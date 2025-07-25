@@ -10,6 +10,7 @@ import {
 } from "@shared/schema";
 import { validateDocument } from "./services/aiValidation";
 import { createSmartContract, getContractStatus } from "./services/blockchain";
+import { seedDemoData, clearDemoData } from "./seedData";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -367,6 +368,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin routes for demo data management
+  app.post('/api/admin/seed-demo-data', async (req, res) => {
+    try {
+      await seedDemoData();
+      res.json({ 
+        success: true, 
+        message: "Demo data seeded successfully",
+        offers: 9,
+        commodities: 9,
+        users: 3
+      });
+    } catch (error: any) {
+      console.error("Failed to seed demo data:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Failed to seed demo data", 
+        error: error.message 
+      });
+    }
+  });
+
+  app.delete('/api/admin/clear-demo-data', async (req, res) => {
+    try {
+      await clearDemoData();
+      res.json({ 
+        success: true, 
+        message: "Demo data cleared successfully" 
+      });
+    } catch (error: any) {
+      console.error("Failed to clear demo data:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Failed to clear demo data", 
+        error: error.message 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
+  
+  // Seed demo data on startup if no offers exist
+  setTimeout(async () => {
+    try {
+      const existingOffers = await storage.getOffers();
+      if (existingOffers.length === 0) {
+        console.log("🌱 No existing offers found, seeding demo data...");
+        await seedDemoData();
+      }
+    } catch (error) {
+      console.error("Failed to seed demo data on startup:", error);
+    }
+  }, 2000);
+  
   return httpServer;
 }
