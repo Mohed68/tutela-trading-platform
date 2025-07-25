@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, TrendingUp, Users, Zap, ChevronRight, CheckCircle } from "lucide-react";
+import TutelaLogo from "@/components/common/TutelaLogo";
 
 export default function Landing() {
   const handleLogin = () => {
@@ -8,16 +9,11 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen tutela-header-gradient">
       {/* Header */}
       <header className="container mx-auto px-4 py-6">
         <nav className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xl">T</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-900">TUTELA</span>
-          </div>
+          <TutelaLogo size="lg" showText={true} />
           <Button onClick={handleLogin} className="tutela-btn-primary">
             Sign In
           </Button>
@@ -27,11 +23,14 @@ export default function Landing() {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20">
         <div className="text-center max-w-4xl mx-auto">
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            Secure Physical Commodity Trading
-            <span className="text-primary"> with AI & Blockchain</span>
+          <h1 className="text-5xl font-bold mb-6">
+            <span style={{ color: 'var(--tutela-secondary)' }}>Secure Physical Commodity Trading</span>
+            <br />
+            <span className="bg-gradient-to-r from-gray-800 to-blue-600 bg-clip-text text-transparent">
+              with AI & Blockchain
+            </span>
           </h1>
-          <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+          <p className="text-xl mb-8 leading-relaxed" style={{ color: 'var(--tutela-gray-800)' }}>
             TUTELA is the leading digital platform for primary physical commodity trading, 
             specializing in Fuel & Hydrocarbons, Metals & Precious Metals, and Agricultural products. 
             Our proprietary validation and verification process ensures secure, authenticated transactions.
@@ -50,7 +49,7 @@ export default function Landing() {
       {/* Features Section */}
       <section className="container mx-auto px-4 py-20">
         <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--tutela-secondary)' }}>
             Why Choose TUTELA?
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
@@ -62,8 +61,8 @@ export default function Landing() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           <Card className="tutela-metric-card text-center">
             <CardHeader>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <Shield className="h-6 w-6 text-blue-600" />
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--tutela-blue-100)', color: 'var(--tutela-primary)' }}>
+                <Shield className="h-6 w-6" />
               </div>
               <CardTitle className="text-lg">AI-Powered Validation</CardTitle>
             </CardHeader>
@@ -76,8 +75,8 @@ export default function Landing() {
 
           <Card className="tutela-metric-card text-center">
             <CardHeader>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <Zap className="h-6 w-6 text-green-600" />
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--tutela-gray-100)', color: 'var(--tutela-secondary)' }}>
+                <Zap className="h-6 w-6" />
               </div>
               <CardTitle className="text-lg">Blockchain Security</CardTitle>
             </CardHeader>
@@ -90,8 +89,8 @@ export default function Landing() {
 
           <Card className="tutela-metric-card text-center">
             <CardHeader>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <Users className="h-6 w-6 text-purple-600" />
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--tutela-blue-50)', color: 'var(--tutela-accent)' }}>
+                <Users className="h-6 w-6" />
               </div>
               <CardTitle className="text-lg">Verified Partners</CardTitle>
             </CardHeader>
@@ -104,8 +103,8 @@ export default function Landing() {
 
           <Card className="tutela-metric-card text-center">
             <CardHeader>
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <TrendingUp className="h-6 w-6 text-yellow-600" />
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4" style={{ background: 'linear-gradient(135deg, var(--tutela-blue-50) 0%, var(--tutela-gray-50) 100%)', color: 'var(--tutela-primary)' }}>
+                <TrendingUp className="h-6 w-6" />
               </div>
               <CardTitle className="text-lg">Market Analytics</CardTitle>
             </CardHeader>

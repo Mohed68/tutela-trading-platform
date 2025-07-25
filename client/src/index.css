@@ -59,58 +59,130 @@
   }
 }
 
-/* Custom TUTELA brand colors and styles */
+/* TUTELA Brand Colors - Based on Official Logo */
 :root {
-  --tutela-primary: hsl(207, 90%, 54%);
-  --tutela-secondary: hsl(159, 84%, 40%);
-  --tutela-accent: hsl(0, 84%, 60%);
-  --tutela-blue-50: hsl(207, 100%, 97%);
-  --tutela-blue-100: hsl(207, 100%, 94%);
-  --tutela-green-50: hsl(159, 100%, 96%);
-  --tutela-green-100: hsl(159, 84%, 91%);
-  --tutela-yellow-50: hsl(48, 100%, 96%);
-  --tutela-yellow-100: hsl(48, 96%, 89%);
-  --tutela-red-50: hsl(0, 100%, 97%);
-  --tutela-red-100: hsl(0, 93%, 94%);
-  --tutela-purple-50: hsl(270, 100%, 98%);
-  --tutela-purple-100: hsl(270, 100%, 95%);
+  /* Primary brand colors from logo */
+  --tutela-primary: hsl(220, 85%, 55%); /* Bright blue from logo */
+  --tutela-secondary: hsl(220, 20%, 25%); /* Dark charcoal from logo */
+  --tutela-accent: hsl(220, 85%, 65%); /* Lighter blue accent */
+  
+  /* Extended palette */
+  --tutela-blue-50: hsl(220, 100%, 97%);
+  --tutela-blue-100: hsl(220, 95%, 94%);
+  --tutela-blue-200: hsl(220, 90%, 88%);
+  --tutela-blue-500: hsl(220, 85%, 55%);
+  --tutela-blue-600: hsl(220, 85%, 50%);
+  --tutela-blue-700: hsl(220, 85%, 45%);
+  
+  --tutela-gray-50: hsl(220, 15%, 97%);
+  --tutela-gray-100: hsl(220, 15%, 94%);
+  --tutela-gray-200: hsl(220, 15%, 88%);
+  --tutela-gray-800: hsl(220, 20%, 25%);
+  --tutela-gray-900: hsl(220, 25%, 15%);
+  
+  /* Status colors that complement the brand */
+  --tutela-success: hsl(145, 65%, 45%);
+  --tutela-warning: hsl(45, 85%, 55%);
+  --tutela-error: hsl(0, 75%, 55%);
+  
+  /* Gradient from logo */
+  --tutela-gradient: linear-gradient(135deg, var(--tutela-secondary) 0%, var(--tutela-primary) 100%);
 }
 
-/* TUTELA specific component styles */
+/* TUTELA Brand Components */
 .tutela-sidebar {
-  @apply w-64 bg-white border-r border-gray-200;
+  @apply w-64 border-r;
+  background: linear-gradient(180deg, var(--tutela-gray-50) 0%, white 100%);
+  border-color: var(--tutela-gray-200);
 }
 
 .tutela-nav-item {
-  @apply text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-200;
+  @apply flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 mb-1 mx-2;
+  color: var(--tutela-gray-800);
+}
+
+.tutela-nav-item:hover {
+  background: var(--tutela-blue-50);
+  color: var(--tutela-primary);
 }
 
 .tutela-nav-item.active {
-  @apply bg-primary text-white;
+  background: var(--tutela-gradient);
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
 }
 
 .tutela-metric-card {
-  @apply bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200;
+  @apply bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300 p-6;
+  border-color: var(--tutela-gray-200);
+}
+
+.tutela-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(59, 130, 246, 0.1);
 }
 
 .tutela-btn-primary {
-  @apply bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center;
+  @apply px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center;
+  background: var(--tutela-gradient);
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+.tutela-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
 }
 
 .tutela-btn-secondary {
-  @apply bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors duration-200 flex items-center justify-center;
+  @apply px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center border-2;
+  background: white;
+  color: var(--tutela-secondary);
+  border-color: var(--tutela-gray-200);
+}
+
+.tutela-btn-secondary:hover {
+  background: var(--tutela-blue-50);
+  border-color: var(--tutela-primary);
+  color: var(--tutela-primary);
+}
+
+.tutela-logo {
+  @apply flex items-center space-x-3;
+}
+
+.tutela-logo-icon {
+  @apply w-10 h-10 rounded-lg flex items-center justify-center;
+  background: var(--tutela-gradient);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
 }
 
 .tutela-insight-card {
-  @apply border rounded-lg p-4;
+  @apply border rounded-xl p-6 transition-all duration-200;
 }
 
 .tutela-insight-card.info {
-  @apply bg-blue-50 border-blue-200;
+  background: var(--tutela-blue-50);
+  border-color: var(--tutela-blue-200);
 }
 
 .tutela-insight-card.success {
-  @apply bg-green-50 border-green-200;
+  background: var(--tutela-gray-50);
+  border-color: var(--tutela-success);
+}
+
+.tutela-insight-card.warning {
+  background: hsl(45, 100%, 97%);
+  border-color: var(--tutela-warning);
+}
+
+/* Modern gradient overlays */
+.tutela-header-gradient {
+  background: linear-gradient(135deg, var(--tutela-blue-50) 0%, white 100%);
+}
+
+.tutela-card-header {
+  background: linear-gradient(135deg, var(--tutela-blue-50) 0%, var(--tutela-gray-50) 100%);
 }
 
 .tutela-insight-card.warning {

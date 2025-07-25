@@ -50,29 +50,29 @@ export default function MetricsCards({ metrics, isLoading }: MetricsCardsProps) 
       title: "Active Offers",
       value: metrics?.activeOffers || 0,
       icon: TrendingUp,
-      iconColor: "text-blue-600",
-      bgColor: "bg-blue-100",
+      iconStyle: { color: 'var(--tutela-primary)' },
+      bgStyle: { background: 'var(--tutela-blue-100)' },
     },
     {
       title: "Pending Contracts", 
       value: metrics?.pendingContracts || 0,
       icon: FileText,
-      iconColor: "text-green-600",
-      bgColor: "bg-green-100",
+      iconStyle: { color: 'var(--tutela-secondary)' },
+      bgStyle: { background: 'var(--tutela-gray-100)' },
     },
     {
       title: "Verification Queue",
       value: metrics?.verificationQueue || 0,
       icon: Clock,
-      iconColor: "text-yellow-600",
-      bgColor: "bg-yellow-100",
+      iconStyle: { color: 'var(--tutela-warning)' },
+      bgStyle: { background: 'hsl(45, 100%, 97%)' },
     },
     {
       title: "Total Volume",
       value: formatVolume(metrics?.totalVolume || "0"),
       icon: DollarSign,
-      iconColor: "text-purple-600",
-      bgColor: "bg-purple-100",
+      iconStyle: { color: 'var(--tutela-accent)' },
+      bgStyle: { background: 'var(--tutela-blue-50)' },
     },
   ];
 
@@ -84,8 +84,8 @@ export default function MetricsCards({ metrics, isLoading }: MetricsCardsProps) 
           <Card key={card.title} className="tutela-metric-card">
             <CardContent className="p-6">
               <div className="flex items-center">
-                <div className={`p-2 ${card.bgColor} rounded-lg`}>
-                  <Icon className={`${card.iconColor} h-5 w-5`} />
+                <div className="p-2 rounded-lg" style={card.bgStyle}>
+                  <Icon className="h-5 w-5" style={card.iconStyle} />
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">{card.title}</p>

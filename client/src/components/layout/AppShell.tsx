@@ -13,6 +13,7 @@ import {
   LogOut
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import TutelaLogo from "@/components/common/TutelaLogo";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -41,18 +42,13 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ background: 'var(--tutela-gray-50)' }}>
       {/* Navigation Header */}
-      <nav className="bg-white border-b border-gray-200 fixed w-full top-0 z-50">
+      <nav className="bg-white border-b fixed w-full top-0 z-50 shadow-sm" style={{ borderColor: 'var(--tutela-gray-200)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <div className="flex-shrink-0 flex items-center">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">T</span>
-                </div>
-                <span className="ml-3 text-xl font-bold text-gray-900">TUTELA</span>
-              </div>
+              <TutelaLogo size="md" showText={true} />
             </div>
             <div className="flex items-center space-x-4">
               <div className="relative">
@@ -69,10 +65,8 @@ export default function AppShell({ children }: AppShellProps) {
                     alt="User Avatar"
                   />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                    <span className="text-white text-sm font-medium">
-                      {(user as any)?.firstName?.[0]}{(user as any)?.lastName?.[0]}
-                    </span>
+                  <div className="h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-medium" style={{ background: 'var(--tutela-gradient)' }}>
+                    {(user as any)?.firstName?.[0]}{(user as any)?.lastName?.[0]}
                   </div>
                 )}
                 <span className="text-sm font-medium text-gray-700">
