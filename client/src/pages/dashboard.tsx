@@ -5,6 +5,8 @@ import MetricsCards from "@/components/dashboard/MetricsCards";
 import ActiveOffers from "@/components/dashboard/ActiveOffers";
 import RecentActivity from "@/components/dashboard/RecentActivity";
 import AIInsights from "@/components/dashboard/AIInsights";
+import { Button } from "@/components/ui/button";
+import { ShoppingCart } from "lucide-react";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
@@ -42,10 +44,23 @@ export default function Dashboard() {
       <div className="p-6">
         {/* Dashboard Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Trading Dashboard</h1>
-          <p className="mt-2 text-gray-600">
-            Monitor your commodity trading activities and market opportunities
-          </p>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+            <div>
+              <h1 className="text-3xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>Trading Dashboard</h1>
+              <p className="mt-2 text-gray-600">
+                Monitor your commodity trading activities and market opportunities
+              </p>
+            </div>
+            <div className="flex gap-3 mt-4 sm:mt-0">
+              <Button 
+                onClick={() => window.location.href = '/commodities'} 
+                className="tutela-btn-primary"
+              >
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                Browse Marketplace
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Key Metrics Cards */}

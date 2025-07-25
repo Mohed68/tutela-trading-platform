@@ -18,7 +18,16 @@ export default function Commodities() {
   const queryClient = useQueryClient();
 
   const { data: offers = [], isLoading } = useQuery({
-    queryKey: ["/api/offers/search", { q: searchQuery, category: selectedCategory !== "all" ? selectedCategory : undefined }],
+    queryKey: ["/api/offers/search", searchQuery, selectedCategory !== "all" ? selectedCategory : undefined],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (searchQuery) params.append('q', searchQuery);
+      if (selectedCategory !== "all") params.append('category', selectedCategory);
+      
+      const response = await fetch(`/api/offers/search?${params.toString()}`);
+      if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+      return response.json();
+    },
     retry: false,
   });
 

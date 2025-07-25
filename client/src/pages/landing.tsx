@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shield, TrendingUp, Users, Zap, ChevronRight, CheckCircle } from "lucide-react";
+import { Shield, TrendingUp, Users, Zap, ChevronRight, CheckCircle, ShoppingCart } from "lucide-react";
 import TutelaLogo from "@/components/common/TutelaLogo";
 
 export default function Landing() {
@@ -39,8 +39,8 @@ export default function Landing() {
             <Button onClick={handleLogin} size="lg" className="tutela-btn-primary">
               Start Trading <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
-            <Button variant="outline" size="lg" className="tutela-btn-secondary">
-              Learn More
+            <Button onClick={handleLogin} variant="outline" size="lg" className="tutela-btn-secondary">
+              Browse Marketplace <TrendingUp className="ml-2 h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -185,6 +185,55 @@ export default function Landing() {
               </ul>
             </CardContent>
           </Card>
+        </div>
+      </section>
+
+      {/* Active Marketplace Preview */}
+      <section className="container mx-auto px-4 py-20" style={{ background: 'linear-gradient(135deg, var(--tutela-blue-50) 0%, var(--tutela-gray-50) 100%)' }}>
+        <div className="text-center mb-16">
+          <div className="flex items-center justify-center mb-4">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mr-4" style={{ background: 'var(--tutela-primary)' }}>
+              <ShoppingCart className="h-8 w-8 text-white" />
+            </div>
+            <h2 className="text-4xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>
+              Active Marketplace
+            </h2>
+          </div>
+          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+            Explore live trading opportunities across global commodity markets. 
+            Our marketplace features verified offers from trusted partners with real-time pricing and detailed specifications.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          <Card className="tutela-metric-card text-center">
+            <CardContent className="p-6">
+              <div className="text-3xl font-bold mb-2" style={{ color: 'var(--tutela-primary)' }}>9+</div>
+              <div className="text-sm font-medium text-gray-600">Active Offers</div>
+              <div className="text-xs text-gray-500 mt-1">Live Trading Opportunities</div>
+            </CardContent>
+          </Card>
+          <Card className="tutela-metric-card text-center">
+            <CardContent className="p-6">
+              <div className="text-3xl font-bold mb-2" style={{ color: 'var(--tutela-accent)' }}>$2.1B+</div>
+              <div className="text-sm font-medium text-gray-600">Total Value</div>
+              <div className="text-xs text-gray-500 mt-1">Available for Trading</div>
+            </CardContent>
+          </Card>
+          <Card className="tutela-metric-card text-center">
+            <CardContent className="p-6">
+              <div className="text-3xl font-bold mb-2" style={{ color: 'var(--tutela-secondary)' }}>3</div>
+              <div className="text-sm font-medium text-gray-600">Categories</div>
+              <div className="text-xs text-gray-500 mt-1">Fuel, Metals, Agricultural</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="text-center">
+          <Button onClick={handleLogin} size="lg" className="tutela-btn-primary">
+            <ShoppingCart className="mr-2 h-5 w-5" />
+            Browse Active Marketplace
+          </Button>
         </div>
       </section>
 
