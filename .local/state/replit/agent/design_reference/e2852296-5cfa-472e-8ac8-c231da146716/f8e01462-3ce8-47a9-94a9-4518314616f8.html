@@ -1,0 +1,513 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TUTELA - Commodity Trading Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#1E40AF',
+                        secondary: '#059669',
+                        accent: '#DC2626',
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- @COMPONENT: AppShell -->
+    <!-- Navigation Header -->
+    <nav class="bg-white border-b border-gray-200 fixed w-full top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center">
+                        <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                            <span class="text-white font-bold text-lg">T</span>
+                        </div>
+                        <span class="ml-3 text-xl font-bold text-gray-900">TUTELA</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <i class="fas fa-bell text-gray-400 text-lg"></i>
+                        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">3</span>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <img class="h-8 w-8 rounded-full object-cover" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&h=100" alt="User Avatar" data-mock="true">
+                        <span class="text-sm font-medium text-gray-700" data-bind="user.name">John Smith</span>
+                        <i class="fas fa-chevron-down text-gray-400 text-sm"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex pt-16">
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-white border-r border-gray-200 fixed h-full overflow-y-auto">
+            <nav class="mt-5 px-2">
+                <div class="space-y-1">
+                    <a href="#" class="bg-primary text-white group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+                        <i class="fas fa-chart-line mr-3 text-sm"></i>
+                        Dashboard
+                    </a>
+                    <a href="#" class="text-gray-600 hover:bg-gray-50 hover:text-gray-900 group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+                        <i class="fas fa-cube mr-3 text-sm"></i>
+                        Commodities
+                    </a>
+                    <a href="#" class="text-gray-600 hover:bg-gray-50 hover:text-gray-900 group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+                        <i class="fas fa-handshake mr-3 text-sm"></i>
+                        Contracts
+                    </a>
+                    <a href="#" class="text-gray-600 hover:bg-gray-50 hover:text-gray-900 group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+                        <i class="fas fa-users mr-3 text-sm"></i>
+                        Partners
+                    </a>
+                    <a href="#" class="text-gray-600 hover:bg-gray-50 hover:text-gray-900 group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+                        <i class="fas fa-shield-alt mr-3 text-sm"></i>
+                        Verification
+                    </a>
+                    <a href="#" class="text-gray-600 hover:bg-gray-50 hover:text-gray-900 group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+                        <i class="fas fa-chart-bar mr-3 text-sm"></i>
+                        Analytics
+                    </a>
+                    <a href="#" class="text-gray-600 hover:bg-gray-50 hover:text-gray-900 group flex items-center px-2 py-2 text-sm font-medium rounded-md">
+                        <i class="fas fa-cog mr-3 text-sm"></i>
+                        Settings
+                    </a>
+                </div>
+            </nav>
+        </aside>
+        <!-- @END_COMPONENT: AppShell -->
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64 p-6">
+            <!-- @COMPONENT: DashboardHeader -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-900">Trading Dashboard</h1>
+                <p class="mt-2 text-gray-600">Monitor your commodity trading activities and market opportunities</p>
+            </div>
+            <!-- @END_COMPONENT: DashboardHeader -->
+
+            <!-- @COMPONENT: MetricsCards -->
+            <!-- Key Metrics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-blue-100 rounded-lg">
+                            <i class="fas fa-chart-line text-blue-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Active Offers</p>
+                            <p class="text-2xl font-bold text-gray-900" data-bind="metrics.activeOffers">24</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-green-100 rounded-lg">
+                            <i class="fas fa-handshake text-green-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Pending Contracts</p>
+                            <p class="text-2xl font-bold text-gray-900" data-bind="metrics.pendingContracts">8</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-yellow-100 rounded-lg">
+                            <i class="fas fa-clock text-yellow-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Verification Queue</p>
+                            <p class="text-2xl font-bold text-gray-900" data-bind="metrics.verificationQueue">5</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-purple-100 rounded-lg">
+                            <i class="fas fa-dollar-sign text-purple-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Total Volume</p>
+                            <p class="text-2xl font-bold text-gray-900" data-bind="metrics.totalVolume">$2.4M</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- @END_COMPONENT: MetricsCards -->
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- @COMPONENT: ActiveOffers -->
+                <!-- Active Offers Section -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                            <h2 class="text-lg font-semibold text-gray-900">Active Commodity Offers</h2>
+                            <button class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors">
+                                <i class="fas fa-plus mr-2"></i>Create Offer
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            <!-- Search and Filter Bar -->
+                            <div class="mb-4 flex flex-col sm:flex-row gap-4">
+                                <div class="flex-1">
+                                    <div class="relative">
+                                        <input type="text" placeholder="Search commodities..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary">
+                                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                    </div>
+                                </div>
+                                <select class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary">
+                                    <option>All Categories</option>
+                                    <option>Fuel & Hydrocarbons</option>
+                                    <option>Metals & Precious Metals</option>
+                                    <option>Agricultural Products</option>
+                                </select>
+                            </div>
+
+                            <!-- Offers Table -->
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Commodity</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <!-- @MAP: offers.map(offer => ( -->
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="flex items-center">
+                                                    <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                                                        <i class="fas fa-oil-can text-blue-600 text-sm"></i>
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-sm font-medium text-gray-900" data-bind="offer.name">Crude Oil WTI</div>
+                                                        <div class="text-sm text-gray-500" data-bind="offer.location">Houston, TX</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Sell</span>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-bind="offer.quantity">1,000 BBL</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-bind="offer.price">$72.50/BBL</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending</span>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                <button class="text-primary hover:text-blue-700 mr-3">View</button>
+                                                <button class="text-gray-400 hover:text-gray-600">Edit</button>
+                                            </td>
+                                        </tr>
+                                        
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="flex items-center">
+                                                    <div class="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center mr-3">
+                                                        <i class="fas fa-coins text-yellow-600 text-sm"></i>
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-sm font-medium text-gray-900" data-bind="offer.name">Gold Bars 99.9%</div>
+                                                        <div class="text-sm text-gray-500" data-bind="offer.location">London, UK</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Buy</span>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-bind="offer.quantity">50 KG</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-bind="offer.price">$62,000/KG</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Active</span>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                <button class="text-primary hover:text-blue-700 mr-3">View</button>
+                                                <button class="text-gray-400 hover:text-gray-600">Edit</button>
+                                            </td>
+                                        </tr>
+                                        
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="flex items-center">
+                                                    <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                                                        <i class="fas fa-seedling text-green-600 text-sm"></i>
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-sm font-medium text-gray-900" data-bind="offer.name">Wheat Grade A</div>
+                                                        <div class="text-sm text-gray-500" data-bind="offer.location">Chicago, IL</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Sell</span>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-bind="offer.quantity">5,000 MT</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-bind="offer.price">$285/MT</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Active</span>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                <button class="text-primary hover:text-blue-700 mr-3">View</button>
+                                                <button class="text-gray-400 hover:text-gray-600">Edit</button>
+                                            </td>
+                                        </tr>
+                                        <!-- @END_MAP )) -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_COMPONENT: ActiveOffers -->
+
+                <!-- @COMPONENT: Sidebar -->
+                <!-- Right Sidebar -->
+                <div class="space-y-6">
+                    <!-- Recent Activity -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900">Recent Activity</h3>
+                        </div>
+                        <div class="p-6">
+                            <div class="space-y-4">
+                                <!-- @MAP: activities.map(activity => ( -->
+                                <div class="flex items-start space-x-3">
+                                    <div class="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                                    <div class="flex-1">
+                                        <p class="text-sm text-gray-900" data-bind="activity.text">Contract signed for Gold Bars 99.9%</p>
+                                        <p class="text-xs text-gray-500" data-bind="activity.time">2 hours ago</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-start space-x-3">
+                                    <div class="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                                    <div class="flex-1">
+                                        <p class="text-sm text-gray-900" data-bind="activity.text">New partner verification completed</p>
+                                        <p class="text-xs text-gray-500" data-bind="activity.time">4 hours ago</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-start space-x-3">
+                                    <div class="w-2 h-2 bg-yellow-500 rounded-full mt-2"></div>
+                                    <div class="flex-1">
+                                        <p class="text-sm text-gray-900" data-bind="activity.text">Document upload pending review</p>
+                                        <p class="text-xs text-gray-500" data-bind="activity.time">6 hours ago</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-start space-x-3">
+                                    <div class="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
+                                    <div class="flex-1">
+                                        <p class="text-sm text-gray-900" data-bind="activity.text">Payment verification failed</p>
+                                        <p class="text-xs text-gray-500" data-bind="activity.time">1 day ago</p>
+                                    </div>
+                                </div>
+                                <!-- @END_MAP )) -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Insights -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                <i class="fas fa-robot mr-2 text-primary"></i>
+                                AI Insights
+                            </h3>
+                        </div>
+                        <div class="p-6">
+                            <div class="space-y-4">
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-lightbulb text-blue-600 mt-1 mr-3"></i>
+                                        <div>
+                                            <h4 class="text-sm font-medium text-blue-900">Market Opportunity</h4>
+                                            <p class="text-sm text-blue-700 mt-1">Crude oil prices are trending upward. Consider adjusting your pricing strategy.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-shield-alt text-green-600 mt-1 mr-3"></i>
+                                        <div>
+                                            <h4 class="text-sm font-medium text-green-900">Verification Complete</h4>
+                                            <p class="text-sm text-green-700 mt-1">3 new partners have been verified and are ready for trading.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-exclamation-triangle text-yellow-600 mt-1 mr-3"></i>
+                                        <div>
+                                            <h4 class="text-sm font-medium text-yellow-900">Risk Alert</h4>
+                                            <p class="text-sm text-yellow-700 mt-1">2 contracts require additional documentation before proceeding.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900">Quick Actions</h3>
+                        </div>
+                        <div class="p-6">
+                            <div class="space-y-3">
+                                <button class="w-full bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center">
+                                    <i class="fas fa-plus mr-2"></i>
+                                    Create New Offer
+                                </button>
+                                
+                                <button class="w-full bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors flex items-center justify-center">
+                                    <i class="fas fa-search mr-2"></i>
+                                    Browse Marketplace
+                                </button>
+                                
+                                <button class="w-full bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors flex items-center justify-center">
+                                    <i class="fas fa-upload mr-2"></i>
+                                    Upload Documents
+                                </button>
+                                
+                                <button class="w-full bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors flex items-center justify-center">
+                                    <i class="fas fa-chart-bar mr-2"></i>
+                                    View Analytics
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_COMPONENT: Sidebar -->
+            </div>
+        </main>
+    </div>
+
+    <!-- @COMPONENT: CreateOfferModal -->
+    <!-- Create Offer Modal (Hidden by default) -->
+    <div id="createOfferModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Create New Commodity Offer</h3>
+                    <button class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <form class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Commodity Type</label>
+                            <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option>Select Category</option>
+                                <option>Fuel & Hydrocarbons</option>
+                                <option>Metals & Precious Metals</option>
+                                <option>Agricultural Products</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Offer Type</label>
+                            <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option>Buy</option>
+                                <option>Sell</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Commodity Name</label>
+                        <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., Crude Oil WTI, Gold Bars 99.9%">
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+                            <input type="number" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary" placeholder="1000">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Unit</label>
+                            <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option>BBL (Barrels)</option>
+                                <option>MT (Metric Tons)</option>
+                                <option>KG (Kilograms)</option>
+                                <option>OZ (Ounces)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Price per Unit</label>
+                            <input type="number" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary" placeholder="72.50">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Currency</label>
+                            <select class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option>USD</option>
+                                <option>EUR</option>
+                                <option>GBP</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                        <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Houston, TX">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Additional details about the commodity..."></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-700 transition-colors">Create Offer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: CreateOfferModal -->
+
+    <script>
+        // Simple modal functionality
+        (function() {
+            // TODO: Implement proper modal state management and form validation
+            
+            const createOfferButtons = document.querySelectorAll('button:contains("Create Offer")');
+            const modal = document.getElementById('createOfferModal');
+            
+            // Note: This is a simplified demo - in production, use proper event delegation
+            // and state management
+        })();
+    </script>
+</body>
+</html>
