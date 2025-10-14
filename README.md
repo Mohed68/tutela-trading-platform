@@ -210,8 +210,4 @@ For support and questions:
 
 ---
 
-<<<<<<< HEAD
 **TUTELA** - Transforming Physical Commodity Trading with Technology
-=======
-**TUTELA** - Transforming Physical Commodity Trading with Technology
->>>>>>> 266ae67 (Introduce project documentation with setup instructions and tech stack details)

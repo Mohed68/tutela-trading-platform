@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TUTELA — Strategic Commodities Platform</title>
+  <link rel="icon" href="/tutela-logo.png">
+  <link rel="stylesheet" href="public/style.css" />
+</head>
+<body class="state-unverified">
+  <header class="appbar">
+    <div class="brand">
+      <img class="logo" src="/tutela-logo.png" alt="TUTELA" />
+      <h1>TUTELA</h1>
+    </div>
+    <nav class="nav">
+      <a href="#dashboard">Dashboard</a>
+      <a href="#offers">Offers</a>
+      <a href="#contracts">Contracts</a>
+      <a href="#insights">Insights</a>
+    </nav>
+  </header>
+
+  <main id="dashboard" class="container">
+    <!-- KYB -->
+    <section class="card kyc-card">
+      <div class="card-head">
+        <h2>KYB Status</h2>
+        <span id="stateBadge" class="badge">Unverified</span>
+      </div>
+
+      <div class="kyb-wrap">
+        <div class="progress">
+          <svg width="140" height="140" viewBox="0 0 140 140" class="ring">
+            <circle class="bg" cx="70" cy="70" r="60" stroke-width="12" fill="none"></circle>
+            <circle id="ringVal" class="val" cx="70" cy="70" r="60" stroke-width="12" fill="none"
+                    stroke-dasharray="377" stroke-dashoffset="377"></circle>
+            <text id="ringText" x="70" y="76" text-anchor="middle" class="ring-text">0%</text>
+          </svg>
+        </div>
+
+        <div class="kyc-actions">
+          <p id="kycMsg" class="muted">Complete verification to unlock full platform features.</p>
+
+          <div class="uploader">
+            <label class="lbl">Required documents:</label>
+            <input id="kybFiles" type="file" multiple />
+            <small class="muted">Upload: Trade license, Owners/Directors IDs, IBAN/Bank letter, Company address proof.</small>
+          </div>
+
+          <div class="btns">
+            <button id="btnSubmitDocs" class="btn btn-primary">Submit Documents</button>
+            <button id="btnStart" class="btn btn-ghost">Simulate Quick Check</button>
+            <button id="btnReset" class="btn btn-ghost">Reset</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Offers -->
+    <section id="offers" class="card">
+      <div class="card-head">
+        <h2>Available Offers</h2>
+        <div class="filters">
+          <select id="filterCommodity" title="Commodity">
+            <option>All Commodities</option>
+            <option>Crude Oil</option>
+            <option>Gold</option>
+            <option>Wheat</option>
+            <option>Aluminum</option>
+          </select>
+          <select id="filterType" title="Contract Type">
+            <option>All Contracts</option>
+            <option>Spot</option>
+            <option>Futures</option>
+          </select>
+          <input id="search" placeholder="Search..." />
+          <button id="sortPrice" class="btn btn-ghost" title="Sort by price">Sort by Price</button>
+          <button id="btnCreateOffer" class="btn btn-primary">Create Offer</button>
+        </div>
+      </div>
+
+      <div id="offerList" class="list"></div>
+
+      <!-- Gate details before verification -->
+      <div id="offersOverlay" class="overlay">
+        <div class="overlay-msg">
+          <p>Complete verification to view details and negotiate.</p>
+          <button class="btn btn-primary" id="overlayCta">Start Verification</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contracts (sample) -->
+    <section id="contracts" class="card">
+      <h2>Active Contracts</h2>
+      <ul id="contractList" class="list">
+        <li>#C-12345 — Brent Crude — <span class="chip chip-ok">Active</span></li>
+        <li>#C-67890 — Gold Bars — <span class="chip chip-warn">Pending Payment</span></li>
+      </ul>
+    </section>
+
+    <!-- Insights -->
+    <section id="insights" class="card">
+      <h2>Smart Insights</h2>
+      <p class="muted">Market trends, risk scores, and suggested opportunities.</p>
+      <div class="chart-box">[Placeholder]</div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>© TUTELA — MVP UI (No backend)</small>
+  </footer>
+
+  <script src="public/app.js"></script>
+</body>
+</html>
