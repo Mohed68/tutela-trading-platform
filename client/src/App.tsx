@@ -1,80 +1,51 @@
-import React from "react";
-import { Route, Switch } from "wouter";
-import { Toaster } from "./components/ui/toaster";
-import { useAuth } from "./hooks/useAuth";
+import { Suspense } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import Landing from "./pages/landing";
+import LandingPage from "./pages/landing";
 import Dashboard from "./pages/dashboard";
 import Commodities from "./pages/commodities";
 import Contracts from "./pages/contracts";
 import Partners from "./pages/partners";
 import Verification from "./pages/verification";
-import NotFound from "./pages/not-found";
-import Layout from "./components/layout/Layout";
 
-// بوابة بسيطة للتحكم في حالة الـ Auth (لودينغ / خطأ / غير مسجّل / مسجّل)
-function AuthGate({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, error } = useAuth();
+import Layout from "./components/layout"; 
+// ملاحظة: يوجد index.tsx داخل مجلد layout، لذلك الاستيراد صحيح بهذا الشكل
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50">
-        <div className="space-y-4 text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto" />
-          <p className="text-sm text-slate-400">Loading your workspace...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50">
-        <div className="space-y-4 text-center max-w-md">
-          <h1 className="text-xl font-semibold">Authentication Error</h1>
-          <p className="text-sm text-slate-400">{error}</p>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            Return to Home
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  // لو ما في مستخدم => نظهر صفحة الهوم (Landing) كواجهة عامة
-  if (!user) {
-    return <Landing />;
-  }
-
-  // لو المستخدم مسجّل => نسمح بعرض بقية التطبيق داخل الـ Layout
-  return <>{children}</>;
-}
+import { useAuth } from "./common/authUtils";
 
 export default function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div className="w-full h-screen flex items-center justify-center text-xl">
+      Loading...
+    </div>;
+  }
+
   return (
-    <>
-      <Toaster />
-      <Switch>
-        {/* مسار الهوم (عام) */}
-        <Route path="/" component={Landing} />
+    <BrowserRouter>
+      <Suspense fallback={<div>Loading page...</div>}>
+        <Routes>
 
-        {/* المسارات المحمية */}
-        <AuthGate>
-          <Layout>
-            <Route path="/dashboard" component={Dashboard} />
-            <Route path="/commodities" component={Commodities} />
-            <Route path="/contracts" component={Contracts} />
-            <Route path="/partners" component={Partners} />
-            <Route path="/verification" component={Verification} />
-          </Layout>
-        </AuthGate>
+          {/* Public Landing */}
+          <Route path="/" element={<LandingPage />} />
 
-        {/* 404 */}
-        <Route component={NotFound} />
-      </Switch>
-    </>
+          {/* Protected Routes */}
+          <Route element={<Layout user={user} />}>
+
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/commodities" element={<Commodities />} />
+            <Route path="/contracts" element={<Contracts />} />
+            <Route path="/partners" element={<Partners />} />
+            <Route path="/verification" element={<Verification />} />
+
+          </Route>
+
+          {/* 404 */}
+          <Route path="*" element={<div>Page not found</div>} />
+
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
   );
 }
