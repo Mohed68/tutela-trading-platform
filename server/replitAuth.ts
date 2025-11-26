@@ -16,28 +16,27 @@ const AUTH_MODE = (process.env.AUTH_MODE ?? "local").toLowerCase();
 const IS_DEMO_MODE = process.env.DEMO_MODE === "true";
 const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
 
-// في Render نستخدم always local unless أنت تغير المتغيرات يدويًا
+// في Render / التطوير نشتغل local إلا إذا أنت عدلت المتغيرات يدويًا
 const USE_LOCAL_AUTH =
   AUTH_MODE === "local" || IS_DEMO_MODE || IS_DEVELOPMENT;
 
-// هذا الـ user اللي بنستخدمه في الـ local/dev/demo
+// local admin ثابت، بنفس شكل الـ user اللي الباقي متوقعه
 const LOCAL_USER = {
-  // حقول top-level بحيث أي كود يقرأ user.sub أو user.email يشتغل
+  // حقول top-level
   sub: "local-admin",
   email: "admin@tutela.local",
   first_name: "Local",
   last_name: "Admin",
   profile_image_url: "",
 
-  // claims بنفس البنية اللي ترجع من OIDC
+  // claims كما لو جاية من OIDC
   claims: {
     sub: "local-admin",
     email: "admin@tutela.local",
     first_name: "Local",
     last_name: "Admin",
     profile_image_url: "",
-    // نعطيه expiration بعيد جداً
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365,
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365, // سنة قدّام
   },
 
   access_token: undefined as string | undefined,
@@ -45,7 +44,7 @@ const LOCAL_USER = {
   expires_at: Number.MAX_SAFE_INTEGER,
 } as const;
 
-// لو فعلياً حابين نشغّل Replit OIDC لازم تتوفر REPLIT_DOMAINS
+// لو حابين Replit OIDC فعلياً
 if (AUTH_MODE === "replit" && !process.env.REPLIT_DOMAINS) {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
 }
@@ -67,8 +66,8 @@ const getOidcConfig = memoize(
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
 
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
+  const PgStore = connectPg(session);
+  const sessionStore = new PgStore({
     conString: process.env.DATABASE_URL,
     createTableIfMissing: false,
     ttl: sessionTtl,
@@ -189,7 +188,7 @@ export async function setupAuth(app: Express) {
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   if (USE_LOCAL_AUTH) {
-    // نحقن local-admin بشكل صريح وبنفس البنية المتوقعة
+    // نحقن local-admin بنفس الشكل كل مرة
     const localUser: any = {
       ...LOCAL_USER,
       claims: { ...LOCAL_USER.claims },
@@ -197,7 +196,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
     req.user = localUser;
 
-    // نحاول نتأكد أن المستخدم موجود في الـ DB (لأجل /api/auth/user وغيره)
+    // نتأكد أنه موجود في الـ DB (لأجل /api/auth/user و باقي الاستعلامات)
     try {
       await storage.upsertUser({
         id: localUser.sub,
@@ -239,3 +238,4 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 };
+
