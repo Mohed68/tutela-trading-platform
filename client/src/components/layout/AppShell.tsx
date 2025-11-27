@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
+import { type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -8,20 +9,30 @@ import {
   Users, 
   Shield, 
   Settings, 
+import {
+  BarChart3,
+  Package,
+  FileText,
+  Users,
+  Shield,
   Bell,
   ChevronDown,
   LogOut
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import TutelaLogo from "@/components/common/TutelaLogo";
 
 interface AppShellProps {
   children: React.ReactNode;
+  children: ReactNode;
 }
 
 export default function AppShell({ children }: AppShellProps) {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
+  const { pathname } = useLocation();
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: BarChart3, current: location === "/" },
@@ -31,6 +42,11 @@ export default function AppShell({ children }: AppShellProps) {
     { name: "Verification", href: "/verification", icon: Shield, current: location === "/verification" },
     { name: "Analytics", href: "/analytics", icon: BarChart3, current: location === "/analytics" },
     { name: "Settings", href: "/settings", icon: Settings, current: location === "/settings" },
+    { name: "Dashboard", href: "/dashboard", icon: BarChart3 },
+    { name: "Commodities", href: "/commodities", icon: Package },
+    { name: "Contracts", href: "/contracts", icon: FileText },
+    { name: "Partners", href: "/partners", icon: Users },
+    { name: "Verification", href: "/verification", icon: Shield },
   ];
 
   if (isLoading) {
@@ -56,19 +72,7 @@ export default function AppShell({ children }: AppShellProps) {
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                   3
                 </span>
-              </div>
-              <div className="flex items-center space-x-3">
-                {(user as any)?.profileImageUrl ? (
-                  <img 
-                    className="h-8 w-8 rounded-full object-cover" 
-                    src={(user as any).profileImageUrl} 
-                    alt="User Avatar"
-                  />
-                ) : (
-                  <div className="h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-medium" style={{ background: 'var(--tutela-gradient)' }}>
-                    {(user as any)?.firstName?.[0]}{(user as any)?.lastName?.[0]}
-                  </div>
-                )}
+@@ -72,46 +69,49 @@ export default function AppShell({ children }: AppShellProps) {
                 <span className="text-sm font-medium text-gray-700">
                   {(user as any)?.firstName} {(user as any)?.lastName}
                 </span>
@@ -94,6 +98,7 @@ export default function AppShell({ children }: AppShellProps) {
             <div className="space-y-1">
               {navigation.map((item) => {
                 const Icon = item.icon;
+                const isActive = pathname === item.href;
                 return (
                   <Link key={item.name} href={item.href}>
                     <a className={`tutela-nav-item ${item.current ? 'active' : ''}`}>
@@ -101,6 +106,14 @@ export default function AppShell({ children }: AppShellProps) {
                       {item.name}
                     </a>
                   </Link>
+                  <NavLink
+                    key={item.name}
+                    to={item.href}
+                    className={`tutela-nav-item ${isActive ? 'active' : ''}`}
+                  >
+                    <Icon className="mr-3 text-sm h-5 w-5" />
+                    {item.name}
+                  </NavLink>
                 );
               })}
             </div>
