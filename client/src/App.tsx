@@ -40,6 +40,11 @@ export default function App() {
             <Route path="/verification" element={<Verification />} />
 
           </Route>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/commodities" element={<Commodities />} />
+          <Route path="/contracts" element={<Contracts />} />
+          <Route path="/partners" element={<Partners />} />
+          <Route path="/verification" element={<Verification />} />
 
           {/* 404 */}
           <Route path="*" element={<div>Page not found</div>} />
