@@ -1,6 +1,5 @@
 import * as client from "openid-client";
-import { Strategy, type VerifyFunction } from "openid-client/passport";
-
+import { Strategy, type VerifyFunction } from "openid-client";
 import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
@@ -8,50 +7,35 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
-// ---------------------------------------------------------------------------
-// Auth mode configuration
-// ---------------------------------------------------------------------------
+// --- Auth mode configuration ----------------------------------------
 
-const AUTH_MODE = (process.env.AUTH_MODE ?? "local").toLowerCase();
+const AUTH_MODE = process.env.AUTH_MODE ?? "local";
 const IS_DEMO_MODE = process.env.DEMO_MODE === "true";
 const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
 
-// في Render / التطوير نشتغل local إلا إذا أنت عدلت المتغيرات يدويًا
-const USE_LOCAL_AUTH =
-  AUTH_MODE === "local" || IS_DEMO_MODE || IS_DEVELOPMENT;
+// إذا كنا في local / demo / development نستخدم مستخدم محلي وهمي
+const USE_LOCAL_AUTH = AUTH_MODE === "local" || IS_DEMO_MODE || IS_DEVELOPMENT;
 
-// local admin ثابت، بنفس شكل الـ user اللي الباقي متوقعه
 const LOCAL_USER = {
-  // حقول top-level
-  sub: "local-admin",
-  email: "admin@tutela.local",
-  first_name: "Local",
-  last_name: "Admin",
-  profile_image_url: "",
-
-  // claims كما لو جاية من OIDC
   claims: {
     sub: "local-admin",
     email: "admin@tutela.local",
     first_name: "Local",
     last_name: "Admin",
     profile_image_url: "",
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365, // سنة قدّام
+    // نجعل الصلاحية طويلة حتى لا ينتهي الـ session بسهولة في هذه الأوضاع
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365,
   },
-
   access_token: undefined as string | undefined,
   refresh_token: undefined as string | undefined,
   expires_at: Number.MAX_SAFE_INTEGER,
-} as const;
+};
 
-// لو حابين Replit OIDC فعلياً
 if (AUTH_MODE === "replit" && !process.env.REPLIT_DOMAINS) {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
 }
 
-// ---------------------------------------------------------------------------
-// OIDC config + session store
-// ---------------------------------------------------------------------------
+// --- OIDC config helper (يُستخدم فقط في وضع replit) ----------------
 
 const getOidcConfig = memoize(
   async () => {
@@ -62,6 +46,8 @@ const getOidcConfig = memoize(
   },
   { maxAge: 3600 * 1000 }
 );
+
+// --- Session setup ---------------------------------------------------
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -77,15 +63,18 @@ export function getSession() {
   return session({
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
-    resave: false,
-    saveUninitialized: false,
     cookie: {
       maxAge: sessionTtl,
+      httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
     },
+    resave: false,
+    saveUninitialized: false,
   });
 }
+
+// --- Helpers to sync tokens into user object ------------------------
 
 function updateUserSession(
   user: any,
@@ -97,7 +86,7 @@ function updateUserSession(
   user.expires_at = user.claims?.exp;
 }
 
-async function upsertUserFromClaims(claims: any) {
+async function upsertUser(claims: any) {
   await storage.upsertUser({
     id: claims["sub"],
     email: claims["email"],
@@ -107,19 +96,18 @@ async function upsertUserFromClaims(claims: any) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// setupAuth: تشغيل الـ session و/أو Replit OIDC حسب الـ mode
-// ---------------------------------------------------------------------------
+// --- Main auth setup -------------------------------------------------
 
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
 
-  // في local/dev/demo ما نفعّل OIDC إطلاقاً
+  // في أوضاع local/demo/development نستخدم مستخدم محلي ولا نفعّل OIDC
   if (USE_LOCAL_AUTH) {
     return;
   }
 
+  // من هنا وطالع يعمل فقط إذا AUTH_MODE ليس local/demo/dev
   app.use(passport.initialize());
   app.use(passport.session());
 
@@ -131,10 +119,11 @@ export async function setupAuth(app: Express) {
   ) => {
     const user: any = {};
     updateUserSession(user, tokens);
-    await upsertUserFromClaims(tokens.claims());
+    await upsertUser(tokens.claims());
     verified(null, user);
   };
 
+  // نكوّن إستراتيجية لكل domain مذكور في REPLIT_DOMAINS
   for (const domain of process.env.REPLIT_DOMAINS!.split(",")) {
     const strategy = new Strategy(
       {
@@ -145,16 +134,17 @@ export async function setupAuth(app: Express) {
       },
       verify
     );
+
     passport.use(strategy);
+
+    passport.serializeUser((user, done) => {
+      done(null, user);
+    });
+
+    passport.deserializeUser((obj: any, done) => {
+      done(null, obj);
+    });
   }
-
-  passport.serializeUser((user: any, done) => {
-    done(null, user);
-  });
-
-  passport.deserializeUser((user: any, done) => {
-    done(null, user);
-  });
 
   app.get("/api/login", (req, res, next) => {
     passport.authenticate(`replitauth:${req.hostname}`, {
@@ -182,39 +172,18 @@ export async function setupAuth(app: Express) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// isAuthenticated middleware
-// ---------------------------------------------------------------------------
+// --- Auth middleware used by routes ---------------------------------
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // في local/demo/dev نحقن مستخدم محلي ثابت
   if (USE_LOCAL_AUTH) {
-    // نحقن local-admin بنفس الشكل كل مرة
-    const localUser: any = {
-      ...LOCAL_USER,
-      claims: { ...LOCAL_USER.claims },
-    };
-
-    req.user = localUser;
-
-    // نتأكد أنه موجود في الـ DB (لأجل /api/auth/user و باقي الاستعلامات)
-    try {
-      await storage.upsertUser({
-        id: localUser.sub,
-        email: localUser.email,
-        firstName: localUser.first_name,
-        lastName: localUser.last_name,
-        profileImageUrl: localUser.profile_image_url,
-      });
-    } catch (err) {
-      console.error("Failed to upsert local user:", err);
-    }
-
+    req.user = { ...LOCAL_USER, claims: { ...LOCAL_USER.claims } } as any;
     return next();
   }
 
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user?.expires_at) {
+  if (!req.isAuthenticated?.() || !user?.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
