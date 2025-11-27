@@ -74,6 +74,7 @@
     "react-hook-form": "^7.53.0",
     "recharts": "^2.13.3",
     "multer": "^1.4.5-lts.1",
+    "nanoid": "^5.0.7",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
