@@ -10,10 +10,13 @@ import { ShoppingCart } from "lucide-react";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { ROUTES } from "@/config/routes";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -52,8 +55,8 @@ export default function Dashboard() {
               </p>
             </div>
             <div className="flex gap-3 mt-4 sm:mt-0">
-              <Button 
-                onClick={() => window.location.href = '/commodities'} 
+              <Button
+                onClick={() => navigate(ROUTES.marketplace)}
                 className="tutela-btn-primary"
               >
                 <ShoppingCart className="mr-2 h-4 w-4" />
@@ -79,7 +82,3 @@ export default function Dashboard() {
             <AIInsights />
           </div>
         </div>
-      </div>
-    </AppShell>
-  );
-}
