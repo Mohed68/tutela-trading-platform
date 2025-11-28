@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { NavLink, useLocation } from "react-router-dom";
+import { ROUTES } from "@/config/routes";
 import { useAuth } from "@/hooks/useAuth";
 import TutelaLogo from "@/components/common/TutelaLogo";
 
@@ -42,11 +43,11 @@ export default function AppShell({ children }: AppShellProps) {
     { name: "Verification", href: "/verification", icon: Shield, current: location === "/verification" },
     { name: "Analytics", href: "/analytics", icon: BarChart3, current: location === "/analytics" },
     { name: "Settings", href: "/settings", icon: Settings, current: location === "/settings" },
-    { name: "Dashboard", href: "/dashboard", icon: BarChart3 },
-    { name: "Commodities", href: "/commodities", icon: Package },
-    { name: "Contracts", href: "/contracts", icon: FileText },
-    { name: "Partners", href: "/partners", icon: Users },
-    { name: "Verification", href: "/verification", icon: Shield },
+    { name: "Dashboard", href: ROUTES.dashboard, icon: BarChart3 },
+    { name: "Marketplace", href: ROUTES.marketplace, icon: Package },
+    { name: "Contracts", href: ROUTES.contracts, icon: FileText },
+    { name: "Partners", href: ROUTES.partners, icon: Users },
+    { name: "Verification", href: ROUTES.verification, icon: Shield },
   ];
 
   if (isLoading) {
@@ -72,7 +73,7 @@ export default function AppShell({ children }: AppShellProps) {
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                   3
                 </span>
-@@ -72,46 +69,49 @@ export default function AppShell({ children }: AppShellProps) {
+@@ -72,46 +70,49 @@ export default function AppShell({ children }: AppShellProps) {
                 <span className="text-sm font-medium text-gray-700">
                   {(user as any)?.firstName} {(user as any)?.lastName}
                 </span>
