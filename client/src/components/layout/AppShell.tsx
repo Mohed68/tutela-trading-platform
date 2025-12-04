@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   BarChart3,
@@ -22,10 +22,11 @@ interface AppShellProps {
 export default function AppShell({ children }: AppShellProps) {
   const { user, isLoading } = useAuth();
   const { pathname } = useLocation();
-  
+
   const navigation = [
     { name: "Dashboard", href: ROUTES.dashboard, icon: BarChart3 },
     { name: "Marketplace", href: ROUTES.marketplace, icon: Package },
+    { name: "Commodities", href: ROUTES.commodities, icon: Package },
     { name: "Contracts", href: ROUTES.contracts, icon: FileText },
     { name: "Partners", href: ROUTES.partners, icon: Users },
     { name: "Verification", href: ROUTES.verification, icon: Shield },
@@ -34,82 +35,112 @@ export default function AppShell({ children }: AppShellProps) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--tutela-gray-50)" }}>
-      {/* Navigation Header */}
+    <div
+      className="min-h-screen"
+      style={{ background: "var(--tutela-gray-50)" }}
+    >
+      {/* Top Navigation Bar */}
       <nav
         className="bg-white border-b fixed w-full top-0 z-50 shadow-sm"
         style={{ borderColor: "var(--tutela-gray-200)" }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <TutelaLogo size="md" showText={true} />
+            {/* Left: Logo */}
+            <div className="flex items-center gap-3">
+              <TutelaLogo size="md" showText />
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Bell className="text-gray-400 text-lg h-5 w-5" />
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                  3
-                </span>
-                </div>
-              <div className="flex items-center space-x-3 px-3 py-1 rounded-md hover:bg-gray-50">
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
-                  {`${(user as any)?.firstName?.[0] ?? "T"}${(user as any)?.lastName?.[0] ?? "U"}`}
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-gray-700">
-                    {(user as any)?.firstName} {(user as any)?.lastName}
-                  </span>
-                  <span className="text-xs text-gray-500">Verified Trader</span>
-                </div>
-                <ChevronDown className="text-gray-400 text-sm h-4 w-4" />
-              </div>
+
+            {/* Right: Notifications + User */}
+            <div className="flex items-center gap-4">
               <Button
                 variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/api/logout")}
-                className="text-gray-600 hover:text-gray-900"
+                size="icon"
+                className="rounded-full"
+                aria-label="Notifications"
               >
-                <LogOut className="h-4 w-4" />
+                <Bell className="h-5 w-5" />
+              </Button>
+
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end">
+                  <span className="text-sm font-medium text-gray-900">
+                    {user?.name ?? "Guest User"}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {user?.email ?? ""}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              </div>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-full"
+                aria-label="Sign out"
+              >
+                <LogOut className="h-5 w-5" />
               </Button>
             </div>
           </div>
         </div>
       </nav>
 
-      <div className="flex pt-16">
-        {/* Sidebar Navigation */}
-        <aside className="tutela-sidebar fixed h-full overflow-y-auto">
-          <nav className="mt-5 px-2">
-            <div className="space-y-1">
+      {/* Main layout: sidebar + content */}
+      <div className="pt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex gap-6">
+          {/* Sidebar navigation */}
+          <aside className="w-56 hidden md:block">
+            <nav className="space-y-1">
               {navigation.map((item) => {
+                const active =
+                  pathname === item.href ||
+                  pathname.startsWith(item.href + "/");
+
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+
                 return (
                   <NavLink
                     key={item.name}
                     to={item.href}
-                    className={`tutela-nav-item ${isActive ? "active" : ""}`}
+                    className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      active
+                        ? "bg-primary text-white"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
                   >
-                    <Icon className="mr-3 text-sm h-5 w-5" />
-                    {item.name}
+                    <Icon
+                      className={`h-4 w-4 ${
+                        active ? "text-white" : "text-gray-400"
+                      }`}
+                    />
+                    <span>{item.name}</span>
                   </NavLink>
                 );
               })}
-            </div>
-          </nav>
-        </aside>
+            </nav>
+          </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 ml-64">{children}</main>
+          {/* Page content */}
+          <main className="flex-1">
+            <div className="bg-white rounded-xl shadow-sm border p-4 sm:p-6">
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   );
-  }
-  
+}
