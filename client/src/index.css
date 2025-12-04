@@ -2,135 +2,115 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ====== Base app styling ====== */
 
 :root {
+  --tutela-green-500: #22c55e;
+  --tutela-green-600: #16a34a;
+  --tutela-green-700: #15803d;
+
   --tutela-gray-50:  #f9fafb;
   --tutela-gray-100: #f3f4f6;
   --tutela-gray-200: #e5e7eb;
+  --tutela-gray-300: #d1d5db;
+  --tutela-gray-700: #374151;
   --tutela-gray-900: #111827;
 
-  --tutela-green-500: #16a34a;
-  --tutela-green-600: #15803d;
+  --tutela-border-subtle: var(--tutela-gray-200);
+  --tutela-surface: #ffffff;
 }
 
-/* Body + html */
-html,
-body,
-#root {
-  height: 100%;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    background-color: var(--tutela-gray-50);
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  a {
+    @apply text-emerald-600 hover:text-emerald-700 underline-offset-4;
+  }
 }
 
-body {
-  @apply bg-slate-950 text-slate-50 antialiased;
+
+@layer components {
+  .tutela-layout {
+    @apply min-h-screen flex flex-col bg-slate-50;
+  }
+
+  .tutela-main {
+    @apply flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full gap-6 px-4 sm:px-6 lg:px-8 py-6;
+  }
+
+  .tutela-card {
+    @apply bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6;
+  }
+
+  .tutela-card-muted {
+    @apply bg-slate-50 border-dashed border-slate-200;
+  }
+
+  .tutela-section-title {
+    @apply text-sm font-medium text-slate-500 uppercase tracking-wide mb-2;
+  }
+
+  .tutela-section-heading {
+    @apply text-lg font-semibold text-slate-900;
+  }
+
+  .tutela-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700;
+  }
+
+  .tutela-badge-muted {
+    @apply bg-slate-100 text-slate-700;
+  }
+
+  .tutela-grid-2 {
+    @apply grid grid-cols-1 md:grid-cols-2 gap-4;
+  }
+
+  .tutela-grid-3 {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-4;
+  }
+
+  .tutela-table {
+    @apply w-full text-sm;
+  }
+
+  .tutela-table thead {
+    @apply text-xs font-semibold text-slate-500 uppercase tracking-wide;
+  }
+
+  .tutela-table th,
+  .tutela-table td {
+    @apply px-3 py-2 border-b border-slate-100;
+  }
 }
 
-/* ====== Layout helpers ====== */
 
-.tutela-layout {
-  @apply min-h-screen bg-slate-950 text-slate-50;
-}
+@layer utilities {
+  .tutela-scroll {
+    @apply overflow-y-auto;
+  }
 
-.tutela-header {
-  @apply sticky top-0 z-40 border-b border-slate-800 bg-slate-950/80 backdrop-blur;
-}
+  .tutela-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
 
-.tutela-header-inner {
-  @apply mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8;
-}
+  .tutela-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.7);
+    border-radius: 9999px;
+  }
 
-.tutela-main {
-  @apply mx-auto flex max-w-7xl gap-6 px-4 pb-10 pt-24 sm:px-6 lg:px-8;
-}
-
-/* Sidebar navigation */
-.tutela-sidebar {
-  @apply hidden w-60 shrink-0 flex-col gap-1 md:flex;
-}
-
-.tutela-nav-link {
-  @apply flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white;
-}
-
-.tutela-nav-link-active {
-  @apply bg-slate-800 text-white;
-}
-
-/* Cards */
-.tutela-card {
-  @apply rounded-xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm;
-}
-
-/* Badges */
-.tutela-badge {
-  @apply inline-flex items-center rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-200;
-}
-
-/* Simple status pills */
-.status-pill {
-  @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium;
-}
-
-.status-pill--success {
-  @apply bg-emerald-900/40 text-emerald-300;
-}
-
-.status-pill--warning {
-  @apply bg-amber-900/40 text-amber-300;
-}
-
-.status-pill--danger {
-  @apply bg-rose-900/40 text-rose-300;
-}
-
-/* Table helpers */
-.tutela-table {
-  @apply w-full border-collapse text-sm;
-}
-
-.tutela-table thead {
-  @apply bg-slate-900/80;
-}
-
-.tutela-table th {
-  @apply px-3 py-2 text-left font-semibold text-slate-300;
-}
-
-.tutela-table td {
-  @apply border-t border-slate-800 px-3 py-2 text-slate-200;
-}
-
-/* Simple metric grid */
-.metrics-grid {
-  @apply grid gap-4 md:grid-cols-3;
-}
-
-/* Progress bar */
-.tutela-progress {
-  @apply h-2 w-full overflow-hidden rounded-full bg-slate-800;
-}
-
-.tutela-progress-bar {
-  @apply h-full rounded-full bg-emerald-500;
-}
-
-/* Timeline dots used في dashboard القديم */
-.activity-dot {
-  @apply h-2 w-2 rounded-full;
-}
-
-.activity-dot.success {
-  @apply bg-emerald-500;
-}
-
-.activity-dot.info {
-  @apply bg-blue-500;
-}
-
-.activity-dot.warning {
-  @apply bg-amber-500;
-}
-
-.activity-dot.error {
-  @apply bg-rose-500;
+  .tutela-scroll::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
 }
