@@ -8,7 +8,7 @@ import {
   Shield,
   Bell,
   ChevronDown,
-  LogOut
+  LogOut,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { ROUTES } from "@/config/routes";
@@ -24,7 +24,7 @@ export default function AppShell({ children }: AppShellProps) {
   const { pathname } = useLocation();
   
   const navigation = [
- { name: "Dashboard", href: ROUTES.dashboard, icon: BarChart3 },
+    { name: "Dashboard", href: ROUTES.dashboard, icon: BarChart3 },
     { name: "Marketplace", href: ROUTES.marketplace, icon: Package },
     { name: "Contracts", href: ROUTES.contracts, icon: FileText },
     { name: "Partners", href: ROUTES.partners, icon: Users },
@@ -40,9 +40,12 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--tutela-gray-50)' }}>
+    <div className="min-h-screen" style={{ background: "var(--tutela-gray-50)" }}>
       {/* Navigation Header */}
-      <nav className="bg-white border-b fixed w-full top-0 z-50 shadow-sm" style={{ borderColor: 'var(--tutela-gray-200)' }}>
+      <nav
+        className="bg-white border-b fixed w-full top-0 z-50 shadow-sm"
+        style={{ borderColor: "var(--tutela-gray-200)" }}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
@@ -54,16 +57,23 @@ export default function AppShell({ children }: AppShellProps) {
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                   3
                 </span>
-@@ -72,46 +70,49 @@ export default function AppShell({ children }: AppShellProps) {
-                <span className="text-sm font-medium text-gray-700">
-                  {(user as any)?.firstName} {(user as any)?.lastName}
-                </span>
+                </div>
+              <div className="flex items-center space-x-3 px-3 py-1 rounded-md hover:bg-gray-50">
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
+                  {`${(user as any)?.firstName?.[0] ?? "T"}${(user as any)?.lastName?.[0] ?? "U"}`}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-gray-700">
+                    {(user as any)?.firstName} {(user as any)?.lastName}
+                  </span>
+                  <span className="text-xs text-gray-500">Verified Trader</span>
+                </div>
                 <ChevronDown className="text-gray-400 text-sm h-4 w-4" />
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => window.location.href = "/api/logout"}
+                onClick={() => (window.location.href = "/api/logout")}
                 className="text-gray-600 hover:text-gray-900"
               >
                 <LogOut className="h-4 w-4" />
@@ -85,7 +95,7 @@ export default function AppShell({ children }: AppShellProps) {
                   <NavLink
                     key={item.name}
                     to={item.href}
-                    className={`tutela-nav-item ${isActive ? 'active' : ''}`}
+                    className={`tutela-nav-item ${isActive ? "active" : ""}`}
                   >
                     <Icon className="mr-3 text-sm h-5 w-5" />
                     {item.name}
@@ -97,10 +107,9 @@ export default function AppShell({ children }: AppShellProps) {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 ml-64">
-          {children}
-        </main>
+        <main className="flex-1 ml-64">{children}</main>
       </div>
     </div>
   );
+  }
   
