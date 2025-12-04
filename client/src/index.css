@@ -2,241 +2,102 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  * {
-    @apply border-border;
-  }
+/* =========
+   Global base styles
+   ========= */
 
-  body {
-    @apply font-sans antialiased bg-background text-foreground;
-    font-family: 'Inter', system-ui, sans-serif;
-  }
-}
-
-/* TUTELA Brand Colors - Based on Official Logo */
 :root {
-  /* Primary brand colors from logo */
-  --tutela-primary: hsl(220, 85%, 55%); /* Bright blue from logo */
-  --tutela-secondary: hsl(220, 20%, 25%); /* Dark charcoal from logo */
-  --tutela-accent: hsl(220, 85%, 65%); /* Lighter blue accent */
-  
-  /* Extended palette */
-  --tutela-blue-50: hsl(220, 100%, 97%);
-  --tutela-blue-100: hsl(220, 95%, 94%);
-  --tutela-blue-200: hsl(220, 90%, 88%);
-  --tutela-blue-500: hsl(220, 85%, 55%);
-  --tutela-blue-600: hsl(220, 85%, 50%);
-  --tutela-blue-700: hsl(220, 85%, 45%);
-  
-  --tutela-gray-50: hsl(220, 15%, 97%);
-  --tutela-gray-100: hsl(220, 15%, 94%);
-  --tutela-gray-200: hsl(220, 15%, 88%);
-  --tutela-gray-800: hsl(220, 20%, 25%);
-  --tutela-gray-900: hsl(220, 25%, 15%);
-  
-  /* Status colors that complement the brand */
-  --tutela-success: hsl(145, 65%, 45%);
-  --tutela-warning: hsl(45, 85%, 55%);
-  --tutela-error: hsl(0, 75%, 55%);
-  
-  /* Gradient from logo */
-  --tutela-gradient: linear-gradient(135deg, var(--tutela-secondary) 0%, var(--tutela-primary) 100%);
+  /* ألوان عامة بسيطة (نستخدم ألوان Tailwind العادية) */
+  --tutela-bg: #020617;        /* slate-950 */
+  --tutela-surface: #020617;   /* نفس الخلفية حالياً */
+  --tutela-text: #e5e7eb;      /* gray-200 */
 }
 
-/* TUTELA Brand Components */
-.tutela-sidebar {
-  @apply w-64 border-r;
-  background: linear-gradient(180deg, var(--tutela-gray-50) 0%, white 100%);
-  border-color: var(--tutela-gray-200);
+body {
+  @apply bg-slate-950 text-gray-100 antialiased;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.tutela-nav-item {
-  @apply flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 mb-1 mx-2;
-  color: var(--tutela-gray-800);
+#root {
+  @apply min-h-screen;
 }
 
-.tutela-nav-item:hover {
-  background: var(--tutela-blue-50);
-  color: var(--tutela-primary);
+/* =========
+   Layout helpers
+   ========= */
+
+.tutela-page {
+  @apply min-h-screen flex flex-col;
 }
 
-.tutela-nav-item.active {
-  background: var(--tutela-gradient);
-  color: white;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+.tutela-page-main {
+  @apply flex-1 flex flex-col;
 }
 
-.tutela-metric-card {
-  @apply bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300 p-6;
-  border-color: var(--tutela-gray-200);
+/* =========
+   Cards / containers
+   ========= */
+
+.tutela-card {
+  @apply bg-slate-900/60 border border-slate-800 rounded-2xl p-6 shadow-sm;
 }
 
-.tutela-metric-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(59, 130, 246, 0.1);
+.tutela-card-muted {
+  @apply bg-slate-900/40 border border-slate-800/70;
 }
 
-.tutela-btn-primary {
-  @apply px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center;
-  background: var(--tutela-gradient);
-  color: white;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+.tutela-section-title {
+  @apply text-sm font-medium text-slate-400 tracking-wide uppercase;
 }
 
-.tutela-btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
-}
+/* =========
+   Tables
+   ========= */
 
-.tutela-btn-secondary {
-  @apply px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center border-2;
-  background: white;
-  color: var(--tutela-secondary);
-  border-color: var(--tutela-gray-200);
-}
-
-.tutela-btn-secondary:hover {
-  background: var(--tutela-blue-50);
-  border-color: var(--tutela-primary);
-  color: var(--tutela-primary);
-}
-
-.tutela-logo {
-  @apply flex items-center space-x-3;
-}
-
-.tutela-logo-icon {
-  @apply w-10 h-10 rounded-lg flex items-center justify-center;
-  background: var(--tutela-gradient);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
-}
-
-.tutela-insight-card {
-  @apply border rounded-xl p-6 transition-all duration-200;
-}
-
-.tutela-insight-card.info {
-  background: var(--tutela-blue-50);
-  border-color: var(--tutela-blue-200);
-}
-
-.tutela-insight-card.success {
-  background: var(--tutela-gray-50);
-  border-color: var(--tutela-success);
-}
-
-.tutela-insight-card.warning {
-  background: hsl(45, 100%, 97%);
-  border-color: var(--tutela-warning);
-}
-
-/* Modern gradient overlays */
-.tutela-header-gradient {
-  background: linear-gradient(135deg, var(--tutela-blue-50) 0%, white 100%);
-}
-
-.tutela-card-header {
-  background: linear-gradient(135deg, var(--tutela-blue-50) 0%, var(--tutela-gray-50) 100%);
-}
-
-/* Status badge styles */
-.status-badge {
-  @apply inline-flex px-2 py-1 text-xs font-semibold rounded-full;
-}
-
-.status-badge.active {
-  @apply bg-green-100 text-green-800;
-}
-
-.status-badge.pending {
-  @apply bg-yellow-100 text-yellow-800;
-}
-
-.status-badge.closed {
-  @apply bg-gray-100 text-gray-800;
-}
-
-.status-badge.sell {
-  @apply bg-green-100 text-green-800;
-}
-
-.status-badge.buy {
-  @apply bg-blue-100 text-blue-800;
-}
-
-/* Table styles */
 .tutela-table {
-  @apply min-w-full divide-y divide-gray-200;
+  @apply w-full text-sm text-left;
 }
 
 .tutela-table thead {
-  @apply bg-gray-50;
+  @apply text-xs uppercase text-slate-400 border-b border-slate-800;
 }
 
-.tutela-table th {
-  @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
-}
-
+.tutela-table th,
 .tutela-table td {
-  @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+  @apply px-4 py-3 align-middle;
 }
 
-.tutela-table tr:hover {
-  @apply bg-gray-50;
+.tutela-table tbody tr {
+  @apply border-b border-slate-900/60;
 }
 
-/* Loading states */
-.loading-pulse {
-  @apply animate-pulse bg-gray-200 rounded;
+/* =========
+   Status pills
+   ========= */
+
+.tutela-badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border;
 }
 
-/* Form styles */
-.tutela-form-group {
-  @apply space-y-2;
+.tutela-badge-success {
+  @apply tutela-badge border-emerald-500/30 text-emerald-300 bg-emerald-500/10;
 }
 
-.tutela-form-label {
-  @apply block text-sm font-medium text-gray-700;
+.tutela-badge-warning {
+  @apply tutela-badge border-amber-500/30 text-amber-300 bg-amber-500/10;
 }
 
-.tutela-form-input {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200;
+.tutela-badge-danger {
+  @apply tutela-badge border-rose-500/30 text-rose-300 bg-rose-500/10;
 }
 
-.tutela-form-select {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200;
+/* =========
+   Simple utility overrides
+   ========= */
+
+.tutela-scroll {
+  @apply overflow-y-auto;
 }
 
-.tutela-form-textarea {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200;
-}
-
-/* Modal styles */
-.tutela-modal-overlay {
-  @apply fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50;
-}
-
-.tutela-modal-content {
-  @apply relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white;
-}
-
-/* Activity timeline */
-.activity-dot {
-  @apply w-2 h-2 rounded-full mt-2;
-}
-
-.activity-dot.success {
-  @apply bg-green-500;
-}
-
-.activity-dot.info {
-  @apply bg-blue-500;
-}
-
-.activity-dot.warning {
-  @apply bg-yellow-500;
-}
-
-.activity-dot.error {
-  @apply bg-red-500;
-}
+/* لتفادي أي تعارضات قديمة، ما في أي كود جافاسكربت أو JSON هنا،
+   فقط CSS عادي مع @tailwind و @apply المدعومة من Tailwind. */
