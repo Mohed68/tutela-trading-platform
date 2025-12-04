@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig(async ({ mode }) => {
   const isProduction = mode === "production";
@@ -23,9 +23,17 @@ export default defineConfig(async ({ mode }) => {
   ];
 
   return {
+    root: "client",
     plugins,
+    resolve: {
+      alias: {
+        "@": "/workspace/tutela-trading-platform/client/src",
+        "@assets": "/workspace/tutela-trading-platform/attached_assets",
+        "react-router-dom": "/workspace/tutela-trading-platform/client/src/lib/router",
+      },
+    },
     build: {
-      outDir: "dist/public",
+      outDir: "../dist/public",
     },
   };
 });
