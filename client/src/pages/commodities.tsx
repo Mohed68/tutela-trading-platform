@@ -1,13 +1,12 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { ROUTES, ROUTE_ALIASES } from "@/config/routes";
+import { ROUTES } from "@/config/routes";
 
 export default function CommoditiesRedirect() {
   const { search } = useLocation();
-  const baseRedirect = ROUTE_ALIASES[ROUTES.commodities] ?? ROUTES.marketplace;
-  const hasQuery = baseRedirect.includes("?");
+  const hasQuery = ROUTES.commodities.includes("?");
   const redirectTarget = search
-    ? `${baseRedirect}${hasQuery ? "&" : "?"}${search.slice(1)}`
-    : baseRedirect;
+    ? `${ROUTES.commodities}${hasQuery ? "&" : "?"}${search.slice(1)}`
+    : ROUTES.commodities;
 
   return <Navigate to={redirectTarget} replace />;
 }
