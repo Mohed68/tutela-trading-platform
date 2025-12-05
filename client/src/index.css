@@ -2,115 +2,132 @@
 @tailwind components;
 @tailwind utilities;
 
-
 :root {
-  --tutela-green-500: #22c55e;
-  --tutela-green-600: #16a34a;
-  --tutela-green-700: #15803d;
-
   --tutela-gray-50:  #f9fafb;
   --tutela-gray-100: #f3f4f6;
   --tutela-gray-200: #e5e7eb;
-  --tutela-gray-300: #d1d5db;
-  --tutela-gray-700: #374151;
   --tutela-gray-900: #111827;
 
-  --tutela-border-subtle: var(--tutela-gray-200);
-  --tutela-surface: #ffffff;
+  --tutela-green-500: #16a34a;
+  --tutela-green-600: #16a34a;
+
+  --tutela-border-color: var(--tutela-gray-200);
+  --tutela-bg-page: var(--tutela-gray-50);
 }
 
 
-@layer base {
-  * {
-    @apply border-border;
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply min-h-screen bg-slate-50 text-slate-900 antialiased;
+  background-color: var(--tutela-bg-page);
+}
+
+/* الروابط العامة */
+a {
+  @apply text-emerald-600 hover:text-emerald-700 underline-offset-4;
+}
+
+.tutela-app-root {
+  @apply min-h-screen flex flex-col;
+}
+
+.tutela-main-shell {
+  @apply flex min-h-screen;
+  background-color: var(--tutela-bg-page);
+}
+
+.tutela-sidebar {
+  @apply hidden md:flex md:flex-col md:w-64 border-r bg-white;
+  border-color: var(--tutela-border-color);
+}
+
+.tutela-sidebar-nav {
+  @apply flex-1 flex flex-col gap-1 px-4 py-4;
+}
+
+.tutela-sidebar-nav a {
+  @apply flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+    text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+}
+
+.tutela-sidebar-nav a[data-active="true"] {
+  @apply bg-emerald-50 text-emerald-700;
+}
+
+/* محتوى الصفحة الرئيسي */
+.tutela-page {
+  @apply flex-1 flex flex-col;
+}
+
+.tutela-page-header {
+  @apply flex items-center justify-between px-6 pt-20 pb-4 border-b bg-white/80 backdrop-blur;
+  border-color: var(--tutela-border-color);
+}
+
+.tutela-page-content {
+  @apply px-6 py-6 max-w-7xl w-full mx-auto;
+}
+
+/* =========================
+   Dashboard / cards helpers
+   ========================= */
+
+.tutela-card-grid {
+  @apply grid gap-4 md:gap-6;
+}
+
+@media (min-width: 768px) {
+  .tutela-card-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
   }
 
-  body {
-    @apply bg-slate-50 text-slate-900 antialiased;
-    background-color: var(--tutela-gray-50);
+  .tutela-card-span-4 {
+    grid-column: span 4 / span 4;
   }
 
-  #root {
-    min-height: 100vh;
+  .tutela-card-span-6 {
+    grid-column: span 6 / span 6;
   }
 
-  a {
-    @apply text-emerald-600 hover:text-emerald-700 underline-offset-4;
+  .tutela-card-span-8 {
+    grid-column: span 8 / span 8;
   }
 }
 
-
-@layer components {
-  .tutela-layout {
-    @apply min-h-screen flex flex-col bg-slate-50;
-  }
-
-  .tutela-main {
-    @apply flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full gap-6 px-4 sm:px-6 lg:px-8 py-6;
-  }
-
-  .tutela-card {
-    @apply bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6;
-  }
-
-  .tutela-card-muted {
-    @apply bg-slate-50 border-dashed border-slate-200;
-  }
-
-  .tutela-section-title {
-    @apply text-sm font-medium text-slate-500 uppercase tracking-wide mb-2;
-  }
-
-  .tutela-section-heading {
-    @apply text-lg font-semibold text-slate-900;
-  }
-
-  .tutela-badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700;
-  }
-
-  .tutela-badge-muted {
-    @apply bg-slate-100 text-slate-700;
-  }
-
-  .tutela-grid-2 {
-    @apply grid grid-cols-1 md:grid-cols-2 gap-4;
-  }
-
-  .tutela-grid-3 {
-    @apply grid grid-cols-1 md:grid-cols-3 gap-4;
-  }
-
-  .tutela-table {
-    @apply w-full text-sm;
-  }
-
-  .tutela-table thead {
-    @apply text-xs font-semibold text-slate-500 uppercase tracking-wide;
-  }
-
-  .tutela-table th,
-  .tutela-table td {
-    @apply px-3 py-2 border-b border-slate-100;
-  }
+.tutela-card {
+  @apply bg-white rounded-xl border shadow-sm;
+  border-color: var(--tutela-border-color);
 }
 
+.tutela-card-header {
+  @apply flex items-center justify-between px-4 py-3 border-b;
+  border-color: var(--tutela-border-color);
+}
 
-@layer utilities {
-  .tutela-scroll {
-    @apply overflow-y-auto;
-  }
+.tutela-card-title {
+  @apply text-sm font-semibold text-slate-800;
+}
 
-  .tutela-scroll::-webkit-scrollbar {
-    width: 6px;
-  }
+.tutela-card-body {
+  @apply p-4;
+}
 
-  .tutela-scroll::-webkit-scrollbar-thumb {
-    background-color: rgba(148, 163, 184, 0.7);
-    border-radius: 9999px;
-  }
+.tutela-badge-pill {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
 
-  .tutela-scroll::-webkit-scrollbar-track {
-    background-color: transparent;
-  }
+.tutela-badge-green {
+  @apply tutela-badge-pill bg-emerald-50 text-emerald-700;
+}
+
+.tutela-badge-amber {
+  @apply tutela-badge-pill bg-amber-50 text-amber-700;
+}
+
+.tutela-badge-slate {
+  @apply tutela-badge-pill bg-slate-100 text-slate-700;
 }
