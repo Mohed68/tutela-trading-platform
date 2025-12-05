@@ -2,129 +2,157 @@
 @tailwind components;
 @tailwind utilities;
 
+
 :root {
-  --tutela-gray-50:  #f9fafb;
-  --tutela-gray-100: #f3f4f6;
-  --tutela-gray-200: #e5e7eb;
-  --tutela-gray-900: #111827;
 
-  --tutela-green-500: #16a34a;
-  --tutela-green-600: #16a34a;
+  --tutela-green-50: #e9f7f0;
+  --tutela-green-100: #c9ecd9;
+  --tutela-green-200: #a6e0c0;
+  --tutela-green-300: #7fd4a5;
+  --tutela-green-400: #54c789;
+  --tutela-green-500: #22b36a;
+  --tutela-green-600: #1c9156;
+  --tutela-green-700: #166f42;
+  --tutela-green-800: #104d2e;
+  --tutela-green-900: #0a301d;
 
-  --tutela-border-color: var(--tutela-gray-200);
-  --tutela-bg-page: var(--tutela-gray-50);
+  --tutela-gray-50: #f7f7f8;
+  --tutela-gray-100: #e4e4e7;
+  --tutela-gray-200: #d4d4d8;
+  --tutela-gray-300: #a1a1aa;
+  --tutela-gray-400: #71717a;
+  --tutela-gray-500: #52525b;
+  --tutela-gray-600: #3f3f46;
+  --tutela-gray-700: #27272f;
+  --tutela-gray-800: #18181b;
+  --tutela-gray-900: #09090b;
+
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+
+  --primary: 142 71% 45%;        
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 142 71% 45%;
+
+  --radius: 0.75rem;
 }
 
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
 
-html,
-body {
-  height: 100%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+
+  --primary: 142 71% 45%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 142 71% 45%;
 }
 
-body {
-  @apply min-h-screen bg-slate-50 text-slate-900 antialiased;
-  background-color: var(--tutela-bg-page);
-}
-
-/* الروابط العامة */
-a {
-  @apply text-emerald-600 hover:text-emerald-700 underline-offset-4;
-}
-
-.tutela-app-root {
-  @apply min-h-screen flex flex-col;
-}
-
-.tutela-main-shell {
-  @apply flex min-h-screen;
-  background-color: var(--tutela-bg-page);
-}
-
-.tutela-sidebar {
-  @apply hidden md:flex md:flex-col md:w-64 border-r bg-white;
-  border-color: var(--tutela-border-color);
-}
-
-.tutela-sidebar-nav {
-  @apply flex-1 flex flex-col gap-1 px-4 py-4;
-}
-
-.tutela-sidebar-nav a {
-  @apply flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
-    text-slate-600 hover:bg-slate-100 hover:text-slate-900;
-}
-
-.tutela-sidebar-nav a[data-active="true"] {
-  @apply bg-emerald-50 text-emerald-700;
-}
-
-/* محتوى الصفحة الرئيسي */
-.tutela-page {
-  @apply flex-1 flex flex-col;
-}
-
-.tutela-page-header {
-  @apply flex items-center justify-between px-6 pt-20 pb-4 border-b bg-white/80 backdrop-blur;
-  border-color: var(--tutela-border-color);
-}
-
-.tutela-page-content {
-  @apply px-6 py-6 max-w-7xl w-full mx-auto;
-}
-
-
-.tutela-card-grid {
-  @apply grid gap-4 md:gap-6;
-}
-
-@media (min-width: 768px) {
-  .tutela-card-grid {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
+@layer base {
+  * {
+    @apply border-border;
   }
 
-  .tutela-card-span-4 {
-    grid-column: span 4 / span 4;
+  body {
+    @apply bg-background text-foreground antialiased;
   }
 
-  .tutela-card-span-6 {
-    grid-column: span 6 / span 6;
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
   }
 
-  .tutela-card-span-8 {
-    grid-column: span 8 / span 8;
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
   }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--foreground));
+  }
+}
+
+.tutela-layout {
+  @apply min-h-screen flex flex-col bg-[hsl(var(--background))];
+}
+
+.tutela-main {
+  @apply flex-1 flex flex-col lg:flex-row gap-6;
 }
 
 .tutela-card {
-  @apply bg-white rounded-xl border shadow-sm;
-  border-color: var(--tutela-border-color);
+  @apply rounded-2xl bg-white shadow-sm border border-[hsl(var(--border))] p-4;
 }
 
-.tutela-card-header {
-  @apply flex items-center justify-between px-4 py-3 border-b;
-  border-color: var(--tutela-border-color);
+.tutela-badge {
+  @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+         bg-[hsl(var(--tutela-green-50))] text-[color:var(--tutela-green-700)];
 }
 
-.tutela-card-title {
-  @apply text-sm font-semibold text-slate-800;
+.activity-dot {
+  @apply w-2 h-2 rounded-full mt-2;
 }
 
-.tutela-card-body {
-  @apply p-4;
+.activity-dot.success {
+  @apply bg-green-500;
 }
 
-.tutela-badge-pill {
-  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+.activity-dot.info {
+  @apply bg-blue-500;
 }
 
-.tutela-badge-green {
-  @apply tutela-badge-pill bg-emerald-50 text-emerald-700;
+.activity-dot.warning {
+  @apply bg-yellow-500;
 }
 
-.tutela-badge-amber {
-  @apply tutela-badge-pill bg-amber-50 text-amber-700;
+.activity-dot.error {
+  @apply bg-red-500;
 }
 
-.tutela-badge-slate {
-  @apply tutela-badge-pill bg-slate-100 text-slate-700;
+.tutela-modal-content {
+  @apply relative mx-auto p-5 border w-full max-w-2xl rounded-2xl bg-white shadow-lg;
 }
