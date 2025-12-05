@@ -2,91 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Root theme tokens (مبسّطة عشان ما تكسر الـ parser) */
+:root {
+  --tutela-primary: #16a34a;
+  --tutela-primary-foreground: #ffffff;
+
+  --tutela-gray-50: #f8fafc;
+  --tutela-gray-100: #e2e8f0;
+  --tutela-gray-200: #cbd5f5;
+  --tutela-gray-800: #0f172a;
+
+  --tutela-border: #e2e8f0;
+  --tutela-bg: #f8fafc;
+  --tutela-text: #0f172a;
+}
+
+/* Global */
 html,
-body,
-#root {
-  margin: 0;
-  padding: 0;
+body {
   height: 100%;
 }
 
-:root {
-  --tutela-primary: #16a34a;
-  --tutela-primary-soft: #dcfce7;
-  --tutela-primary-strong: #15803d;
-  --tutela-bg: #0f172a;
-  --tutela-surface: #020617;
-  --tutela-border: #1e293b;
-  --tutela-text: #e2e8f0;
-  --tutela-muted-text: #94a3b8;
-}
-
-.dark {
-  color-scheme: dark;
-}
-
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
-  background-color: var(--tutela-bg);
-  color: var(--tutela-text);
+  @apply bg-slate-50 text-slate-900 antialiased;
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+#root {
+  @apply min-h-screen;
 }
 
-::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.9);
+/* Basic layout helpers لتوتيلا */
+.tutela-layout {
+  @apply min-h-screen bg-slate-50;
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.8);
-  border-radius: 9999px;
+.tutela-shell {
+  @apply flex min-h-screen;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 0.9);
+.tutela-shell-sidebar {
+  @apply w-64 border-r bg-white;
 }
 
-.app-root {
-  min-height: 100vh;
-  background-color: var(--tutela-bg);
+.tutela-shell-main {
+  @apply flex-1 min-h-screen bg-slate-50;
 }
 
+/* Scroll area عام */
+.tutela-scroll {
+  @apply overflow-y-auto;
+}
 
+/* بطاقات عامة */
 .tutela-card {
-  background-color: rgba(15, 23, 42, 0.95);
-  border: 1px solid var(--tutela-border);
-  border-radius: 1rem;
-  padding: 1.25rem;
+  @apply rounded-xl border bg-white shadow-sm;
 }
 
-.tutela-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+.tutela-card-header {
+  @apply flex items-center justify-between border-b px-4 py-3;
 }
 
-.tutela-muted {
-  font-size: 0.875rem;
-  color: var(--tutela-muted-text);
+.tutela-card-title {
+  @apply text-sm font-medium text-slate-900;
 }
 
-.tutela-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background-color: rgba(22, 163, 74, 0.1);
-  color: var(--tutela-primary);
-}
-
-.tutela-page {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 5rem 1.25rem 2.5rem;
+.tutela-card-body {
+  @apply p-4;
 }
