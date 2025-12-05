@@ -2,9 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-
 :root {
-
   --tutela-green-50: #e9f7f0;
   --tutela-green-100: #c9ecd9;
   --tutela-green-200: #a6e0c0;
@@ -36,7 +34,7 @@
   --popover: 0 0% 100%;
   --popover-foreground: 240 10% 3.9%;
 
-  --primary: 142 71% 45%;        
+  --primary: 142 71% 45%;
   --primary-foreground: 0 0% 100%;
 
   --secondary: 240 4.8% 95.9%;
@@ -129,8 +127,7 @@
 }
 
 .tutela-badge {
-  @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-         bg-[hsl(var(--tutela-green-50))] text-[color:var(--tutela-green-700)];
+  @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-[hsl(var(--tutela-green-50))] text-[color:var(--tutela-green-700)];
 }
 
 .activity-dot {
