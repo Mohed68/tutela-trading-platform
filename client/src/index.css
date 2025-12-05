@@ -2,183 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ====== Tutela theme tokens ====== */
-:root {
-  /* Brand */
-  --tutela-primary-50:  #e8f7ec;
-  --tutela-primary-100: #c8ebd3;
-  --tutela-primary-200: #9fddb5;
-  --tutela-primary-300: #6fca91;
-  --tutela-primary-400: #36b06a;
-  --tutela-primary-500: #16a34a;
-  --tutela-primary-600: #15803d;
-  --tutela-primary-700: #166534;
-  --tutela-primary-800: #14532d;
-  --tutela-primary-900: #052e16;
-
-  /* Neutrals */
-  --tutela-gray-25:  #f9fafb;
-  --tutela-gray-50:  #f3f4f6;
-  --tutela-gray-100: #e5e7eb;
-  --tutela-gray-200: #d1d5db;
-  --tutela-gray-300: #9ca3af;
-  --tutela-gray-400: #6b7280;
-  --tutela-gray-500: #4b5563;
-  --tutela-gray-600: #374151;
-  --tutela-gray-700: #1f2933;
-  --tutela-gray-800: #111827;
-  --tutela-gray-900: #020617;
-
-  /* Surfaces */
-  --tutela-surface:        #ffffff;
-  --tutela-surface-muted:  #f9fafb;
-  --tutela-border-subtle:  var(--tutela-gray-200);
-  --tutela-border-strong:  var(--tutela-gray-300);
-
-  /* Text */
-  --tutela-text-main:      #020617;
-  --tutela-text-muted:     #4b5563;
-  --tutela-text-soft:      #6b7280;
-}
-
-/* ====== Global base styles ====== */
 html,
-body {
+body,
+#root {
+  margin: 0;
+  padding: 0;
   height: 100%;
 }
 
+:root {
+  --tutela-primary: #16a34a;
+  --tutela-primary-soft: #dcfce7;
+  --tutela-primary-strong: #15803d;
+  --tutela-bg: #0f172a;
+  --tutela-surface: #020617;
+  --tutela-border: #1e293b;
+  --tutela-text: #e2e8f0;
+  --tutela-muted-text: #94a3b8;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background-color: var(--tutela-gray-50);
-  color: var(--tutela-text-main);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background-color: var(--tutela-bg);
+  color: var(--tutela-text);
 }
 
-/* Root app container (Vite entry) */
-#root {
-  min-height: 100vh;
-}
-
-/* ====== Typography helpers ====== */
-.tutela-heading-xl {
-  @apply text-3xl md:text-4xl font-semibold tracking-tight;
-}
-
-.tutela-heading-lg {
-  @apply text-2xl md:text-3xl font-semibold tracking-tight;
-}
-
-.tutela-heading-md {
-  @apply text-xl font-semibold tracking-tight;
-}
-
-.tutela-body {
-  @apply text-sm text-slate-700;
-}
-
-/* ====== Layout & shell ====== */
-.tutela-app-shell {
-  min-height: 100vh;
-  background-color: var(--tutela-gray-50);
-}
-
-.tutela-toolbar {
-  @apply flex items-center justify-between px-6 py-4 border-b bg-white;
-  border-color: var(--tutela-border-subtle);
-}
-
-.tutela-sidebar {
-  @apply h-full border-r bg-white;
-  border-color: var(--tutela-border-subtle);
-}
-
-/* ====== Cards & panels ====== */
-.tutela-card {
-  @apply bg-white rounded-xl border shadow-sm;
-  border-color: var(--tutela-border-subtle);
-}
-
-.tutela-card-muted {
-  @apply bg-slate-50 rounded-xl border;
-  border-color: var(--tutela-border-subtle);
-}
-
-.tutela-card-header {
-  @apply flex items-center justify-between gap-2 px-5 py-4 border-b;
-  border-color: var(--tutela-border-subtle);
-}
-
-.tutela-card-title {
-  @apply text-base font-semibold text-slate-900;
-}
-
-.tutela-card-body {
-  @apply px-5 py-4;
-}
-
-/* ====== Pills & badges ====== */
-.tutela-badge-muted {
-  @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium;
-  border-color: var(--tutela-border-subtle);
-  color: var(--tutela-text-muted);
-  background-color: var(--tutela-surface-muted);
-}
-
-/* ====== Tables ====== */
-.tutela-table {
-  @apply min-w-full text-sm;
-}
-
-.tutela-table thead tr {
-  @apply border-b bg-slate-50;
-  border-color: var(--tutela-border-subtle);
-}
-
-.tutela-table th {
-  @apply px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500;
-}
-
-.tutela-table td {
-  @apply px-4 py-2 align-middle text-slate-800;
-}
-
-.tutela-table tbody tr {
-  @apply border-b;
-  border-color: var(--tutela-border-subtle);
-}
-
-/* ====== Status colors ====== */
-.tutela-status-pill {
-  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
-}
-
-.tutela-status-pill--success {
-  @apply bg-emerald-50 text-emerald-700;
-}
-
-.tutela-status-pill--warning {
-  @apply bg-amber-50 text-amber-700;
-}
-
-.tutela-status-pill--danger {
-  @apply bg-rose-50 text-rose-700;
-}
-
-/* ====== Scrollbar (WebKit) ====== */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background-color: transparent;
+  background: rgba(15, 23, 42, 0.9);
 }
 
 ::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
   border-radius: 9999px;
-  background-color: var(--tutela-gray-200);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--tutela-gray-300);
+  background: rgba(71, 85, 105, 0.9);
+}
+
+.app-root {
+  min-height: 100vh;
+  background-color: var(--tutela-bg);
+}
+
+
+.tutela-card {
+  background-color: rgba(15, 23, 42, 0.95);
+  border: 1px solid var(--tutela-border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+
+.tutela-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.tutela-muted {
+  font-size: 0.875rem;
+  color: var(--tutela-muted-text);
+}
+
+.tutela-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background-color: rgba(22, 163, 74, 0.1);
+  color: var(--tutela-primary);
+}
+
+.tutela-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 5rem 1.25rem 2.5rem;
 }
