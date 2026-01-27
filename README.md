@@ -1,217 +1,205 @@
-# TUTELA - Physical Commodity Trading Platform
+TUTELA – Physical Commodity Trading Platform (V2)
 
-A comprehensive digital trading platform for physical commodities with AI-powered validation, blockchain integration, and verified partner networks.
+TUTELA is a full-stack web platform for managing and securing physical commodity trading workflows such as oil, fuels, metals, and agricultural products.
 
-![TUTELA Platform](https://img.shields.io/badge/Platform-TUTELA-blue?style=for-the-badge)
-![Status](https://img.shields.io/badge/Status-Production%20Ready-green?style=for-the-badge)
+The platform focuses on:
 
-## 🌟 Overview
+Company verification
 
-TUTELA is a full-stack web application for secure physical commodity trading, specializing in:
-- **Fuel & Hydrocarbons** (Crude Oil, Natural Gas, Refined Products)
-- **Metals & Precious Metals** (Gold, Silver, Copper, Steel)
-- **Agricultural Products** (Wheat, Soybeans, Coffee, Cotton)
+Offer and contract management
 
-The platform combines AI-powered document validation, blockchain integration for smart contracts, and comprehensive partner verification systems to create a trusted trading environment.
+Document handling
 
-## 🚀 Key Features
+AI-assisted validation
 
-### 🔐 Security & Authentication
-- **Replit Auth Integration** with OpenID Connect
-- **Session Management** with PostgreSQL storage
-- **Role-based Access Control** for verified traders
+Centralized trade data
 
-### 🤖 AI-Powered Validation
-- **Document Authentication** using OpenAI GPT-4o
-- **Fraud Detection** with advanced pattern recognition
-- **Market Insights** and trading recommendations
+This project is currently an MVP intended for controlled pilots and further development.
 
-### ⛓️ Blockchain Integration
-- **Smart Contracts** for secure transactions
-- **Immutable Transaction Records** on blockchain
-- **Automated Contract Execution** with milestone tracking
+🧩 Features
 
-### 👥 Partner Verification
-- **Financial Rating System** with credit score validation
-- **Business Credential Verification** for qualified partners
-- **Trusted Network** of verified commodity traders
+Company registration & verification
 
-## 🛠️ Technology Stack
+Commodity and offer listings
 
-### Frontend
-- **React 18** with TypeScript
-- **Vite** for fast development and optimized builds
-- **shadcn/ui** components built on Radix UI
-- **Tailwind CSS** with custom design system
-- **TanStack Query** for server state management
-- **Wouter** for lightweight routing
+Trade contract workflow
 
-### Backend
-- **Node.js** with Express.js framework
-- **TypeScript** with ES modules
-- **RESTful API** design pattern
-- **Multer** for document upload handling
+File upload for commercial documents
 
-### Database
-- **PostgreSQL** with Neon serverless hosting
-- **Drizzle ORM** for type-safe operations
-- **Automated Migrations** with Drizzle Kit
+AI-assisted document validation (OpenAI)
 
-### External Services
-- **OpenAI API** for AI validation (GPT-4o)
-- **Replit Auth** for authentication
-- **Neon Database** for serverless PostgreSQL
+REST API backend
 
-## 📊 Demo Data
+Modern React UI
 
-The platform includes comprehensive demo data featuring:
+🏗️ Tech Stack
+Frontend
 
-### 9 Active Trading Offers
-- **WTI Crude Oil** - $78.45/barrel (10,000 barrels available)
-- **Gold Bullion** - $775,000/400oz bar (100 bars available)
-- **Hard Red Winter Wheat** - $285/metric ton (5,000 MT available)
-- **Natural Gas** - $2.85/MMBtu (50,000 MMBtu available)
-- **Silver Bullion** - $23,500/1000oz bar (500 bars available)
-- **Copper Cathode** - $8,450/metric ton (250 MT available)
-- **Soybeans** - $445/metric ton (10,000 MT available)
-- **Brent Crude Oil** - $82.20/barrel (25,000 barrels available)
-- **Arabica Coffee** - $195/60kg bag (100 bags available)
+React 18
 
-### Total Marketplace Value: $2.1B+
+TypeScript
 
-## 🏃‍♂️ Quick Start
+Vite
 
-### Prerequisites
-- Node.js 18+ 
-- PostgreSQL database (Neon recommended)
-- OpenAI API key
+Tailwind CSS
 
-### Installation
+shadcn/ui
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/tutela-trading-platform.git
-   cd tutela-trading-platform
-   ```
+TanStack Query
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+Wouter Router
 
-3. **Set up environment variables**
-   ```bash
-   # Copy and configure your environment
-   cp .env.example .env
-   ```
+Backend
 
-4. **Configure database**
-   ```bash
-   npm run db:push
-   ```
+Node.js
 
-5. **Start development server**
-   ```bash
-   npm run dev
-   ```
+Express
 
-The application will be available at `http://localhost:5000`
+TypeScript
 
-## 🔧 Environment Variables
+Multer (file uploads)
 
-```env
-DATABASE_URL=your_postgresql_connection_string
-OPENAI_API_KEY=your_openai_api_key
-SESSION_SECRET=your_session_secret
-REPL_ID=your_replit_app_id
-ISSUER_URL=https://replit.com/oidc
-REPLIT_DOMAINS=your-domain.replit.dev
-```
+Database
 
-## 📁 Project Structure
+PostgreSQL
 
-```
-tutela-trading-platform/
-├── client/                 # React frontend application
-│   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   ├── pages/          # Application pages
-│   │   ├── hooks/          # Custom React hooks
-│   │   └── lib/           # Utility functions
-├── server/                 # Express.js backend API
-│   ├── services/          # Business logic services
-│   ├── routes.ts          # API route definitions
-│   ├── storage.ts         # Database operations
-│   └── seedData.ts        # Demo data seeding
-├── shared/                # Common TypeScript schemas
-│   └── schema.ts          # Database schema definitions
-└── uploads/               # File upload directory
-```
+Drizzle ORM
 
-## 🚀 Deployment
+External Services
 
-### Replit Deployment (Recommended)
-1. Connect your GitHub repository to Replit
-2. Configure environment variables in Replit Secrets
-3. Deploy using Replit Deployments
+OpenAI API
 
-### Manual Deployment
-1. Build the application: `npm run build`
-2. Set up PostgreSQL database
-3. Configure environment variables
-4. Start production server: `npm start`
+Replit Auth (OIDC)
 
-## 🔑 API Endpoints
+📂 Project Structure
+client/     → Frontend (React)
+server/     → Backend (Express API)
+shared/     → Shared schemas & types
+uploads/    → Uploaded files (local storage)
+migrations/ → Database migrations
 
-### Authentication
-- `GET /api/auth/user` - Get current user
-- `GET /api/login` - Initiate login flow
-- `GET /api/logout` - Logout user
+⚙️ Environment Variables
 
-### Commodities & Offers
-- `GET /api/commodities` - List all commodities
-- `GET /api/offers/search` - Search trading offers
-- `POST /api/offers` - Create new offer
-- `GET /api/offers/:id` - Get offer details
+Create a .env file based on .env.example.
 
-### Contracts & Verification
-- `GET /api/contracts` - List user contracts
-- `POST /api/contracts` - Create new contract
-- `POST /api/verification/documents` - Upload verification documents
-- `GET /api/verification/pending` - Get pending verifications
+Required:
 
-## 🤝 Contributing
+DATABASE_URL=
+OPENAI_API_KEY=
+SESSION_SECRET=
+REPL_ID=
+ISSUER_URL=
+REPLIT_DOMAINS=
+PORT=5000
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/new-feature`
-3. Commit your changes: `git commit -am 'Add new feature'`
-4. Push to the branch: `git push origin feature/new-feature`
-5. Submit a pull request
 
-## 📄 License
+If deploying outside Replit, authentication callback URLs and domains must be updated accordingly.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+🖥️ Local Development
 
-## 🆘 Support
+Install dependencies:
 
-For support and questions:
-- Create an issue in this repository
-- Contact the development team
-- Check the documentation in `/docs`
+npm install
 
-## 🎯 Future Roadmap
 
-- [ ] Multi-currency support with real-time exchange rates
-- [ ] Advanced analytics dashboard with market trends
-- [ ] Mobile application for iOS and Android
-- [ ] Integration with major commodity exchanges
-- [ ] Advanced AI trading recommendations
-- [ ] Multi-language support for global markets
+Run database migrations:
 
----
+npm run db:push
 
-<<<<<<< HEAD
-**TUTELA** - Transforming Physical Commodity Trading with Technology
-=======
-**TUTELA** - Transforming Physical Commodity Trading with Technology
->>>>>>> 266ae67 (Introduce project documentation with setup instructions and tech stack details)
+
+Start development server:
+
+npm run dev
+
+
+Application runs on:
+
+http://localhost:5000
+
+🏗️ Build & Run (Production)
+npm run build
+npm start
+
+
+Requirements:
+
+PostgreSQL database
+
+All environment variables configured
+
+Node.js runtime (not static hosting)
+
+☁️ Deployment
+
+Supported platforms:
+
+Replit Deployments
+
+Render
+
+Railway
+
+Fly.io
+
+VPS (Ubuntu + Node + PM2)
+
+Not suitable for:
+
+Netlify (static only)
+
+GitHub Pages
+
+Static-only hosting
+
+📦 File Uploads
+
+Files are stored locally in the uploads/ directory.
+
+⚠️ On many cloud platforms, local storage is temporary.
+
+For production:
+
+Use S3 / Cloudflare R2 / Blob storage
+
+Store file references in the database
+
+🔐 Security & Limitations
+
+Server-side sessions
+
+No blockchain integration yet
+
+No automated tests
+
+No CI/CD pipeline
+
+Not production-hardened
+
+This version is intended as an MVP.
+
+🗺️ Roadmap
+
+Independent authentication provider
+
+External file storage
+
+Smart contract integration
+
+Role-based permissions
+
+Audit logging
+
+CI/CD
+
+Automated testing
+
+Compliance modules
+
+📜 License
+
+MIT License
+
+👤 Author
+
+Mohamed Emad
+Founder – TUTELA Platform
