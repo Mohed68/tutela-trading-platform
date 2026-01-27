@@ -1,38 +1,53 @@
 TUTELA – Physical Commodity Trading Platform (V2)
 
-TUTELA is a full-stack web platform for managing and securing physical commodity trading workflows such as oil, fuels, metals, and agricultural products.
+TUTELA is a full-stack web platform designed to digitize and organize physical commodity trading workflows (oil, fuels, metals, and agricultural products).
 
-The platform focuses on:
+The platform focuses on solving real operational problems in commodity trading:
 
-Company verification
+Lack of trust between counterparties
 
-Offer and contract management
+Manual and fragmented documentation
 
-Document handling
+Weak verification processes
 
-AI-assisted validation
+Poor visibility over trade lifecycle
 
-Centralized trade data
+This version represents an MVP (Minimum Viable Product) intended for pilot usage and further development.
 
-This project is currently an MVP intended for controlled pilots and further development.
+🌍 What Does TUTELA Do?
 
-🧩 Features
+TUTELA provides a centralized system to manage:
 
-Company registration & verification
+Companies and counterparties
 
-Commodity and offer listings
+Commodity offers and requests
 
-Trade contract workflow
+Trade contracts
 
-File upload for commercial documents
+Commercial documents
+
+Basic risk and document validation
+
+It is not a crypto exchange and not a DeFi platform.
+It targets real-world physical trade operations.
+
+✨ Key Features
+
+Company registration and verification
+
+Commodity and offer listing
+
+Trade contract lifecycle management
+
+Commercial document uploads
 
 AI-assisted document validation (OpenAI)
 
 REST API backend
 
-Modern React UI
+Modern, responsive React UI
 
-🏗️ Tech Stack
+🧱 Technology Stack
 Frontend
 
 React 18
@@ -82,7 +97,7 @@ migrations/ → Database migrations
 
 Create a .env file based on .env.example.
 
-Required:
+Required variables:
 
 DATABASE_URL=
 OPENAI_API_KEY=
@@ -93,9 +108,9 @@ REPLIT_DOMAINS=
 PORT=5000
 
 
-If deploying outside Replit, authentication callback URLs and domains must be updated accordingly.
+⚠️ When deploying outside Replit, authentication callback URLs and allowed domains must be configured correctly.
 
-🖥️ Local Development
+🧪 Local Development
 
 Install dependencies:
 
@@ -112,26 +127,26 @@ Start development server:
 npm run dev
 
 
-Application runs on:
+The application will be available at:
 
 http://localhost:5000
 
-🏗️ Build & Run (Production)
+🏗️ Production Build
 npm run build
 npm start
 
 
 Requirements:
 
-PostgreSQL database
+A running PostgreSQL database
 
 All environment variables configured
 
-Node.js runtime (not static hosting)
+A Node.js runtime (not static hosting)
 
-☁️ Deployment
+☁️ Deployment Options
 
-Supported platforms:
+Supported deployment platforms:
 
 Replit Deployments
 
@@ -145,7 +160,7 @@ VPS (Ubuntu + Node + PM2)
 
 Not suitable for:
 
-Netlify (static only)
+Netlify
 
 GitHub Pages
 
@@ -153,31 +168,33 @@ Static-only hosting
 
 📦 File Uploads
 
-Files are stored locally in the uploads/ directory.
+Uploaded files are stored locally in the uploads/ directory.
 
-⚠️ On many cloud platforms, local storage is temporary.
+⚠️ On most cloud platforms, local file storage is temporary and can be lost after redeployments.
 
-For production:
+For production usage:
 
-Use S3 / Cloudflare R2 / Blob storage
+Use S3 / Cloudflare R2 / Azure Blob Storage
 
-Store file references in the database
+Store only file references in the database
 
 🔐 Security & Limitations
 
-Server-side sessions
+Server-side session handling
 
 No blockchain integration yet
 
-No automated tests
+No automated test suite
 
 No CI/CD pipeline
 
-Not production-hardened
+Not hardened for high-risk financial operations
 
-This version is intended as an MVP.
+This version is intended for controlled pilots and development only.
 
 🗺️ Roadmap
+
+Planned improvements:
 
 Independent authentication provider
 
@@ -189,11 +206,27 @@ Role-based permissions
 
 Audit logging
 
-CI/CD
+CI/CD pipeline
 
-Automated testing
+Automated tests
 
 Compliance modules
+
+🧠 Design Principles
+
+TUTELA is built around:
+
+Real-world commodity workflows
+
+Operational trust
+
+Document-driven processes
+
+Trade transparency
+
+Gradual technical hardening
+
+It focuses on practical trade operations, not speculation.
 
 📜 License
 
