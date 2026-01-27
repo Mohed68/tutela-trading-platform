@@ -1,8 +1,22 @@
-TUTELA – Physical Commodity Trading Platform (V2)
+🚀 TUTELA – Physical Commodity Trading Platform (V2)
 
-TUTELA is a full-stack web platform designed to digitize and organize physical commodity trading workflows (oil, fuels, metals, and agricultural products).
+A comprehensive digital trading platform for physical commodities with AI-powered validation and structured trade workflows.
 
-The platform focuses on solving real operational problems in commodity trading:
+Designed to support real-world trading of:
+
+🛢️ Oil, fuels, and refined products
+
+⚙️ Metals and minerals
+
+🌾 Agricultural commodities
+
+TUTELA focuses on improving trust, verification, and operational control in physical commodity trading.
+
+🌍 Overview
+
+TUTELA is a full-stack web application built to manage and organize physical commodity trading workflows (off-chain).
+
+It addresses key operational challenges:
 
 Lack of trust between counterparties
 
@@ -14,26 +28,24 @@ Poor visibility over trade lifecycle
 
 This version represents an MVP (Minimum Viable Product) intended for pilot usage and further development.
 
-🌍 What Does TUTELA Do?
-
-TUTELA provides a centralized system to manage:
-
-Companies and counterparties
-
-Commodity offers and requests
-
-Trade contracts
-
-Commercial documents
-
-Basic risk and document validation
-
-It is not a crypto exchange and not a DeFi platform.
-It targets real-world physical trade operations.
-
 ✨ Key Features
+🔐 Security & Authentication
 
-Company registration and verification
+Secure user authentication
+
+Session management
+
+Role-based access (buyer / seller)
+
+🤖 AI-Powered Validation
+
+Document analysis using OpenAI
+
+Basic fraud and anomaly detection
+
+Contract and document consistency checks
+
+📄 Trade & Document Management
 
 Commodity and offer listing
 
@@ -41,50 +53,62 @@ Trade contract lifecycle management
 
 Commercial document uploads
 
-AI-assisted document validation (OpenAI)
+Centralized trade data view
 
-REST API backend
+🏗️ (Planned) Blockchain Integration
 
-Modern, responsive React UI
+Smart contract execution (roadmap)
+
+Immutable transaction records (roadmap)
+
+Transparent contract status tracking (roadmap)
+
+🧩 Partner Verification
+
+Company registration and verification
+
+Business document validation
+
+Trade history and activity logs
 
 🧱 Technology Stack
 Frontend
 
-React 18
+⚛️ React 18
 
-TypeScript
+🟦 TypeScript
 
-Vite
+⚡ Vite
 
-Tailwind CSS
+🎨 Tailwind CSS
 
-shadcn/ui
+🧩 shadcn/ui
 
-TanStack Query
+🔄 TanStack Query
 
-Wouter Router
+🧭 Wouter Router
 
 Backend
 
-Node.js
+🟢 Node.js
 
-Express
+🚀 Express
 
-TypeScript
+🟦 TypeScript
 
-Multer (file uploads)
+📤 Multer (file uploads)
 
 Database
 
-PostgreSQL
+🐘 PostgreSQL
 
-Drizzle ORM
+🧬 Drizzle ORM
 
 External Services
 
-OpenAI API
+🤖 OpenAI API
 
-Replit Auth (OIDC)
+🔑 Replit Auth (OIDC)
 
 📂 Project Structure
 client/     → Frontend (React)
@@ -97,7 +121,7 @@ migrations/ → Database migrations
 
 Create a .env file based on .env.example.
 
-Required variables:
+Required:
 
 DATABASE_URL=
 OPENAI_API_KEY=
@@ -127,26 +151,25 @@ Start development server:
 npm run dev
 
 
-The application will be available at:
+Application runs at:
 
 http://localhost:5000
 
-🏗️ Production Build
+🏗️ Build & Run (Production)
 npm run build
 npm start
 
 
 Requirements:
 
-A running PostgreSQL database
+PostgreSQL database
 
 All environment variables configured
 
-A Node.js runtime (not static hosting)
+Node.js runtime (not static hosting)
 
 ☁️ Deployment Options
-
-Supported deployment platforms:
+✅ Supported
 
 Replit Deployments
 
@@ -158,7 +181,7 @@ Fly.io
 
 VPS (Ubuntu + Node + PM2)
 
-Not suitable for:
+❌ Not Suitable
 
 Netlify
 
@@ -170,19 +193,19 @@ Static-only hosting
 
 Uploaded files are stored locally in the uploads/ directory.
 
-⚠️ On most cloud platforms, local file storage is temporary and can be lost after redeployments.
+⚠️ On most cloud platforms, local file storage is temporary.
 
-For production usage:
+For production:
 
 Use S3 / Cloudflare R2 / Azure Blob Storage
 
-Store only file references in the database
+Store file references in the database
 
 🔐 Security & Limitations
 
 Server-side session handling
 
-No blockchain integration yet
+No active blockchain layer yet
 
 No automated test suite
 
@@ -190,11 +213,9 @@ No CI/CD pipeline
 
 Not hardened for high-risk financial operations
 
-This version is intended for controlled pilots and development only.
+This version is intended for controlled pilots and development.
 
 🗺️ Roadmap
-
-Planned improvements:
 
 Independent authentication provider
 
