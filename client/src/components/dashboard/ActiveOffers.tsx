@@ -12,12 +12,12 @@ export default function ActiveOffers() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isCreateOfferOpen, setIsCreateOfferOpen] = useState(false);
 
-  const { data: offers = [], isLoading } = useQuery({
+  const { data: offers = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/offers"],
     retry: false,
   });
 
-  const { data: commodities = [] } = useQuery({
+  const { data: commodities = [] } = useQuery<any[]>({
     queryKey: ["/api/commodities"],
     retry: false,
   });
