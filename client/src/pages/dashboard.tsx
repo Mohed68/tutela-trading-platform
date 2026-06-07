@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -21,7 +21,13 @@ import RecentActivity from "@/components/dashboard/RecentActivity";
 import AIInsights from "@/components/dashboard/AIInsights";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type AccessStatus } from "@/lib/access";
+import {
+  VERIFICATION_WORKFLOW_STEPS,
+  getStoredVerificationWorkflowState,
+  isWorkflowStepComplete,
+  type AccessStatus,
+  type VerificationWorkflowState,
+} from "@/lib/access";
 import { ROUTES } from "@/config/routes";
 
 const marketplaceSnapshot = [
@@ -37,13 +43,6 @@ const unlockBenefits = [
   "Counterparty documents",
   "Negotiation workspace",
   "Contracts and shipment tracking",
-];
-
-const verificationSteps = [
-  { label: "Company account created", status: "Complete", complete: true },
-  { label: "Company profile", status: "Pending", complete: false },
-  { label: "Legal documents", status: "Pending", complete: false },
-  { label: "KYB review", status: "Locked", complete: false },
 ];
 
 function AccessStateCard({
@@ -98,7 +97,7 @@ function SnapshotCards() {
   );
 }
 
-function VerificationProgress() {
+function VerificationProgress({ workflowState }: { workflowState: VerificationWorkflowState }) {
   return (
     <Card className="border-gray-200 bg-white shadow-sm">
       <CardHeader>
@@ -108,19 +107,25 @@ function VerificationProgress() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {verificationSteps.map((step) => (
-          <div key={step.label} className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
-            <div className="flex items-center gap-3">
-              {step.complete ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              ) : (
-                <div className="h-5 w-5 rounded-full border border-gray-300" />
-              )}
-              <span className="text-sm font-medium text-gray-800">{step.label}</span>
+        {VERIFICATION_WORKFLOW_STEPS.map((step) => {
+          const complete = isWorkflowStepComplete(workflowState, step.completeAfter);
+          const pending = !complete && workflowState === "pending_review" && step.key === "review";
+          return (
+            <div key={step.key} className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+              <div className="flex items-center gap-3">
+                {complete ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                ) : (
+                  <div className="h-5 w-5 rounded-full border border-gray-300" />
+                )}
+                <span className="text-sm font-medium text-gray-800">{step.label}</span>
+              </div>
+              <span className="text-sm text-gray-600">
+                {complete ? "Complete" : pending ? "Pending" : step.key === "review" ? "Locked" : "Pending"}
+              </span>
             </div>
-            <span className="text-sm text-gray-600">{step.status}</span>
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
     </Card>
   );
@@ -149,10 +154,12 @@ function UnlockBenefits() {
 
 function RestrictedDashboard({
   status,
+  workflowState,
   onMarketplace,
   onVerification,
 }: {
   status: AccessStatus;
+  workflowState: VerificationWorkflowState;
   onMarketplace: () => void;
   onVerification: () => void;
 }) {
@@ -220,7 +227,7 @@ function RestrictedDashboard({
       <SnapshotCards />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <VerificationProgress />
+        <VerificationProgress workflowState={workflowState} />
         <UnlockBenefits />
       </div>
     </div>
@@ -230,10 +237,28 @@ function RestrictedDashboard({
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
+  const [workflowState, setWorkflowState] = useState<VerificationWorkflowState>(() => getStoredVerificationWorkflowState());
 
-  const verificationStatus: AccessStatus = !user
+  useEffect(() => {
+    const syncWorkflowState = () => setWorkflowState(getStoredVerificationWorkflowState());
+    window.addEventListener("storage", syncWorkflowState);
+    window.addEventListener("focus", syncWorkflowState);
+    return () => {
+      window.removeEventListener("storage", syncWorkflowState);
+      window.removeEventListener("focus", syncWorkflowState);
+    };
+  }, []);
+
+  const accountStatus: AccessStatus = !user
     ? "guest"
     : ((user as { verificationStatus?: AccessStatus }).verificationStatus ?? "registered");
+
+  const verificationStatus: AccessStatus =
+    workflowState === "pending_review"
+      ? "pending"
+      : workflowState === "verified" || workflowState === "rejected"
+        ? workflowState
+        : accountStatus;
 
   const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ["/api/dashboard/metrics"],
@@ -294,6 +319,7 @@ export default function Dashboard() {
         ) : (
           <RestrictedDashboard
             status={verificationStatus}
+            workflowState={workflowState}
             onMarketplace={() => navigate(ROUTES.marketplace)}
             onVerification={() => navigate(ROUTES.verification)}
           />
