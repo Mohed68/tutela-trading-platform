@@ -19,8 +19,14 @@ interface AppShellProps {
   children: ReactNode;
 }
 
+type AppShellUser = {
+  name?: string | null;
+  email?: string | null;
+};
+
 export default function AppShell({ children }: AppShellProps) {
   const { user, isLoading } = useAuth();
+  const shellUser = user as AppShellUser | null | undefined;
   const { pathname } = useLocation();
 
   const navigation = [
@@ -71,10 +77,10 @@ export default function AppShell({ children }: AppShellProps) {
               <div className="flex items-center gap-3">
                 <div className="flex flex-col items-end">
                   <span className="text-sm font-medium text-gray-900">
-                    {user?.name ?? "Guest User"}
+                    {shellUser?.name ?? "Guest User"}
                   </span>
                   <span className="text-xs text-gray-500">
-                    {user?.email ?? ""}
+                    {shellUser?.email ?? ""}
                   </span>
                 </div>
                 <button
