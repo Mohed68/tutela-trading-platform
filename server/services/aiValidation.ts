@@ -5,6 +5,33 @@ const openai = hasOpenAIKey
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
   : null;
 
+function getFirstResponseText(output: unknown, fallback: string): string {
+  const firstOutput = Array.isArray(output) ? output[0] : undefined;
+  if (!firstOutput || typeof firstOutput !== "object" || !("content" in firstOutput)) {
+    return fallback;
+  }
+
+  const content = (firstOutput as { content?: unknown }).content;
+  const firstContent = Array.isArray(content) ? content[0] : undefined;
+  if (!firstContent || typeof firstContent !== "object" || !("text" in firstContent)) {
+    return fallback;
+  }
+
+  const text = (firstContent as { text?: unknown }).text;
+  if (typeof text === "string") {
+    return text;
+  }
+
+  if (text && typeof text === "object" && "value" in text) {
+    const value = (text as { value?: unknown }).value;
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+
+  return fallback;
+}
+
 export interface DocumentValidationResult {
   isValid: boolean;
   confidence: number;
@@ -68,9 +95,10 @@ export async function validateDocument(
       input: validationPrompt,
     });
 
-    const text =
-      (response.output[0]?.content[0] as any)?.text?.value ??
-      JSON.stringify(fallbackResult);
+    const text = getFirstResponseText(
+      response.output,
+      JSON.stringify(fallbackResult),
+    );
 
     let parsed: any;
     try {
@@ -203,14 +231,15 @@ export async function analyzeCommodityMarket(
       input: analysisPrompt,
     });
 
-    const text =
-      (response.output[0]?.content[0] as any)?.text?.value ??
+    const text = getFirstResponseText(
+      response.output,
       JSON.stringify({
         marketPrice: 0,
         priceRange: { min: 0, max: 0 },
         marketTrend: "stable",
         recommendations: [],
-      });
+      }),
+    );
 
     let parsed: any;
     try {
