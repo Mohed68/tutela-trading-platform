@@ -30,13 +30,13 @@ export default function Verification() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: documents = [], isLoading: documentsLoading } = useQuery({
+  const { data: documents = [], isLoading: documentsLoading } = useQuery<any[]>({
     queryKey: ["/api/verification/documents"],
     retry: false,
     enabled: isAuthenticated,
   });
 
-  const { data: pendingVerifications = [], isLoading: pendingLoading } = useQuery({
+  const { data: pendingVerifications = [], isLoading: pendingLoading } = useQuery<any[]>({
     queryKey: ["/api/verification/pending"],
     retry: false,
     enabled: isAuthenticated,
