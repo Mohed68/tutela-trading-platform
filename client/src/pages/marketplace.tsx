@@ -17,7 +17,7 @@ export default function Marketplace() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: offers = [], isLoading } = useQuery({
+  const { data: offers = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/offers/search", searchQuery, selectedCategory !== "all" ? selectedCategory : undefined],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -31,7 +31,7 @@ export default function Marketplace() {
     retry: false,
   });
 
-  const { data: commodities = [] } = useQuery({
+  const { data: commodities = [] } = useQuery<any[]>({
     queryKey: ["/api/commodities"],
     retry: false,
   });
@@ -133,7 +133,7 @@ export default function Marketplace() {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Verified Traders</p>
                     <p className="text-2xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>
-                      {[...new Set(offers.map((offer: any) => offer.user?.id))].length}
+                      {Array.from(new Set(offers.map((offer: any) => offer.user?.id))).length}
                     </p>
                   </div>
                 </div>
