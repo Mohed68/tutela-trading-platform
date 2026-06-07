@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import AppShell from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Plus, TrendingUp, Package, MapPin, Shield, Star } from "lucide-react";
 import CreateOfferModal from "@/components/offers/CreateOfferModal";
 import { useToast } from "@/hooks/use-toast";
-import { isUnauthorizedError } from "@/lib/authUtils";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  type AccessStatus,
+  canNegotiate,
+  canViewDocuments,
+  canViewMarketplace,
+  canViewPrices,
+} from "@/lib/access";
 
 export default function Marketplace() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -16,14 +23,55 @@ export default function Marketplace() {
   const [isCreateOfferOpen, setIsCreateOfferOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  const verificationStatus: AccessStatus = !user
+    ? "guest"
+    : ((user as { verificationStatus?: AccessStatus }).verificationStatus ?? "registered");
+
+  const canSeeMarketplace = canViewMarketplace(verificationStatus);
+  const canSeePrices = canViewPrices(verificationStatus);
+  const canSeeDocuments = canViewDocuments(verificationStatus);
+  const canStartNegotiation = canNegotiate(verificationStatus);
+
+  const getMarketplaceCta = () => {
+    switch (verificationStatus) {
+      case "guest":
+        return "Create company account / Sign in";
+      case "registered":
+        return "Complete KYB/KYC";
+      case "pending":
+        return "Verification pending";
+      case "rejected":
+        return "Resolve verification issue";
+      case "suspended":
+        return "Account suspended";
+      case "verified":
+      default:
+        return "View Details & Contact";
+    }
+  };
+
+  const getMaskedCompanyLabel = (type?: string) => {
+    switch (type) {
+      case "fuel_hydrocarbons":
+        return "Verified Energy Supplier";
+      case "metals_precious":
+        return "Verified Metals Supplier";
+      case "agricultural":
+        return "Verified Agricultural Exporter";
+      default:
+        return "Verified GCC Trader";
+    }
+  };
 
   const { data: offers = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/offers/search", searchQuery, selectedCategory !== "all" ? selectedCategory : undefined],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (searchQuery) params.append('q', searchQuery);
-      if (selectedCategory !== "all") params.append('category', selectedCategory);
-      
+      if (searchQuery) params.append("q", searchQuery);
+      if (selectedCategory !== "all") params.append("category", selectedCategory);
+
       const response = await fetch(`/api/offers/search?${params.toString()}`);
       if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
       return response.json();
@@ -57,14 +105,14 @@ export default function Marketplace() {
   };
 
   const formatPrice = (price: string, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'USD',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "USD",
     }).format(parseFloat(price));
   };
 
   const formatCommodityType = (type: string) => {
-    return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    return type.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   };
 
   return (
@@ -73,16 +121,58 @@ export default function Marketplace() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>Commodity Marketplace</h1>
+            <h1 className="text-3xl font-bold" style={{ color: "var(--tutela-secondary)" }}>
+              Commodity Marketplace
+            </h1>
             <p className="mt-2 text-gray-600">
               Discover and trade physical commodities with verified partners worldwide
             </p>
           </div>
-          <Button onClick={() => setIsCreateOfferOpen(true)} className="tutela-btn-primary mt-4 sm:mt-0">
+          <Button
+            onClick={() => setIsCreateOfferOpen(true)}
+            className="tutela-btn-primary mt-4 sm:mt-0"
+            disabled={!canStartNegotiation}
+          >
             <Plus className="mr-2 h-4 w-4" />
-            Create Offer
+            {canStartNegotiation ? "Create Offer" : getMarketplaceCta()}
           </Button>
         </div>
+
+        {verificationStatus === "registered" && (
+          <Card className="mb-6 border-blue-100 bg-blue-50">
+            <CardContent className="py-3 text-sm text-blue-800">
+              Complete KYB/KYC verification to view pricing and contact traders.
+            </CardContent>
+          </Card>
+        )}
+        {verificationStatus === "pending" && (
+          <Card className="mb-6 border-yellow-100 bg-yellow-50">
+            <CardContent className="py-3 text-sm text-yellow-800">
+              Verification is pending. Pricing and negotiation are restricted until approval.
+            </CardContent>
+          </Card>
+        )}
+        {verificationStatus === "rejected" && (
+          <Card className="mb-6 border-red-100 bg-red-50">
+            <CardContent className="py-3 text-sm text-red-800">
+              Verification was rejected. Marketplace access is restricted.
+            </CardContent>
+          </Card>
+        )}
+        {verificationStatus === "suspended" && (
+          <Card className="mb-6 border-red-100 bg-red-50">
+            <CardContent className="py-3 text-sm text-red-800">
+              Account suspended. Marketplace is visible, but transaction actions are disabled.
+            </CardContent>
+          </Card>
+        )}
+        {verificationStatus === "guest" && (
+          <Card className="mb-6 border-slate-200 bg-slate-50">
+            <CardContent className="py-3 text-sm text-slate-700">
+              You are viewing a restricted marketplace preview. Create a company account and complete verification to unlock prices, documents, and negotiation.
+            </CardContent>
+          </Card>
+        )}
 
         {/* Market Overview */}
         {!isLoading && offers.length > 0 && (
@@ -90,12 +180,12 @@ export default function Marketplace() {
             <Card className="tutela-metric-card">
               <CardContent className="p-6">
                 <div className="flex items-center">
-                  <div className="p-2 rounded-lg" style={{ background: 'var(--tutela-blue-100)' }}>
-                    <Package className="h-5 w-5" style={{ color: 'var(--tutela-primary)' }} />
+                  <div className="p-2 rounded-lg" style={{ background: "var(--tutela-blue-100)" }}>
+                    <Package className="h-5 w-5" style={{ color: "var(--tutela-primary)" }} />
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Active Offers</p>
-                    <p className="text-2xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>{offers.length}</p>
+                    <p className="text-2xl font-bold" style={{ color: "var(--tutela-secondary)" }}>{offers.length}</p>
                   </div>
                 </div>
               </CardContent>
@@ -103,22 +193,25 @@ export default function Marketplace() {
             <Card className="tutela-metric-card">
               <CardContent className="p-6">
                 <div className="flex items-center">
-                  <div className="p-2 rounded-lg" style={{ background: 'var(--tutela-gray-100)' }}>
-                    <TrendingUp className="h-5 w-5" style={{ color: 'var(--tutela-accent)' }} />
+                  <div className="p-2 rounded-lg" style={{ background: "var(--tutela-gray-100)" }}>
+                    <TrendingUp className="h-5 w-5" style={{ color: "var(--tutela-accent)" }} />
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Total Value</p>
-                    <p className="text-2xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>
-                      {new Intl.NumberFormat('en-US', {
-                        style: 'currency',
-                        currency: 'USD',
-                        notation: 'compact',
-                        maximumFractionDigits: 1
-                      }).format(
-                        offers.reduce((total: number, offer: any) => 
-                          total + (parseFloat(offer.pricePerUnit) * parseFloat(offer.quantity)), 0
-                        )
-                      )}
+                    <p className="text-2xl font-bold" style={{ color: "var(--tutela-secondary)" }}>
+                      {canSeePrices
+                        ? new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                            notation: "compact",
+                            maximumFractionDigits: 1,
+                          }).format(
+                            offers.reduce(
+                              (total: number, offer: any) => total + parseFloat(offer.pricePerUnit) * parseFloat(offer.quantity),
+                              0,
+                            ),
+                          )
+                        : "Restricted"}
                     </p>
                   </div>
                 </div>
@@ -127,12 +220,12 @@ export default function Marketplace() {
             <Card className="tutela-metric-card">
               <CardContent className="p-6">
                 <div className="flex items-center">
-                  <div className="p-2 rounded-lg" style={{ background: 'var(--tutela-blue-50)' }}>
+                  <div className="p-2 rounded-lg" style={{ background: "var(--tutela-blue-50)" }}>
                     <Shield className="h-5 w-5 text-green-600" />
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Verified Traders</p>
-                    <p className="text-2xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>
+                    <p className="text-2xl font-bold" style={{ color: "var(--tutela-secondary)" }}>
                       {Array.from(new Set(offers.map((offer: any) => offer.user?.id))).length}
                     </p>
                   </div>
@@ -174,7 +267,12 @@ export default function Marketplace() {
         </Card>
 
         {/* Offers Grid */}
-        {isLoading ? (
+        {!canSeeMarketplace ? (
+          <div className="text-center py-12">
+            <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Marketplace unavailable</h3>
+          </div>
+        ) : isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="tutela-metric-card">
@@ -212,14 +310,14 @@ export default function Marketplace() {
                 <Card key={offer.id} className="tutela-metric-card hover:shadow-xl transition-all duration-300 border-0 overflow-hidden">
                   <CardHeader className="pb-3 relative">
                     <div className="absolute top-4 right-4">
-                      <Badge 
+                      <Badge
                         className={`${offer.type === "buy" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"} font-semibold`}
                       >
                         {offer.type.toUpperCase()}
                       </Badge>
                     </div>
                     <div className="flex items-center space-x-3 pr-16">
-                      <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: 'var(--tutela-blue-100)' }}>
+                      <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: "var(--tutela-blue-100)" }}>
                         <span className="text-2xl">{getCommodityIcon(offer.commodity?.type)}</span>
                       </div>
                       <div className="flex-1">
@@ -231,17 +329,19 @@ export default function Marketplace() {
                   <CardContent>
                     <div className="space-y-4">
                       {/* Price Section */}
-                      <div className="p-4 rounded-lg border" style={{ background: 'linear-gradient(135deg, var(--tutela-blue-50) 0%, var(--tutela-gray-50) 100%)' }}>
+                      <div className="p-4 rounded-lg border" style={{ background: "linear-gradient(135deg, var(--tutela-blue-50) 0%, var(--tutela-gray-50) 100%)" }}>
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-gray-700">Price per {offer.unit}</span>
-                          <span className="font-bold text-xl" style={{ color: 'var(--tutela-primary)' }}>
-                            {formatPrice(offer.pricePerUnit, offer.currency)}
+                          <span className="font-bold text-xl" style={{ color: "var(--tutela-primary)" }}>
+                            {canSeePrices ? formatPrice(offer.pricePerUnit, offer.currency) : "Price hidden"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-sm text-gray-600">Total Value</span>
                           <span className="font-semibold text-lg text-gray-800">
-                            {formatPrice((parseFloat(offer.pricePerUnit) * parseFloat(offer.quantity)).toString(), offer.currency)}
+                            {canSeePrices
+                              ? formatPrice((parseFloat(offer.pricePerUnit) * parseFloat(offer.quantity)).toString(), offer.currency)
+                              : "Restricted"}
                           </span>
                         </div>
                       </div>
@@ -249,7 +349,7 @@ export default function Marketplace() {
                       {/* Quantity & Details */}
                       <div className="grid grid-cols-2 gap-3">
                         <div className="text-center p-3 bg-gray-50 rounded-lg">
-                          <div className="text-2xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>
+                          <div className="text-2xl font-bold" style={{ color: "var(--tutela-secondary)" }}>
                             {parseFloat(offer.quantity).toLocaleString()}
                           </div>
                           <div className="text-sm text-gray-600">{offer.unit}</div>
@@ -257,7 +357,7 @@ export default function Marketplace() {
                         <div className="text-center p-3 bg-gray-50 rounded-lg">
                           <div className="text-sm text-gray-600">Min Order</div>
                           <div className="text-lg font-semibold text-gray-800">
-                            {offer.minQuantity ? parseFloat(offer.minQuantity).toLocaleString() : 'N/A'}
+                            {offer.minQuantity ? parseFloat(offer.minQuantity).toLocaleString() : "N/A"}
                           </div>
                         </div>
                       </div>
@@ -280,12 +380,14 @@ export default function Marketplace() {
                           </div>
                         </div>
                         <div className="text-sm text-gray-700 font-medium">
-                          {offer.user?.firstName} {offer.user?.lastName} • {offer.user?.companyName || 'Independent Trader'}
+                          {canSeePrices
+                            ? `${offer.user?.firstName ?? ""} ${offer.user?.lastName ?? ""} • ${offer.user?.companyName || "Independent Trader"}`
+                            : getMaskedCompanyLabel(offer.commodity?.type)}
                         </div>
                       </div>
 
                       {/* Terms Preview */}
-                      {(offer.deliveryTerms || offer.paymentTerms) && (
+                      {canSeeDocuments && (offer.deliveryTerms || offer.paymentTerms) && (
                         <div className="bg-gray-50 p-3 rounded-lg">
                           <div className="text-xs font-semibold text-gray-700 mb-2">TRADING TERMS</div>
                           {offer.deliveryTerms && (
@@ -302,9 +404,12 @@ export default function Marketplace() {
                       )}
 
                       <div className="pt-3 border-t">
-                        <Button className="w-full tutela-btn-primary text-sm font-semibold py-2.5">
+                        <Button
+                          className="w-full tutela-btn-primary text-sm font-semibold py-2.5"
+                          disabled={!canStartNegotiation}
+                        >
                           <TrendingUp className="mr-2 h-4 w-4" />
-                          View Details & Contact
+                          {canStartNegotiation ? "View Details & Contact" : getMarketplaceCta()}
                         </Button>
                       </div>
                     </div>
