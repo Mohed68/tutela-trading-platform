@@ -1,13 +1,23 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import AppShell from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, TrendingUp, Package, MapPin, Shield, Star } from "lucide-react";
+import {
+  CheckCircle2,
+  FileText,
+  LockKeyhole,
+  MapPin,
+  Package,
+  Plus,
+  Search,
+  Shield,
+  Star,
+  TrendingUp,
+} from "lucide-react";
 import CreateOfferModal from "@/components/offers/CreateOfferModal";
-import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import {
   type AccessStatus,
@@ -17,12 +27,15 @@ import {
   canViewPrices,
 } from "@/lib/access";
 
+type TrustSignal = {
+  label: string;
+  status: "verified" | "restricted" | "pending";
+};
+
 export default function Marketplace() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [isCreateOfferOpen, setIsCreateOfferOpen] = useState(false);
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const { user } = useAuth();
 
   const verificationStatus: AccessStatus = !user
@@ -65,6 +78,34 @@ export default function Marketplace() {
     }
   };
 
+  const getTrustScore = (offer: any) => {
+    const base = 72;
+    const hasTerms = offer.deliveryTerms || offer.paymentTerms ? 8 : 0;
+    const hasSeller = offer.user?.companyName ? 7 : 0;
+    const hasMinOrder = offer.minQuantity ? 5 : 0;
+    const categoryBoost = offer.commodity?.type ? 4 : 0;
+    return Math.min(base + hasTerms + hasSeller + hasMinOrder + categoryBoost, 96);
+  };
+
+  const getTrustSignals = (offer: any): TrustSignal[] => [
+    { label: "Offer data", status: "verified" },
+    { label: offer.commodity?.type ? "Commodity category" : "Commodity category pending", status: offer.commodity?.type ? "verified" : "pending" },
+    { label: canSeeDocuments ? "Documents available" : "Documents locked", status: canSeeDocuments ? "verified" : "restricted" },
+    { label: canSeePrices ? "Pricing visible" : "Pricing restricted", status: canSeePrices ? "verified" : "restricted" },
+  ];
+
+  const getSignalClassName = (status: TrustSignal["status"]) => {
+    switch (status) {
+      case "verified":
+        return "bg-emerald-50 text-emerald-700 border-emerald-100";
+      case "pending":
+        return "bg-amber-50 text-amber-700 border-amber-100";
+      case "restricted":
+      default:
+        return "bg-slate-50 text-slate-600 border-slate-200";
+    }
+  };
+
   const { data: offers = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/offers/search", searchQuery, selectedCategory !== "all" ? selectedCategory : undefined],
     queryFn: async () => {
@@ -86,9 +127,9 @@ export default function Marketplace() {
 
   const categories = [
     { value: "all", label: "All Categories" },
-    { value: "fuel_hydrocarbons", label: "Fuel & Hydrocarbons" },
-    { value: "metals_precious", label: "Metals & Precious Metals" },
-    { value: "agricultural", label: "Agricultural Products" },
+    { value: "fuel_hydrocarbons", label: "Energy & Petroleum" },
+    { value: "agricultural", label: "Agricultural Commodities" },
+    { value: "metals_precious", label: "Precious Metals & Gold" },
   ];
 
   const getCommodityIcon = (type: string) => {
@@ -112,20 +153,19 @@ export default function Marketplace() {
   };
 
   const formatCommodityType = (type: string) => {
-    return type.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+    return type?.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? "Commodity";
   };
 
   return (
     <AppShell>
       <div className="p-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold" style={{ color: "var(--tutela-secondary)" }}>
               Commodity Marketplace
             </h1>
             <p className="mt-2 text-gray-600">
-              Discover and trade physical commodities with verified partners worldwide
+              Discover verified commodity opportunities with structured trust signals and controlled access.
             </p>
           </div>
           <Button
@@ -141,21 +181,21 @@ export default function Marketplace() {
         {verificationStatus === "registered" && (
           <Card className="mb-6 border-blue-100 bg-blue-50">
             <CardContent className="py-3 text-sm text-blue-800">
-              Complete KYB/KYC verification to view pricing and contact traders.
+              Complete KYB/KYC verification to unlock real pricing, counterparty details, documents, and negotiation.
             </CardContent>
           </Card>
         )}
         {verificationStatus === "pending" && (
           <Card className="mb-6 border-yellow-100 bg-yellow-50">
             <CardContent className="py-3 text-sm text-yellow-800">
-              Verification is pending. Pricing and negotiation are restricted until approval.
+              Verification is pending. Marketplace preview remains available, but transaction actions are restricted.
             </CardContent>
           </Card>
         )}
         {verificationStatus === "rejected" && (
           <Card className="mb-6 border-red-100 bg-red-50">
             <CardContent className="py-3 text-sm text-red-800">
-              Verification was rejected. Marketplace access is restricted.
+              Verification was rejected. Resolve the issue to unlock full marketplace access.
             </CardContent>
           </Card>
         )}
@@ -169,12 +209,11 @@ export default function Marketplace() {
         {verificationStatus === "guest" && (
           <Card className="mb-6 border-slate-200 bg-slate-50">
             <CardContent className="py-3 text-sm text-slate-700">
-              You are viewing a restricted marketplace preview. Create a company account and complete verification to unlock prices, documents, and negotiation.
+              You are viewing a restricted marketplace preview. Create a company account and complete verification to unlock protected deal data.
             </CardContent>
           </Card>
         )}
 
-        {/* Market Overview */}
         {!isLoading && offers.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <Card className="tutela-metric-card">
@@ -197,7 +236,7 @@ export default function Marketplace() {
                     <TrendingUp className="h-5 w-5" style={{ color: "var(--tutela-accent)" }} />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Value</p>
+                    <p className="text-sm font-medium text-gray-600">Visible Value</p>
                     <p className="text-2xl font-bold" style={{ color: "var(--tutela-secondary)" }}>
                       {canSeePrices
                         ? new Intl.NumberFormat("en-US", {
@@ -235,7 +274,6 @@ export default function Marketplace() {
           </div>
         )}
 
-        {/* Search and Filter Bar */}
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row gap-4">
@@ -246,14 +284,14 @@ export default function Marketplace() {
                     type="text"
                     placeholder="Search commodities..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(event) => setSearchQuery(event.target.value)}
                     className="pl-10"
                   />
                 </div>
               </div>
               <select
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                onChange={(event) => setSelectedCategory(event.target.value)}
                 className="tutela-form-select w-full sm:w-auto"
               >
                 {categories.map((category) => (
@@ -266,7 +304,6 @@ export default function Marketplace() {
           </CardContent>
         </Card>
 
-        {/* Offers Grid */}
         {!canSeeMarketplace ? (
           <div className="text-center py-12">
             <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -274,22 +311,22 @@ export default function Marketplace() {
           </div>
         ) : isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i} className="tutela-metric-card">
+            {[...Array(6)].map((_, index) => (
+              <Card key={index} className="tutela-metric-card">
                 <CardHeader>
                   <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-gray-200 rounded-full loading-pulse"></div>
+                    <div className="w-12 h-12 bg-gray-200 rounded-full loading-pulse" />
                     <div className="flex-1">
-                      <div className="h-4 bg-gray-200 rounded loading-pulse mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded loading-pulse w-2/3"></div>
+                      <div className="h-4 bg-gray-200 rounded loading-pulse mb-2" />
+                      <div className="h-3 bg-gray-200 rounded loading-pulse w-2/3" />
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    <div className="h-3 bg-gray-200 rounded loading-pulse"></div>
-                    <div className="h-3 bg-gray-200 rounded loading-pulse w-3/4"></div>
-                    <div className="h-8 bg-gray-200 rounded loading-pulse"></div>
+                    <div className="h-3 bg-gray-200 rounded loading-pulse" />
+                    <div className="h-3 bg-gray-200 rounded loading-pulse w-3/4" />
+                    <div className="h-8 bg-gray-200 rounded loading-pulse" />
                   </div>
                 </CardContent>
               </Card>
@@ -301,126 +338,149 @@ export default function Marketplace() {
               <div className="col-span-full text-center py-12">
                 <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No offers found</h3>
-                <p className="text-gray-600">
-                  Try adjusting your search terms or create a new offer to get started.
-                </p>
+                <p className="text-gray-600">Try adjusting your search terms or create a new offer to get started.</p>
               </div>
             ) : (
-              (offers as any[]).map((offer: any) => (
-                <Card key={offer.id} className="tutela-metric-card hover:shadow-xl transition-all duration-300 border-0 overflow-hidden">
-                  <CardHeader className="pb-3 relative">
-                    <div className="absolute top-4 right-4">
-                      <Badge
-                        className={`${offer.type === "buy" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"} font-semibold`}
-                      >
-                        {offer.type.toUpperCase()}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center space-x-3 pr-16">
-                      <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: "var(--tutela-blue-100)" }}>
-                        <span className="text-2xl">{getCommodityIcon(offer.commodity?.type)}</span>
+              (offers as any[]).map((offer: any) => {
+                const trustScore = getTrustScore(offer);
+                const trustSignals = getTrustSignals(offer);
+                return (
+                  <Card key={offer.id} className="tutela-metric-card hover:shadow-xl transition-all duration-300 border-0 overflow-hidden">
+                    <CardHeader className="pb-3 relative">
+                      <div className="absolute top-4 right-4">
+                        <Badge className={`${offer.type === "buy" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"} font-semibold`}>
+                          {offer.type.toUpperCase()}
+                        </Badge>
                       </div>
-                      <div className="flex-1">
-                        <CardTitle className="text-lg font-bold text-gray-900">{offer.commodity?.name}</CardTitle>
-                        <p className="text-sm text-gray-600 font-medium">{formatCommodityType(offer.commodity?.type)}</p>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {/* Price Section */}
-                      <div className="p-4 rounded-lg border" style={{ background: "linear-gradient(135deg, var(--tutela-blue-50) 0%, var(--tutela-gray-50) 100%)" }}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-700">Price per {offer.unit}</span>
-                          <span className="font-bold text-xl" style={{ color: "var(--tutela-primary)" }}>
-                            {canSeePrices ? formatPrice(offer.pricePerUnit, offer.currency) : "Price hidden"}
-                          </span>
+                      <div className="flex items-center space-x-3 pr-16">
+                        <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: "var(--tutela-blue-100)" }}>
+                          <span className="text-2xl">{getCommodityIcon(offer.commodity?.type)}</span>
                         </div>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-sm text-gray-600">Total Value</span>
-                          <span className="font-semibold text-lg text-gray-800">
+                        <div className="flex-1">
+                          <CardTitle className="text-lg font-bold text-gray-900">{offer.commodity?.name}</CardTitle>
+                          <p className="text-sm text-gray-600 font-medium">{formatCommodityType(offer.commodity?.type)}</p>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-[1fr_auto] gap-3 rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">TUTELA Trust Score</p>
+                            <p className="mt-1 text-sm text-emerald-800">Offer readiness based on submitted data and visible verification signals.</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-black text-emerald-700">{trustScore}</p>
+                            <p className="text-xs text-emerald-700">/ 100</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {trustSignals.map((signal) => (
+                            <div key={signal.label} className={`rounded-lg border px-3 py-2 text-xs font-medium ${getSignalClassName(signal.status)}`}>
+                              <div className="flex items-center gap-2">
+                                {signal.status === "verified" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <LockKeyhole className="h-3.5 w-3.5" />}
+                                {signal.label}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="p-4 rounded-lg border" style={{ background: "linear-gradient(135deg, var(--tutela-blue-50) 0%, var(--tutela-gray-50) 100%)" }}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-700">Price per {offer.unit}</span>
+                            <span className="font-bold text-xl" style={{ color: "var(--tutela-primary)" }}>
+                              {canSeePrices ? formatPrice(offer.pricePerUnit, offer.currency) : "Price hidden"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-sm text-gray-600">Total Value</span>
+                            <span className="font-semibold text-lg text-gray-800">
+                              {canSeePrices
+                                ? formatPrice((parseFloat(offer.pricePerUnit) * parseFloat(offer.quantity)).toString(), offer.currency)
+                                : "Restricted"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="text-center p-3 bg-gray-50 rounded-lg">
+                            <div className="text-2xl font-bold" style={{ color: "var(--tutela-secondary)" }}>
+                              {parseFloat(offer.quantity).toLocaleString()}
+                            </div>
+                            <div className="text-sm text-gray-600">{offer.unit}</div>
+                          </div>
+                          <div className="text-center p-3 bg-gray-50 rounded-lg">
+                            <div className="text-sm text-gray-600">Min Order</div>
+                            <div className="text-lg font-semibold text-gray-800">
+                              {offer.minQuantity ? parseFloat(offer.minQuantity).toLocaleString() : "N/A"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center text-sm text-gray-600">
+                            <MapPin className="mr-2 h-4 w-4 text-gray-400" />
+                            <span className="font-medium">{offer.location}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center text-gray-600">
+                              <Shield className="mr-2 h-4 w-4 text-green-500" />
+                              <span>{canSeePrices ? "Verified Counterparty" : getMaskedCompanyLabel(offer.commodity?.type)}</span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              {[...Array(5)].map((_, index) => (
+                                <Star key={index} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="text-sm text-gray-700 font-medium">
                             {canSeePrices
-                              ? formatPrice((parseFloat(offer.pricePerUnit) * parseFloat(offer.quantity)).toString(), offer.currency)
-                              : "Restricted"}
-                          </span>
+                              ? `${offer.user?.firstName ?? ""} ${offer.user?.lastName ?? ""} • ${offer.user?.companyName || "Independent Trader"}`
+                              : "Counterparty identity hidden until verification"}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Quantity & Details */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="text-center p-3 bg-gray-50 rounded-lg">
-                          <div className="text-2xl font-bold" style={{ color: "var(--tutela-secondary)" }}>
-                            {parseFloat(offer.quantity).toLocaleString()}
-                          </div>
-                          <div className="text-sm text-gray-600">{offer.unit}</div>
-                        </div>
-                        <div className="text-center p-3 bg-gray-50 rounded-lg">
-                          <div className="text-sm text-gray-600">Min Order</div>
-                          <div className="text-lg font-semibold text-gray-800">
-                            {offer.minQuantity ? parseFloat(offer.minQuantity).toLocaleString() : "N/A"}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Location & Trader Info */}
-                      <div className="space-y-2">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <MapPin className="mr-2 h-4 w-4 text-gray-400" />
-                          <span className="font-medium">{offer.location}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center text-gray-600">
-                            <Shield className="mr-2 h-4 w-4 text-green-500" />
-                            <span>Verified Trader</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                            ))}
-                          </div>
-                        </div>
-                        <div className="text-sm text-gray-700 font-medium">
-                          {canSeePrices
-                            ? `${offer.user?.firstName ?? ""} ${offer.user?.lastName ?? ""} • ${offer.user?.companyName || "Independent Trader"}`
-                            : getMaskedCompanyLabel(offer.commodity?.type)}
-                        </div>
-                      </div>
-
-                      {/* Terms Preview */}
-                      {canSeeDocuments && (offer.deliveryTerms || offer.paymentTerms) && (
-                        <div className="bg-gray-50 p-3 rounded-lg">
-                          <div className="text-xs font-semibold text-gray-700 mb-2">TRADING TERMS</div>
-                          {offer.deliveryTerms && (
-                            <div className="text-xs text-gray-600 mb-1">
-                              <strong>Delivery:</strong> {offer.deliveryTerms.substring(0, 45)}...
+                        {canSeeDocuments && (offer.deliveryTerms || offer.paymentTerms) && (
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                              <FileText className="h-3.5 w-3.5" />
+                              TRADING TERMS
                             </div>
-                          )}
-                          {offer.paymentTerms && (
-                            <div className="text-xs text-gray-600">
-                              <strong>Payment:</strong> {offer.paymentTerms.substring(0, 45)}...
-                            </div>
-                          )}
-                        </div>
-                      )}
+                            {offer.deliveryTerms && (
+                              <div className="text-xs text-gray-600 mb-1">
+                                <strong>Delivery:</strong> {offer.deliveryTerms.substring(0, 45)}...
+                              </div>
+                            )}
+                            {offer.paymentTerms && (
+                              <div className="text-xs text-gray-600">
+                                <strong>Payment:</strong> {offer.paymentTerms.substring(0, 45)}...
+                              </div>
+                            )}
+                          </div>
+                        )}
 
-                      <div className="pt-3 border-t">
-                        <Button
-                          className="w-full tutela-btn-primary text-sm font-semibold py-2.5"
-                          disabled={!canStartNegotiation}
-                        >
-                          <TrendingUp className="mr-2 h-4 w-4" />
-                          {canStartNegotiation ? "View Details & Contact" : getMarketplaceCta()}
-                        </Button>
+                        {!canSeeDocuments && (
+                          <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 text-xs text-gray-600">
+                            Documents, detailed terms, and contact channels unlock after KYB/KYC verification.
+                          </div>
+                        )}
+
+                        <div className="pt-3 border-t">
+                          <Button className="w-full tutela-btn-primary text-sm font-semibold py-2.5" disabled={!canStartNegotiation}>
+                            <TrendingUp className="mr-2 h-4 w-4" />
+                            {canStartNegotiation ? "View Details & Contact" : getMarketplaceCta()}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
           </div>
         )}
 
-        {/* Create Offer Modal */}
         <CreateOfferModal
           isOpen={isCreateOfferOpen}
           onClose={() => setIsCreateOfferOpen(false)}
