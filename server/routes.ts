@@ -560,18 +560,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
 
-  // Seed demo data on startup if no offers exist
-  setTimeout(async () => {
-    try {
-      const existingOffers = await storage.getOffers();
-      if (existingOffers.length === 0) {
-        console.log("🌱 No existing offers found, seeding demo data...");
-        await seedDemoData();
+  if (process.env.DEMO_MODE === "true") {
+    // Seed demo data on startup if demo mode is explicitly enabled.
+    setTimeout(async () => {
+      try {
+        const existingOffers = await storage.getOffers();
+        if (existingOffers.length === 0) {
+          console.log("DEMO_MODE enabled: seeding demo marketplace data.");
+          await seedDemoData();
+        }
+      } catch (error) {
+        console.error("Failed to seed demo data on startup:", error);
       }
-    } catch (error) {
-      console.error("Failed to seed demo data on startup:", error);
-    }
-  }, 2000);
+    }, 2000);
+  }
 
   return httpServer;
 }
