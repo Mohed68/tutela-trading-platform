@@ -18,6 +18,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import CreateOfferModal from "@/components/offers/CreateOfferModal";
+import QuickNegotiationModal from "@/components/negotiation/QuickNegotiationModal";
 import { useAuth } from "@/hooks/useAuth";
 import {
   type AccessStatus,
@@ -36,6 +37,8 @@ export default function Marketplace() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [isCreateOfferOpen, setIsCreateOfferOpen] = useState(false);
+  const [selectedQuickOffer, setSelectedQuickOffer] = useState<any | null>(null);
+  const [isQuickNegotiationOpen, setIsQuickNegotiationOpen] = useState(false);
   const { user } = useAuth();
   const isDemoUser =
   (user as { id?: string } | null | undefined)?.id === "local-admin";
@@ -158,6 +161,20 @@ export default function Marketplace() {
 
   const formatCommodityType = (type: string) => {
     return type?.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? "Commodity";
+  };
+
+  const openQuickNegotiation = (offer: any) => {
+    if (!canStartNegotiation) {
+      return;
+    }
+
+    setSelectedQuickOffer(offer);
+    setIsQuickNegotiationOpen(true);
+  };
+
+  const closeQuickNegotiation = () => {
+    setIsQuickNegotiationOpen(false);
+    setSelectedQuickOffer(null);
   };
 
   return (
@@ -469,7 +486,16 @@ export default function Marketplace() {
                           </div>
                         )}
 
-                        <div className="pt-3 border-t">
+                        <div className="space-y-2 pt-3 border-t">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full text-sm font-semibold py-2.5"
+                            disabled={!canStartNegotiation}
+                            onClick={() => openQuickNegotiation(offer)}
+                          >
+                            {canStartNegotiation ? "Quick Negotiate" : getMarketplaceCta()}
+                          </Button>
                           <Button className="w-full tutela-btn-primary text-sm font-semibold py-2.5" disabled={!canStartNegotiation}>
                             <TrendingUp className="mr-2 h-4 w-4" />
                             {canStartNegotiation ? "View Details & Contact" : getMarketplaceCta()}
@@ -489,6 +515,18 @@ export default function Marketplace() {
           onClose={() => setIsCreateOfferOpen(false)}
           commodities={commodities as any[]}
         />
+
+        {selectedQuickOffer && (
+          <QuickNegotiationModal
+            isOpen={isQuickNegotiationOpen}
+            onClose={closeQuickNegotiation}
+            offerId={selectedQuickOffer.id}
+            originalPrice={parseFloat(selectedQuickOffer.pricePerUnit)}
+            originalQuantity={parseFloat(selectedQuickOffer.quantity)}
+            currency={selectedQuickOffer.currency}
+            unit={selectedQuickOffer.unit}
+          />
+        )}
       </div>
     </AppShell>
   );
