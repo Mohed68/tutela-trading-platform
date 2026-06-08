@@ -54,3 +54,8 @@ uploads/*
 .replit
 .upm
 replit.nix
+
+env.env
+*.env
+.env
+.env.*
