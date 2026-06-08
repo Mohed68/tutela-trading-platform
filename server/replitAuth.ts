@@ -12,6 +12,22 @@ import { storage } from "./storage";
 const AUTH_MODE = process.env.AUTH_MODE ?? "local";
 const IS_DEMO_MODE = process.env.DEMO_MODE === "true";
 const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+if (IS_PRODUCTION && AUTH_MODE === "local") {
+  throw new Error("AUTH_MODE=local is not allowed in production.");
+}
+
+if (IS_PRODUCTION && IS_DEMO_MODE) {
+  throw new Error("DEMO_MODE=true is not allowed in production.");
+}
+
+if (
+  IS_PRODUCTION &&
+  (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32)
+) {
+  throw new Error("SESSION_SECRET must be set and at least 32 characters in production.");
+}
 
 // إذا كنا في local / demo / development نستخدم مستخدم محلي وهمي
 const USE_LOCAL_AUTH = AUTH_MODE === "local" || IS_DEMO_MODE || IS_DEVELOPMENT;

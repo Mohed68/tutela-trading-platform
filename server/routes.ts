@@ -80,6 +80,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
+  app.get("/api/health", (_req, res) => {
+    res.json({
+      status: "ok",
+      environment: process.env.NODE_ENV ?? "development",
+    });
+  });
+
   // Auth routes
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
