@@ -22,6 +22,18 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export type InspectionCompany = (typeof INSPECTION_COMPANIES)[number];
 export type NegotiationStatus = (typeof NEGOTIATION_STATUSES)[number];
 export type DeltaClassification = "reasonable" | "moderate" | "high";
+export type NegotiationRisk = "low" | "medium" | "high";
+
+export type NegotiationAnalysis = {
+  originalDealValue: number;
+  counterDealValue: number;
+  priceDeltaPercent: number;
+  quantityDeltaPercent: number;
+  overallDeltaPercent: number;
+  score: number;
+  risk: NegotiationRisk;
+  classification: DeltaClassification;
+};
 
 export type QuickNegotiationInput = {
   offerId: string;
@@ -80,4 +92,84 @@ export function classifyDelta(deltaPercent: number): DeltaClassification {
   }
 
   return "high";
+}
+
+export function calculatePriceDeltaPercent(originalPrice: number, counterPrice: number): number {
+  return Math.abs(calculateDeltaPercent(originalPrice, counterPrice));
+}
+
+export function calculateQuantityDeltaPercent(
+  originalQuantity: number,
+  counterQuantity: number,
+): number {
+  return Math.abs(calculateDeltaPercent(originalQuantity, counterQuantity));
+}
+
+export function calculateNegotiationScore(
+  originalPrice: number,
+  originalQuantity: number,
+  counterPrice: number,
+  counterQuantity: number,
+): number {
+  const priceDeltaPercent = calculatePriceDeltaPercent(originalPrice, counterPrice);
+  const quantityDeltaPercent = calculateQuantityDeltaPercent(originalQuantity, counterQuantity);
+  const averageDeltaPercent = (priceDeltaPercent + quantityDeltaPercent) / 2;
+  const score = 100 - averageDeltaPercent * 2;
+
+  return Math.round(Math.min(Math.max(score, 0), 100));
+}
+
+export function calculateNegotiationRisk(
+  originalPrice: number,
+  originalQuantity: number,
+  counterPrice: number,
+  counterQuantity: number,
+): NegotiationRisk {
+  const priceDeltaPercent = calculatePriceDeltaPercent(originalPrice, counterPrice);
+  const quantityDeltaPercent = calculateQuantityDeltaPercent(originalQuantity, counterQuantity);
+
+  if (
+    priceDeltaPercent > NegotiationLimits.highDeviationThresholdPercent ||
+    quantityDeltaPercent > NegotiationLimits.highDeviationThresholdPercent
+  ) {
+    return "high";
+  }
+
+  if (
+    priceDeltaPercent > NegotiationLimits.moderateDeviationThresholdPercent ||
+    quantityDeltaPercent > NegotiationLimits.moderateDeviationThresholdPercent
+  ) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+export function analyzeNegotiation(
+  originalPrice: number,
+  originalQuantity: number,
+  counterPrice: number,
+  counterQuantity: number,
+): NegotiationAnalysis {
+  const originalDealValue = calculateDealValue(originalPrice, originalQuantity);
+  const counterDealValue = calculateDealValue(counterPrice, counterQuantity);
+  const priceDeltaPercent = calculatePriceDeltaPercent(originalPrice, counterPrice);
+  const quantityDeltaPercent = calculateQuantityDeltaPercent(originalQuantity, counterQuantity);
+  const overallDeltaPercent = Math.abs(calculateDeltaPercent(originalDealValue, counterDealValue));
+
+  return {
+    originalDealValue,
+    counterDealValue,
+    priceDeltaPercent,
+    quantityDeltaPercent,
+    overallDeltaPercent,
+    score: calculateNegotiationScore(
+      originalPrice,
+      originalQuantity,
+      counterPrice,
+      counterQuantity,
+    ),
+    risk: calculateNegotiationRisk(originalPrice, originalQuantity, counterPrice, counterQuantity),
+    classification: classifyDelta(overallDeltaPercent),
+  };
 }
