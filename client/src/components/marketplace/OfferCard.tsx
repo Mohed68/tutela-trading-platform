@@ -32,19 +32,6 @@ const getTrustScore = (offer: any) => {
   return Math.min(base + hasTerms + hasSeller + hasMinOrder + categoryBoost, 96);
 };
 
-const getCommodityIcon = (type: string) => {
-  switch (type) {
-    case "fuel_hydrocarbons":
-      return "⛽";
-    case "metals_precious":
-      return "🥇";
-    case "agricultural":
-      return "🌾";
-    default:
-      return "📦";
-  }
-};
-
 const formatPrice = (price: string, currency: string) => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -66,6 +53,19 @@ const formatValue = (value: unknown) => {
   }
 
   return String(value);
+};
+
+const summarizeTerm = (value: unknown, allowedCodes: string[]) => {
+  const text = formatValue(value);
+
+  if (text === "Not specified") {
+    return text;
+  }
+
+  const normalized = text.toUpperCase();
+  const compact = normalized.replace(/[^A-Z0-9]/g, "");
+  const matchedCode = allowedCodes.find((code) => normalized.includes(code) || compact.includes(code));
+  return matchedCode ?? text.split(/\s|\/|-/)[0].toUpperCase();
 };
 
 const getMockOfferPricingMode = (index: number): OfferPricingMode => {
@@ -94,7 +94,20 @@ const getTrustBadgeClassName = (level: TrustLevel) => {
 
 const verificationCount = 4;
 
-const getCounterpartyLabel = (
+const getCardCounterpartyLabel = (
+  offer: any,
+  visibilityMode: OfferVisibilityMode,
+) => {
+  const isSeller = offer.type === "sell";
+
+  if (visibilityMode === "full_anonymous") {
+    return isSeller ? "Anonymous Supplier" : "Anonymous Buyer";
+  }
+
+  return isSeller ? "Verified Supplier" : "Verified Buyer";
+};
+
+const getDetailsCounterpartyLabel = (
   offer: any,
   visibilityMode: OfferVisibilityMode,
   canSeePrices: boolean,
@@ -124,126 +137,93 @@ export default function OfferCard({
   const isSellOffer = offer.type === "sell";
   const hasPriceData =
     parseFloat(offer.pricePerUnit) > 0 && parseFloat(offer.quantity) > 0;
-  const counterpartyLabel = getCounterpartyLabel(offer, visibilityMode, canSeePrices);
+  const cardCounterpartyLabel = getCardCounterpartyLabel(offer, visibilityMode);
+  const detailsCounterpartyLabel = getDetailsCounterpartyLabel(offer, visibilityMode, canSeePrices);
   const paymentTerms = formatValue(offer.paymentTerms);
   const deliveryTerms = formatValue(offer.deliveryTerms);
+  const paymentSummary = summarizeTerm(offer.paymentTerms, ["SBLC", "CAD", "TT", "LC"]);
+  const shippingSummary = summarizeTerm(offer.deliveryTerms, ["FOB", "CIF", "CFR", "DAP", "EXW"]);
   const pricePerUnit = canSeePrices
     ? formatPrice(offer.pricePerUnit, offer.currency)
     : "Price hidden";
   const totalValue = canSeePrices
     ? formatPrice((parseFloat(offer.pricePerUnit) * parseFloat(offer.quantity)).toString(), offer.currency)
     : "Restricted";
-  const details = [
-    ["Commodity", formatValue(offer.commodity?.name)],
-    ["Category", formatCommodityType(offer.commodity?.type)],
-    ["Buy/Sell", offer.type?.toUpperCase() ?? "Not specified"],
-    ["Pricing mode", formatModelLabel(pricingMode)],
-    ["Visibility mode", formatModelLabel(visibilityMode)],
-    ["Price per unit", pricePerUnit],
-    ["Total value", totalValue],
-    ["Quantity", `${parseFloat(offer.quantity).toLocaleString()} ${offer.unit}`],
-    ["Location", formatValue(offer.location)],
-    ["Payment terms", paymentTerms],
-    ["Delivery terms", deliveryTerms],
-    ["Counterparty", counterpartyLabel],
-    ["Trust score", `${trustScore}/100 ${formatModelLabel(trustLevel)}`],
-    ["Verification stack", `${verificationCount} Verifications`],
-  ];
-
   return (
     <>
-      <Card className="tutela-metric-card hover:shadow-xl transition-all duration-300 border-0 overflow-hidden">
-        <CardHeader className="pb-2 relative px-4 pt-4">
-          <div className="absolute top-4 right-4">
-            <Badge className={`${offer.type === "buy" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"} font-semibold`}>
-              {offer.type.toUpperCase()}
+      <Card className="tutela-metric-card overflow-hidden border-0 transition-all duration-300 hover:shadow-lg">
+        <CardHeader className="px-4 pb-2 pt-4">
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle className="truncate text-lg font-bold leading-tight text-gray-950">
+                {formatValue(offer.commodity?.name)}
+              </CardTitle>
+              <p className="mt-0.5 truncate text-xs font-medium uppercase tracking-wide text-gray-500">
+                {formatCommodityType(offer.commodity?.type)}
+              </p>
+            </div>
+            <Badge className={`${offer.type === "buy" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"} shrink-0 font-semibold`}>
+              {offer.type?.toUpperCase() ?? "OFFER"}
             </Badge>
           </div>
-          <div className="flex items-center space-x-3 pr-16">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "var(--tutela-blue-100)" }}>
-              <span className="text-xl">{getCommodityIcon(offer.commodity?.type)}</span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <CardTitle className="truncate text-lg font-bold text-gray-900">{offer.commodity?.name}</CardTitle>
-              <p className="truncate text-sm text-gray-600 font-medium">{formatCommodityType(offer.commodity?.type)}</p>
-            </div>
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="outline" className="border-blue-100 bg-blue-50 px-2 py-0 text-[11px] font-semibold text-blue-700">
+              {formatModelLabel(pricingMode)}
+            </Badge>
+            <Badge variant="outline" className="border-slate-200 bg-slate-50 px-2 py-0 text-[11px] font-semibold text-slate-700">
+              {formatModelLabel(visibilityMode)}
+            </Badge>
           </div>
         </CardHeader>
         <CardContent className="px-4 pb-4">
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-1.5">
-              <Badge variant="outline" className="border-blue-100 bg-blue-50 text-blue-700">
-                {formatModelLabel(pricingMode)}
-              </Badge>
-              <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
-                {formatModelLabel(visibilityMode)}
-              </Badge>
+          <div className="space-y-3">
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase text-slate-500">Price</div>
+                  <div className="mt-0.5 text-base font-bold text-slate-950">{pricePerUnit}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Quantity</div>
+                  <div className="mt-0.5 text-sm font-semibold text-slate-900">
+                    {parseFloat(offer.quantity).toLocaleString()} {offer.unit}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 flex min-w-0 items-center text-xs font-medium text-slate-600">
+                <MapPin className="mr-1.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <span className="truncate">{formatValue(offer.location)}</span>
+              </div>
             </div>
 
-            <div className={`flex flex-wrap items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-semibold ${getTrustBadgeClassName(trustLevel)}`}>
-              <span>Trust {trustScore}/100</span>
-              <span className="h-1 w-1 rounded-full bg-current" />
-              <span className="capitalize">{trustLevel}</span>
-              <span className="h-1 w-1 rounded-full bg-current" />
-              <span className="flex items-center gap-1">
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-md bg-slate-50 px-2.5 py-2">
+                <div className="font-semibold text-slate-500">Payment</div>
+                <div className="mt-0.5 truncate font-bold text-slate-900">{paymentSummary}</div>
+              </div>
+              <div className="rounded-md bg-slate-50 px-2.5 py-2">
+                <div className="font-semibold text-slate-500">Shipping</div>
+                <div className="mt-0.5 truncate font-bold text-slate-900">{shippingSummary}</div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-y border-slate-100 py-2 text-xs">
+              <div className="flex min-w-0 items-center gap-2 text-slate-700">
+                <Shield className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                <span className="truncate font-semibold">{cardCounterpartyLabel}</span>
+              </div>
+              <div className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 font-semibold ${getTrustBadgeClassName(trustLevel)}`}>
                 <CheckCircle2 className="h-3 w-3" />
-                Verified Stack · {verificationCount}
-              </span>
-            </div>
-
-            <div className="p-2.5 rounded-lg border" style={{ background: "linear-gradient(135deg, var(--tutela-blue-50) 0%, var(--tutela-gray-50) 100%)" }}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-gray-700">Price per {offer.unit}</span>
-                <span className="text-base font-bold" style={{ color: "var(--tutela-primary)" }}>
-                  {pricePerUnit}
-                </span>
-              </div>
-              <div className="mt-1 flex items-center justify-between gap-3">
-                <span className="text-sm text-gray-600">Total Value</span>
-                <span className="font-semibold text-gray-800">
-                  {totalValue}
-                </span>
+                <span>Trust {trustScore}/100</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-gray-50 p-2.5">
-                <div className="text-base font-bold" style={{ color: "var(--tutela-secondary)" }}>
-                  {parseFloat(offer.quantity).toLocaleString()}
-                </div>
-                <div className="text-sm text-gray-600">{offer.unit}</div>
-              </div>
-              <div className="rounded-lg bg-gray-50 p-2.5">
-                <div className="flex items-center text-sm text-gray-600">
-                  <MapPin className="mr-1.5 h-3.5 w-3.5 text-gray-400" />
-                  Location
-                </div>
-                <div className="truncate text-sm font-semibold text-gray-800">{offer.location}</div>
-              </div>
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+              <span>{verificationCount} Verifications</span>
+              <span>Total {totalValue}</span>
             </div>
 
-            <div className="grid gap-1.5 rounded-lg bg-slate-50 p-2.5 text-xs text-slate-700">
-              <div className="flex min-w-0 gap-1">
-                <span className="font-semibold text-slate-600">Payment:</span>
-                <span className="truncate">{paymentTerms}</span>
-              </div>
-              <div className="flex min-w-0 gap-1">
-                <span className="font-semibold text-slate-600">Shipping:</span>
-                <span className="truncate">{deliveryTerms}</span>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <div className="flex items-center text-sm text-gray-600">
-                <Shield className="mr-2 h-4 w-4 text-green-500" />
-                <span>{visibilityMode === "public" ? "Verified Counterparty" : "Identity protected"}</span>
-              </div>
-              <div className="truncate text-sm font-medium text-gray-700">
-                {counterpartyLabel}
-              </div>
-            </div>
-
-            <div className="space-y-2 pt-2.5 border-t">
+            <div className="space-y-2 pt-1">
               {isSellOffer &&
                 (pricingMode === "fixed" ||
                   pricingMode === "negotiable" ||
@@ -267,8 +247,18 @@ export default function OfferCard({
                 </Button>
               )}
 
+              {pricingMode === "indicative" && (
+                <Button
+                  className="w-full tutela-btn-primary text-sm font-semibold py-2.5"
+                  disabled={!canStartNegotiation}
+                >
+                  <TrendingUp className="mr-2 h-4 w-4" />
+                  {canStartNegotiation ? "Request Discussion" : disabledActionLabel}
+                </Button>
+              )}
+
               {pricingMode === "negotiable" && (
-                <>
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
                     variant="outline"
@@ -285,27 +275,17 @@ export default function OfferCard({
                     <TrendingUp className="mr-2 h-4 w-4" />
                     {canStartNegotiation ? "Written Negotiation" : disabledActionLabel}
                   </Button>
-                </>
-              )}
-
-              {pricingMode === "indicative" && (
-                <Button
-                  className="w-full tutela-btn-primary text-sm font-semibold py-2.5"
-                  disabled={!canStartNegotiation}
-                >
-                  <TrendingUp className="mr-2 h-4 w-4" />
-                  {canStartNegotiation ? "Request Discussion" : disabledActionLabel}
-                </Button>
+                </div>
               )}
 
               <Button
                 type="button"
-                variant="outline"
-                className="w-full text-sm font-semibold py-2.5"
+                variant="ghost"
+                className="w-full text-sm font-semibold text-slate-700 hover:text-slate-950"
                 onClick={() => setIsDetailsOpen(true)}
               >
                 <Info className="mr-2 h-4 w-4" />
-                Offer Details
+                Details
               </Button>
             </div>
           </div>
@@ -313,21 +293,127 @@ export default function OfferCard({
       </Card>
 
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="z-[60] max-h-[88vh] overflow-y-auto border border-slate-200 bg-white p-5 text-slate-950 shadow-2xl sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{formatValue(offer.commodity?.name)} Offer Details</DialogTitle>
-            <DialogDescription>
-              Commercial essentials and controlled counterparty information for this marketplace offer.
-            </DialogDescription>
+        <DialogContent className="z-[60] max-h-[90vh] overflow-y-auto border border-slate-200 bg-white p-0 text-slate-950 shadow-2xl sm:max-w-3xl">
+          <DialogHeader className="border-b border-slate-200 px-6 py-5">
+            <div className="flex flex-wrap items-start justify-between gap-3 pr-8">
+              <div>
+                <DialogTitle className="text-xl">{formatValue(offer.commodity?.name)}</DialogTitle>
+                <DialogDescription className="mt-1">
+                  {formatCommodityType(offer.commodity?.type)} commercial offer summary.
+                </DialogDescription>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <Badge className={`${offer.type === "buy" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"} font-semibold`}>
+                  {offer.type?.toUpperCase() ?? "OFFER"}
+                </Badge>
+                <Badge variant="outline">{formatModelLabel(pricingMode)}</Badge>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {details.map(([label, value]) => (
-              <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
-                <div className="mt-1 text-sm font-medium text-slate-900">{value}</div>
+          <div className="space-y-5 px-6 py-5">
+            <section>
+              <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Commercial Summary</h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Counterparty</div>
+                  <div className="mt-1 text-base font-bold text-slate-950">{detailsCounterpartyLabel}</div>
+                  <div className="mt-2 text-sm text-slate-600">{formatValue(offer.location)}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Total Value</div>
+                  <div className="mt-1 text-lg font-bold text-slate-950">{totalValue}</div>
+                  <div className="mt-2 text-sm text-slate-600">{pricePerUnit} / {offer.unit}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Quantity</div>
+                  <div className="mt-1 text-base font-bold text-slate-950">
+                    {parseFloat(offer.quantity).toLocaleString()} {offer.unit}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Origin</div>
+                  <div className="mt-1 text-base font-bold text-slate-950">{formatValue(offer.location)}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Visibility</div>
+                  <div className="mt-1 text-base font-bold text-slate-950">{formatModelLabel(visibilityMode)}</div>
+                </div>
               </div>
-            ))}
+            </section>
+
+            <section>
+              <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Commercial Terms</h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Payment Terms</div>
+                  <div className="mt-1 text-base font-bold text-slate-950">{paymentSummary}</div>
+                  <div className="mt-2 text-sm text-slate-600">{paymentTerms}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Delivery Terms</div>
+                  <div className="mt-1 text-base font-bold text-slate-950">{shippingSummary}</div>
+                  <div className="mt-2 text-sm text-slate-600">{deliveryTerms}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Pricing Mode</div>
+                  <div className="mt-1 text-base font-bold text-slate-950">{formatModelLabel(pricingMode)}</div>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Verification</h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className={`rounded-lg border p-4 ${getTrustBadgeClassName(trustLevel)}`}>
+                  <div className="text-xs font-semibold uppercase">Trust Score</div>
+                  <div className="mt-1 text-lg font-bold">{trustScore}/100</div>
+                  <div className="mt-1 text-sm capitalize">{trustLevel}</div>
+                </div>
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-emerald-800">
+                  <div className="text-xs font-semibold uppercase">Verification Count</div>
+                  <div className="mt-1 text-lg font-bold">{verificationCount}</div>
+                  <div className="mt-1 text-sm">Commercial checks active</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Status</div>
+                  <div className="mt-1 flex items-center gap-2 text-base font-bold text-slate-950">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    Verified
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="border-t border-slate-200 pt-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Actions</h3>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {isSellOffer &&
+                  (pricingMode === "fixed" ||
+                    pricingMode === "negotiable" ||
+                    (pricingMode === "indicative" && hasPriceData)) && (
+                  <Button className="tutela-btn-primary" disabled={!canStartNegotiation}>
+                    <TrendingUp className="mr-2 h-4 w-4" />
+                    {canStartNegotiation ? "Buy Now" : disabledActionLabel}
+                  </Button>
+                )}
+                {pricingMode === "negotiable" && (
+                  <Button
+                    variant="outline"
+                    disabled={!canStartNegotiation}
+                    onClick={() => onQuickNegotiate(offer)}
+                  >
+                    {canStartNegotiation ? "Start Negotiation" : disabledActionLabel}
+                  </Button>
+                )}
+                {pricingMode === "indicative" && (
+                  <Button className="tutela-btn-primary" disabled={!canStartNegotiation}>
+                    <TrendingUp className="mr-2 h-4 w-4" />
+                    {canStartNegotiation ? "Request Discussion" : disabledActionLabel}
+                  </Button>
+                )}
+              </div>
+            </section>
           </div>
         </DialogContent>
       </Dialog>
