@@ -27,6 +27,11 @@ import {
   canViewMarketplace,
   canViewPrices,
 } from "@/lib/access";
+import {
+  getBadgeLabel,
+  sortBadgesByPriority,
+  type VerificationBadgeType,
+} from "@/lib/badges";
 import type { OfferPricingMode, OfferVisibilityMode } from "@/lib/offers";
 import { getTrustLevel, type TrustLevel } from "@/lib/trust";
 
@@ -191,6 +196,25 @@ export default function Marketplace() {
       default:
         return "border-orange-100 bg-orange-50 text-orange-700";
     }
+  };
+
+  const getMockVerificationBadges = () => {
+    const badgeTypes: VerificationBadgeType[] = [
+      "trusted_supplier",
+      "verified_company",
+      "verified_offer",
+      "verified_documents",
+    ];
+
+    return sortBadgesByPriority(
+      badgeTypes.map((type) => ({
+        badgeId: type,
+        type,
+        status: "active",
+        label: getBadgeLabel(type),
+        issuedAt: new Date().toISOString(),
+      })),
+    );
   };
 
   const getDisabledActionLabel = () => getMarketplaceCta();
@@ -399,6 +423,7 @@ export default function Marketplace() {
                 const pricingMode = getMockOfferPricingMode(index);
                 const visibilityMode = getMockVisibilityMode(index);
                 const trustLevel = getTrustLevel(trustScore);
+                const verificationBadges = getMockVerificationBadges();
                 return (
                   <Card key={offer.id} className="tutela-metric-card hover:shadow-xl transition-all duration-300 border-0 overflow-hidden">
                     <CardHeader className="pb-3 relative">
@@ -440,6 +465,19 @@ export default function Marketplace() {
                             <p className="text-2xl font-black text-emerald-700">{trustScore}</p>
                             <p className="text-xs text-emerald-700">/ 100</p>
                           </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {verificationBadges.map((badge) => (
+                            <Badge
+                              key={badge.badgeId}
+                              variant="outline"
+                              className="border-emerald-100 bg-white text-emerald-700"
+                            >
+                              <CheckCircle2 className="mr-1 h-3 w-3" />
+                              {badge.label}
+                            </Badge>
+                          ))}
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
