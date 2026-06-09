@@ -107,13 +107,13 @@ export default function QuickNegotiationModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="z-[60] max-h-[90vh] overflow-y-auto border border-slate-200 bg-white text-slate-950 shadow-2xl sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Quick Negotiation</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 rounded-md border border-slate-100 bg-slate-50 p-3 md:grid-cols-3">
             <div>
               <p className="text-sm text-muted-foreground">Original Price</p>
               <p className="font-medium">
@@ -138,6 +138,7 @@ export default function QuickNegotiationModal({
             <div className="space-y-2">
               <Label htmlFor="counter-price">Counter Price</Label>
               <Input
+                className="bg-white"
                 id="counter-price"
                 min="0"
                 step="0.01"
@@ -152,6 +153,7 @@ export default function QuickNegotiationModal({
             <div className="space-y-2">
               <Label htmlFor="counter-quantity">Counter Quantity</Label>
               <Input
+                className="bg-white"
                 id="counter-quantity"
                 min="0"
                 step="0.01"
@@ -165,7 +167,7 @@ export default function QuickNegotiationModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 rounded-md border border-slate-100 bg-white p-3 md:grid-cols-3">
             <div>
               <p className="text-sm text-muted-foreground">Counter Deal Value</p>
               <p className="font-medium">
