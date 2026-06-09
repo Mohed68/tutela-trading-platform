@@ -193,6 +193,8 @@ export default function Marketplace() {
     }
   };
 
+  const getDisabledActionLabel = () => getMarketplaceCta();
+
   const openQuickNegotiation = (offer: any) => {
     if (!canStartNegotiation) {
       return;
@@ -532,19 +534,46 @@ export default function Marketplace() {
                         )}
 
                         <div className="space-y-2 pt-3 border-t">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full text-sm font-semibold py-2.5"
-                            disabled={!canStartNegotiation}
-                            onClick={() => openQuickNegotiation(offer)}
-                          >
-                            {canStartNegotiation ? "Quick Negotiate" : getMarketplaceCta()}
-                          </Button>
-                          <Button className="w-full tutela-btn-primary text-sm font-semibold py-2.5" disabled={!canStartNegotiation}>
-                            <TrendingUp className="mr-2 h-4 w-4" />
-                            {canStartNegotiation ? "View Details & Contact" : getMarketplaceCta()}
-                          </Button>
+                          {pricingMode === "fixed" && (
+                            <Button
+                              className="w-full tutela-btn-primary text-sm font-semibold py-2.5"
+                              disabled={!canStartNegotiation}
+                            >
+                              <TrendingUp className="mr-2 h-4 w-4" />
+                              {canStartNegotiation ? "Buy Now" : getDisabledActionLabel()}
+                            </Button>
+                          )}
+
+                          {pricingMode === "negotiable" && (
+                            <>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full text-sm font-semibold py-2.5"
+                                disabled={!canStartNegotiation}
+                                onClick={() => openQuickNegotiation(offer)}
+                              >
+                                {canStartNegotiation ? "Quick Negotiate" : getDisabledActionLabel()}
+                              </Button>
+                              <Button
+                                className="w-full tutela-btn-primary text-sm font-semibold py-2.5"
+                                disabled={!canStartNegotiation}
+                              >
+                                <TrendingUp className="mr-2 h-4 w-4" />
+                                {canStartNegotiation ? "Written Negotiation" : getDisabledActionLabel()}
+                              </Button>
+                            </>
+                          )}
+
+                          {pricingMode === "indicative" && (
+                            <Button
+                              className="w-full tutela-btn-primary text-sm font-semibold py-2.5"
+                              disabled={!canStartNegotiation}
+                            >
+                              <TrendingUp className="mr-2 h-4 w-4" />
+                              {canStartNegotiation ? "Request Discussion" : getDisabledActionLabel()}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardContent>
