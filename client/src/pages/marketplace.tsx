@@ -18,7 +18,6 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   type AccessStatus,
   canNegotiate,
-  canViewDocuments,
   canViewMarketplace,
   canViewPrices,
 } from "@/lib/access";
@@ -41,7 +40,6 @@ export default function Marketplace() {
 
   const canSeeMarketplace = canViewMarketplace(verificationStatus);
   const canSeePrices = canViewPrices(verificationStatus);
-  const canSeeDocuments = canViewDocuments(verificationStatus);
   const canStartNegotiation = canNegotiate(verificationStatus);
 
   const getMarketplaceCta = () => {
@@ -294,7 +292,6 @@ export default function Marketplace() {
                   offer={offer}
                   index={index}
                   canSeePrices={canSeePrices}
-                  canSeeDocuments={canSeeDocuments}
                   canStartNegotiation={canStartNegotiation}
                   disabledActionLabel={getDisabledActionLabel()}
                   onQuickNegotiate={openQuickNegotiation}
