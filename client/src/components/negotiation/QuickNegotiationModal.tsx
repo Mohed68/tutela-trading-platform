@@ -107,13 +107,13 @@ export default function QuickNegotiationModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="z-[60] max-h-[90vh] overflow-y-auto border border-slate-200 bg-white text-slate-950 shadow-2xl sm:max-w-2xl">
+      <DialogContent className="z-[60] max-h-[88vh] overflow-y-auto border border-slate-200 bg-white p-5 text-slate-950 shadow-2xl sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Quick Negotiation</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid grid-cols-1 gap-4 rounded-md border border-slate-100 bg-slate-50 p-3 md:grid-cols-3">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 rounded-md border border-slate-100 bg-slate-50 p-3 md:grid-cols-3">
             <div>
               <p className="text-sm text-muted-foreground">Original Price</p>
               <p className="font-medium">
@@ -134,7 +134,7 @@ export default function QuickNegotiationModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="counter-price">Counter Price</Label>
               <Input
@@ -167,7 +167,7 @@ export default function QuickNegotiationModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 rounded-md border border-slate-100 bg-white p-3 md:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 rounded-md border border-slate-100 bg-white p-3 md:grid-cols-3">
             <div>
               <p className="text-sm text-muted-foreground">Counter Deal Value</p>
               <p className="font-medium">
@@ -196,8 +196,11 @@ export default function QuickNegotiationModal({
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <span className="text-sm text-muted-foreground">Classification</span>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-100 bg-slate-50 p-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Classification</p>
+              <p className="text-sm font-medium">Offer quality indicator</p>
+            </div>
             <Badge variant={getClassificationVariant(analysis.classification)} className="capitalize">
               {analysis.classification}
             </Badge>
@@ -209,7 +212,7 @@ export default function QuickNegotiationModal({
             </div>
           )}
 
-          <div className="flex justify-end space-x-3 pt-2">
+          <div className="flex justify-end space-x-3 pt-1">
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>

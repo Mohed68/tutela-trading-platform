@@ -30,6 +30,7 @@ import {
   type VerificationBadgeType,
 } from "@/lib/badges";
 import type { OfferPricingMode, OfferVisibilityMode } from "@/lib/offers";
+import { getMaskedDisplayName } from "@/lib/privacy";
 import { getTrustLevel, type TrustLevel } from "@/lib/trust";
 
 export default function Marketplace() {
@@ -68,19 +69,6 @@ export default function Marketplace() {
       case "verified":
       default:
         return "View Details & Contact";
-    }
-  };
-
-  const getMaskedCompanyLabel = (type?: string) => {
-    switch (type) {
-      case "fuel_hydrocarbons":
-        return "Verified Energy Supplier";
-      case "metals_precious":
-        return "Verified Metals Supplier";
-      case "agricultural":
-        return "Verified Agricultural Exporter";
-      default:
-        return "Verified GCC Trader";
     }
   };
 
@@ -191,6 +179,16 @@ export default function Marketplace() {
   };
 
   const getDisabledActionLabel = () => getMarketplaceCta();
+
+  const getCounterpartyLabel = (offer: any, visibilityMode: OfferVisibilityMode) => {
+    const role = offer.type === "sell" ? "seller" : "buyer";
+
+    if (visibilityMode === "public" && canSeePrices) {
+      return `${offer.user?.firstName ?? ""} ${offer.user?.lastName ?? ""} • ${offer.user?.companyName || "Independent Trader"}`;
+    }
+
+    return getMaskedDisplayName(visibilityMode, role);
+  };
 
   const openQuickNegotiation = (offer: any) => {
     if (!canStartNegotiation) {
@@ -397,6 +395,9 @@ export default function Marketplace() {
                 const trustLevel = getTrustLevel(trustScore);
                 const verificationBadges = getMockVerificationBadges();
                 const isSellOffer = offer.type === "sell";
+                const hasPriceData =
+                  parseFloat(offer.pricePerUnit) > 0 && parseFloat(offer.quantity) > 0;
+                const counterpartyLabel = getCounterpartyLabel(offer, visibilityMode);
                 return (
                   <Card key={offer.id} className="tutela-metric-card hover:shadow-xl transition-all duration-300 border-0 overflow-hidden">
                     <CardHeader className="pb-2 relative">
@@ -416,32 +417,33 @@ export default function Marketplace() {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex flex-wrap gap-2">
+                      <div className="space-y-2.5">
+                        <div className="flex flex-wrap gap-1.5">
                           <Badge variant="outline" className="border-blue-100 bg-blue-50 text-blue-700">
                             {formatModelLabel(pricingMode)}
                           </Badge>
                           <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
                             {formatModelLabel(visibilityMode)}
                           </Badge>
-                          <Badge variant="outline" className={`capitalize ${getTrustBadgeClassName(trustLevel)}`}>
-                            {trustLevel}
-                          </Badge>
                         </div>
 
-                        <div className="flex items-center justify-between rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                            Trust Score
+                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                          <span>Trust {trustScore}/100</span>
+                          <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                          <span className="capitalize">{trustLevel}</span>
+                          <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                          <span className="flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Verified
                           </span>
-                          <span className="text-lg font-black text-emerald-700">{trustScore}/100</span>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1.5">
                           {verificationBadges.map((badge) => (
                             <Badge
                               key={badge.badgeId}
                               variant="outline"
-                              className="border-emerald-100 bg-white text-emerald-700"
+                              className="h-6 border-emerald-100 bg-white px-2 text-[11px] font-medium text-emerald-700"
                             >
                               <CheckCircle2 className="mr-1 h-3 w-3" />
                               {badge.label}
@@ -482,15 +484,13 @@ export default function Marketplace() {
                           </div>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           <div className="flex items-center text-sm text-gray-600">
                             <Shield className="mr-2 h-4 w-4 text-green-500" />
-                            <span>{canSeePrices ? "Verified Counterparty" : getMaskedCompanyLabel(offer.commodity?.type)}</span>
+                            <span>{visibilityMode === "public" ? "Verified Counterparty" : "Identity protected"}</span>
                           </div>
                           <div className="text-sm text-gray-700 font-medium">
-                            {canSeePrices
-                              ? `${offer.user?.firstName ?? ""} ${offer.user?.lastName ?? ""} • ${offer.user?.companyName || "Independent Trader"}`
-                              : "Counterparty identity hidden until verification"}
+                            {counterpartyLabel}
                           </div>
                         </div>
 
@@ -501,7 +501,10 @@ export default function Marketplace() {
                         )}
 
                         <div className="space-y-2 pt-3 border-t">
-                          {isSellOffer && (pricingMode === "fixed" || pricingMode === "negotiable") && (
+                          {isSellOffer &&
+                            (pricingMode === "fixed" ||
+                              pricingMode === "negotiable" ||
+                              (pricingMode === "indicative" && hasPriceData)) && (
                             <Button
                               className="w-full tutela-btn-primary text-sm font-semibold py-2.5"
                               disabled={!canStartNegotiation}
