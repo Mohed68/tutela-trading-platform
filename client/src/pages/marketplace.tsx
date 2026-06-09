@@ -27,6 +27,8 @@ import {
   canViewMarketplace,
   canViewPrices,
 } from "@/lib/access";
+import type { OfferPricingMode, OfferVisibilityMode } from "@/lib/offers";
+import { getTrustLevel, type TrustLevel } from "@/lib/trust";
 
 type TrustSignal = {
   label: string;
@@ -161,6 +163,34 @@ export default function Marketplace() {
 
   const formatCommodityType = (type: string) => {
     return type?.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? "Commodity";
+  };
+
+  const formatModelLabel = (value: string) => {
+    return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  };
+
+  const getMockOfferPricingMode = (index: number): OfferPricingMode => {
+    const modes: OfferPricingMode[] = ["fixed", "negotiable", "indicative"];
+    return modes[index % modes.length];
+  };
+
+  const getMockVisibilityMode = (index: number): OfferVisibilityMode => {
+    const modes: OfferVisibilityMode[] = ["public", "semi_anonymous", "full_anonymous"];
+    return modes[index % modes.length];
+  };
+
+  const getTrustBadgeClassName = (level: TrustLevel) => {
+    switch (level) {
+      case "platinum":
+        return "border-sky-100 bg-sky-50 text-sky-700";
+      case "gold":
+        return "border-amber-100 bg-amber-50 text-amber-700";
+      case "silver":
+        return "border-slate-200 bg-slate-50 text-slate-700";
+      case "bronze":
+      default:
+        return "border-orange-100 bg-orange-50 text-orange-700";
+    }
   };
 
   const openQuickNegotiation = (offer: any) => {
@@ -361,9 +391,12 @@ export default function Marketplace() {
                 <p className="text-gray-600">Try adjusting your search terms or create a new offer to get started.</p>
               </div>
             ) : (
-              (offers as any[]).map((offer: any) => {
+              (offers as any[]).map((offer: any, index: number) => {
                 const trustScore = getTrustScore(offer);
                 const trustSignals = getTrustSignals(offer);
+                const pricingMode = getMockOfferPricingMode(index);
+                const visibilityMode = getMockVisibilityMode(index);
+                const trustLevel = getTrustLevel(trustScore);
                 return (
                   <Card key={offer.id} className="tutela-metric-card hover:shadow-xl transition-all duration-300 border-0 overflow-hidden">
                     <CardHeader className="pb-3 relative">
@@ -384,6 +417,18 @@ export default function Marketplace() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="outline" className="border-blue-100 bg-blue-50 text-blue-700">
+                            {formatModelLabel(pricingMode)}
+                          </Badge>
+                          <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
+                            {formatModelLabel(visibilityMode)}
+                          </Badge>
+                          <Badge variant="outline" className={`capitalize ${getTrustBadgeClassName(trustLevel)}`}>
+                            {trustLevel}
+                          </Badge>
+                        </div>
+
                         <div className="grid grid-cols-[1fr_auto] gap-3 rounded-lg border border-emerald-100 bg-emerald-50 p-4">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">TUTELA Trust Score</p>
