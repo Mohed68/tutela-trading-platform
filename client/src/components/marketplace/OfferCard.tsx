@@ -258,18 +258,19 @@ export default function OfferCard({
               )}
 
               {pricingMode === "negotiable" && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
                   <Button
                     type="button"
-                    variant="outline"
-                    className="w-full text-sm font-semibold py-2.5"
+                    variant={isSellOffer ? "outline" : "default"}
+                    className={`w-full text-sm font-semibold py-2.5 ${!isSellOffer ? "tutela-btn-primary" : ""}`}
                     disabled={!canStartNegotiation}
                     onClick={() => onQuickNegotiate(offer)}
                   >
                     {canStartNegotiation ? "Quick Negotiate" : disabledActionLabel}
                   </Button>
                   <Button
-                    className="w-full tutela-btn-primary text-sm font-semibold py-2.5"
+                    variant="outline"
+                    className="w-full text-sm font-semibold py-2.5"
                     disabled={!canStartNegotiation}
                   >
                     <TrendingUp className="mr-2 h-4 w-4" />
