@@ -188,14 +188,14 @@ export default function CreateOfferModal({ isOpen, onClose, commodities }: Creat
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="z-[60] max-h-[90vh] overflow-y-auto border border-slate-200 bg-white p-5 text-slate-950 shadow-2xl sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create New Commodity Offer</DialogTitle>
         </DialogHeader>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <section className="space-y-4 rounded-lg border border-slate-200 p-4">
+            <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Basic Offer</h3>
                 <p className="text-xs text-slate-500">Core commodity, quantity, price, and location details.</p>
@@ -330,7 +330,7 @@ export default function CreateOfferModal({ isOpen, onClose, commodities }: Creat
               />
             </section>
 
-            <section className="space-y-4 rounded-lg border border-slate-200 p-4">
+            <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Commercial Model</h3>
                 <p className="text-xs text-slate-500">Pricing mode controls buyer actions. Visibility controls identity exposure.</p>
@@ -402,7 +402,7 @@ export default function CreateOfferModal({ isOpen, onClose, commodities }: Creat
               </div>
             </section>
 
-            <section className="space-y-4 rounded-lg border border-slate-200 p-4">
+            <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Trade Terms</h3>
                 <p className="text-xs text-slate-500">Structured terms are mapped into legacy payment and delivery text.</p>
@@ -507,7 +507,7 @@ export default function CreateOfferModal({ isOpen, onClose, commodities }: Creat
               />
             </section>
 
-            <section className="space-y-4 rounded-lg border border-slate-200 p-4">
+            <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Validity</h3>
                 <p className="text-xs text-slate-500">Optional commercial limits for the offer.</p>
