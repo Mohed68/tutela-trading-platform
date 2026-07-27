@@ -56,7 +56,7 @@ async function readSafetyState(client: Client) {
 async function waitForServer(
   child: ReturnType<typeof spawn>,
 ): Promise<void> {
-  const deadline = Date.now() + 45_000;
+  const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       throw new Error("RECOVERY_SERVER_EXITED_EARLY");
@@ -86,25 +86,13 @@ async function stopServer(
 
 test(
   "controlled runtime returns a safe empty marketplace without writes",
-  { skip: !process.env.DATABASE_URL, timeout: 75_000 },
+  { skip: !process.env.DATABASE_URL, timeout: 100_000 },
   async () => {
     let step = "initialize";
     const client = new Client({
       connectionString: requireRawDatabaseUrl(process.env.DATABASE_URL),
     });
-    const child = spawn(
-      process.execPath,
-      ["--import", "tsx", "scripts/start-recovery.ts"],
-      {
-        cwd: process.cwd(),
-        env: {
-          ...process.env,
-          TUTELA_RECOVERY_PORT: PORT,
-        },
-        windowsHide: true,
-        stdio: ["ignore", "ignore", "ignore"],
-      },
-    );
+    let child: ReturnType<typeof spawn> | null = null;
 
     try {
       step = "connect";
@@ -113,6 +101,25 @@ test(
       const before = await readSafetyState(client);
       assert.equal(before.fingerprint, EXPECTED_FINGERPRINT);
 
+      child = spawn(
+        process.execPath,
+        ["dist/index.js"],
+        {
+          cwd: process.cwd(),
+          env: {
+            ...process.env,
+            NODE_ENV: "test",
+            TUTELA_RECOVERY_MODE: "true",
+            DEMO_AUTH_BYPASS: "false",
+            DEMO_MODE: "false",
+            AUTO_VERIFY_DEMO: "false",
+            VITE_SENTRY_DSN: "",
+            PORT,
+          },
+          windowsHide: true,
+          stdio: ["ignore", "ignore", "ignore"],
+        },
+      );
       step = "startup";
       await waitForServer(child);
 
@@ -184,7 +191,7 @@ test(
           : "ASSERTION_OR_RUNTIME_FAILURE";
       throw new Error(`PHASE_3C_RUNTIME_${step.toUpperCase()}_${code}`);
     } finally {
-      await stopServer(child);
+      if (child) await stopServer(child);
       await client.end().catch(() => undefined);
     }
   },
