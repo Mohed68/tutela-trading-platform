@@ -27,6 +27,7 @@ import { ObjectPermission } from "./objectAcl";
 import { resolveFilters, applyAllFilters } from "./filters/publicOffers";
 import { qtyFactor, getCommodityUnits, type OfferHints } from "./conversion";
 import { shouldRunStartupSeeding } from "./recoveryMode";
+import { safeErrorMessage } from "./safeErrors";
 
 // Initialize Stripe
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -246,7 +247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const commodities = await storage.getCommodities();
       res.json(commodities);
     } catch (error) {
-      console.error("Error fetching commodities:", error);
+      console.error(`Error fetching commodities: ${safeErrorMessage(error)}`);
       res.status(500).json({ message: "Failed to fetch commodities" });
     }
   });
@@ -655,7 +656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalCount: normalizedOffers.length
       });
     } catch (error) {
-      console.error("Error fetching offers:", error);
+      console.error(`Error fetching offers: ${safeErrorMessage(error)}`);
       res.status(500).json({ message: "Failed to fetch offers" });
     }
   });
