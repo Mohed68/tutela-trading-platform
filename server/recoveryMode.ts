@@ -6,6 +6,9 @@ const SAFE_RECOVERY_API_ROUTES = new Set([
   "/api/health",
   "/api/commodities",
   "/api/offers",
+  "/api/offers/options",
+  "/api/offers/search",
+  "/api/offers/summary",
   "/api/auth/user",
 ]);
 
@@ -45,6 +48,13 @@ export function shouldInitializeExternalMonitoring(
   return !isRecoveryMode(environment);
 }
 
+export function isSafeRecoveryRequest(method: string, path: string): boolean {
+  return (
+    (method === "GET" || method === "HEAD") &&
+    SAFE_RECOVERY_API_ROUTES.has(path)
+  );
+}
+
 export const recoveryModeGuard: RequestHandler = (request, response, next) => {
   if (!isRecoveryMode()) {
     next();
@@ -56,10 +66,7 @@ export const recoveryModeGuard: RequestHandler = (request, response, next) => {
     return;
   }
 
-  if (
-    (request.method === "GET" || request.method === "HEAD") &&
-    SAFE_RECOVERY_API_ROUTES.has(request.path)
-  ) {
+  if (isSafeRecoveryRequest(request.method, request.path)) {
     next();
     return;
   }

@@ -24,10 +24,17 @@ import {
   ObjectNotFoundError,
 } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
-import { resolveFilters, applyAllFilters } from "./filters/publicOffers";
-import { qtyFactor, getCommodityUnits, type OfferHints } from "./conversion";
+import { resolveFilters } from "./filters/publicOffers";
 import { shouldRunStartupSeeding } from "./recoveryMode";
 import { safeErrorMessage } from "./safeErrors";
+import { canon } from "@shared/constants/units";
+import {
+  buildMarketplaceOptions,
+  buildMarketplaceSummary,
+  filterPublishedMarketplaceOffers,
+  getPublishedMarketplaceOfferRecords,
+  normalizePublishedOffer,
+} from "./marketplace/publicMarketplace";
 
 // Initialize Stripe
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -267,393 +274,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Offer summary endpoint for marketplace insights
+  // Public marketplace reads use a dedicated, minimal projection. When either
+  // authoritative verification field is unavailable, the repository returns
+  // no rows rather than inferring trust from legacy data.
   app.get('/api/offers/summary', async (req, res) => {
     try {
-      // SERVER GUARD: Block unit parameter to prevent filtering
-      const { unit, normalizeUnit, targetUnit, ...rest } = req.query as any;
-      if (unit) {
-        // Refuse to use unit for filtering; keep for backward-compat but never filter by it
-        delete (req.query as any).unit;
-        console.log('[SERVER GUARD] Blocked unit filter in summary endpoint:', unit);
-      }
-      
-      // Check for optional category breakdown
-      const groupBy = req.query.group as string;
-      
-      if (groupBy === 'category') {
-        // Category breakdown for verification
-        const allOffers = await storage.getOffers();
-        const baseFiltered = allOffers.filter(offer => 
-          offer.verified === true && 
-          offer.sellerOrgVerified === true &&
-          offer.status === 'active'
-        );
-        
-        // Group by category
-        const categoryGroups = baseFiltered.reduce((acc, offer) => {
-          const category = offer.commodity?.type || 'unknown';
-          if (!acc[category]) {
-            acc[category] = [];
-          }
-          acc[category].push(offer);
-          return acc;
-        }, {} as Record<string, any[]>);
-        
-        const breakdown = Object.entries(categoryGroups).map(([categoryKey, offers]) => {
-          const marketValueUsd = offers.reduce((sum, offer) => {
-            const unitPrice = typeof offer.pricePerUnit === 'number' ? offer.pricePerUnit : 
-                             typeof offer.price === 'number' ? offer.price :
-                             parseFloat(String(offer.pricePerUnit || offer.price || 0));
-            const quantity = typeof offer.quantity === 'number' ? offer.quantity : 
-                            parseFloat(String(offer.quantity || 0));
-            
-            if (Number.isFinite(unitPrice) && Number.isFinite(quantity)) {
-              return sum + (unitPrice * quantity);
-            }
-            return sum;
-          }, 0);
-          
-          return {
-            category_key: categoryKey,
-            offers: offers.length,
-            market_value_usd: Math.round(marketValueUsd)
-          };
-        }).sort((a, b) => a.category_key.localeCompare(b.category_key));
-        
-        return res.json(breakdown);
-      }
-      
-      // Standard summary endpoint - MUST match list endpoint 1:1
       const filter = resolveFilters(req);
-      
-      // Get all offers and apply the EXACT same base filtering as list endpoint
-      const allOffers = await storage.getOffers();
-      const baseFiltered = allOffers.filter(offer => 
-        offer.verified === true && 
-        offer.sellerOrgVerified === true &&
-        offer.status === 'active'
+      const records = filterPublishedMarketplaceOffers(
+        await getPublishedMarketplaceOfferRecords(),
+        filter,
       );
-      
-      // Apply the EXACT same additional filters as list endpoint
-      const offers = applyAllFilters(baseFiltered, filter);
 
-      // Calculate metrics from the exact same filtered dataset as list endpoint
-      const activeOffers = offers.length;
-      
-      const marketValueUsd = offers.reduce((sum, offer) => {
-        const unitPrice = typeof offer.pricePerUnit === 'number' ? offer.pricePerUnit : 
-                         typeof offer.price === 'number' ? offer.price :
-                         parseFloat(String(offer.pricePerUnit || offer.price || 0));
-        const quantity = typeof offer.quantity === 'number' ? offer.quantity : 
-                        parseFloat(String(offer.quantity || 0));
-        
-        if (Number.isFinite(unitPrice) && Number.isFinite(quantity)) {
-          return sum + (unitPrice * quantity);
+      if (req.query.group === 'category') {
+        const categories = new Map<string, typeof records>();
+        for (const record of records) {
+          const category = record.offer.commodity.category;
+          categories.set(category, [
+            ...(categories.get(category) ?? []),
+            record,
+          ]);
         }
-        return sum;
-      }, 0);
-      
-      const uniqueTraders = new Set(
-        offers
-          .filter(offer => offer.user?.verified === true)
-          .map(offer => offer.userId)
-      );
-      const verifiedTraders = uniqueTraders.size;
-
-      // Cross-unit VWAP calculation with conversion using targetUnit param
-      const { canon } = await import('../shared/constants/units');
-      const summaryTargetUnit = canon(req.query.targetUnit as string); // Canonicalize target unit
-      const commodityKey = filter.commodityKey;
-      
-      let vwap = null;
-      let avgPriceUnit = undefined;
-      let avgPriceCount = 0;
-      let avgPriceCoverage = { used: 0, skipped: 0 };
-      let median = null;
-      let p25 = null;
-      let p75 = null;
-      
-      // Always compute VWAP when commodityKey and summaryTargetUnit are specified
-      if (commodityKey && summaryTargetUnit) {
-        // Cross-unit VWAP: convert all offers to target unit (including metals)
-        let totalValueUSD = 0;
-        let totalQtyInTarget = 0;
-        let used = 0;
-        let skipped = 0;
-        const convertedPrices: number[] = [];
-        
-        for (const offer of offers) {
-          // Get offer values
-          const unitPrice = typeof offer.pricePerUnit === 'number' ? offer.pricePerUnit : 
-                           typeof offer.price === 'number' ? offer.price :
-                           parseFloat(String(offer.pricePerUnit || offer.price || 0));
-          const quantity = typeof offer.quantity === 'number' ? offer.quantity : 
-                          parseFloat(String(offer.quantity || 0));
-          
-          if (!Number.isFinite(unitPrice) || !Number.isFinite(quantity) || unitPrice <= 0 || quantity <= 0) {
-            skipped++;
-            continue;
-          }
-          
-          // Skip non-USD for now (could add currency conversion later)
-          if (offer.currency && offer.currency !== 'USD') {
-            skipped++;
-            continue;
-          }
-          
-          // Get conversion factor from offer unit to target unit
-          const offerHints: OfferHints = {
-            apiGravity: offer.apiGravity,
-            densityKgPerL: offer.densityKgPerL,
-            bagWeightKg: offer.bagWeightKg,
-            barWeightOz: offer.barWeightOz
-          };
-          
-          const conversionFactor = qtyFactor(commodityKey, offer.unit as any, summaryTargetUnit as any, offerHints);
-          
-          if (!conversionFactor) {
-            skipped++;
-            continue;
-          }
-          
-          // Add to totals (price stays same, quantity converts)
-          totalValueUSD += unitPrice * quantity;
-          totalQtyInTarget += quantity * conversionFactor;
-          convertedPrices.push(unitPrice / conversionFactor); // Price per target unit
-          used++;
-        }
-        
-        // Calculate VWAP in target unit (always set count and coverage, even if insufficient sample)
-        avgPriceCount = used;
-        avgPriceCoverage = { used, skipped };
-        
-        if (totalQtyInTarget > 0) {
-          vwap = totalValueUSD / totalQtyInTarget;
-          avgPriceUnit = summaryTargetUnit;
-          
-          // Calculate statistics on converted prices for samples >= 2
-          if (convertedPrices.length >= 2) {
-            const sortedPrices = convertedPrices.sort((a, b) => a - b);
-            const mid = Math.floor(sortedPrices.length / 2);
-            median = sortedPrices.length % 2 === 0 ? 
-              (sortedPrices[mid - 1] + sortedPrices[mid]) / 2 : 
-              sortedPrices[mid];
-            
-            const q25Index = Math.floor(sortedPrices.length * 0.25);
-            const q75Index = Math.floor(sortedPrices.length * 0.75);
-            p25 = sortedPrices[q25Index];
-            p75 = sortedPrices[q75Index];
-          }
-        } else {
-          avgPriceUnit = summaryTargetUnit; // Still set unit even without valid VWAP
-        }
-      } else {
-        // Fallback: original single-unit VWAP when no commodity/unit filters
-        const units = new Set(offers.map(offer => offer.unit));
-        const mixedUnits = units.size > 1;
-        
-        if (!mixedUnits && offers.length > 0) {
-          const totalQuantity = offers.reduce((sum, offer) => {
-            const quantity = typeof offer.quantity === 'number' ? offer.quantity : parseFloat(String(offer.quantity || 0));
-            return sum + (Number.isFinite(quantity) ? quantity : 0);
-          }, 0);
-          
-          if (totalQuantity > 0) {
-            vwap = marketValueUsd / totalQuantity;
-            avgPriceUnit = Array.from(units)[0];
-            avgPriceCount = offers.length;
-          }
-        }
+        return res.json(
+          Array.from(categories.entries())
+            .map(([categoryKey, categoryRecords]) => ({
+              category_key: categoryKey,
+              offers: categoryRecords.length,
+              market_value_usd:
+                buildMarketplaceSummary(categoryRecords).marketValueUsd,
+            }))
+            .sort((left, right) =>
+              left.category_key.localeCompare(right.category_key),
+            ),
+        );
       }
 
-      console.log('market_summary', {
-        category: filter.category || 'all',
-        commodityKey: filter.commodityKey || '',
-        unit: summaryTargetUnit || '',
-        searchQuery: filter.q || '',
-        activeOffers,
-        verifiedTraders,
-        marketValueUsd
-      });
-
-      res.json({
-        activeOffers,
-        marketValueUsd: Math.round(marketValueUsd),
-        verifiedTraders,
-        avgPrice: vwap ? Math.round(vwap * 100) / 100 : null,
-        avgPriceUnit,
-        avgPriceCount,
-        avgPriceCoverage,
-        median: median ? Math.round(median * 100) / 100 : null,
-        p25: p25 ? Math.round(p25 * 100) / 100 : null,
-        p75: p75 ? Math.round(p75 * 100) / 100 : null
-      });
+      const targetUnit = canon(req.query.targetUnit as string);
+      res.json(
+        buildMarketplaceSummary(
+          records,
+          filter.commodityKey,
+          targetUnit,
+        ),
+      );
     } catch (error) {
-      console.error("Error fetching offers summary:", error);
+      console.error(
+        `Error fetching offers summary: ${safeErrorMessage(error)}`,
+      );
       res.status(500).json({ message: "Failed to fetch offers summary" });
     }
   });
 
-  // Offer options endpoint for commodity/unit pairs with conversion-aware units
   app.get('/api/offers/options', async (req, res) => {
     try {
-      const category = req.query.category as string;
-      
-      // Get base filtered offers
-      const allOffers = await storage.getOffers();
-      let offers = allOffers.filter(offer => 
-        offer.verified === true && 
-        offer.sellerOrgVerified === true &&
-        offer.status === 'active'
+      const records = filterPublishedMarketplaceOffers(
+        await getPublishedMarketplaceOfferRecords(),
+        {
+          category: req.query.category as string,
+        },
       );
-      
-      // Apply category filter if provided
-      if (category && category !== 'all') {
-        offers = offers.filter(offer => 
-          offer.commodity?.type === category
-        );
-      }
-      
-      // Group by commodity and collect units (including convertible ones)
-      const commodityMap = new Map<string, { key: string; label: string; units: Set<string> }>();
-      
-      offers.forEach(offer => {
-        const commodity = offer.commodity;
-        if (!commodity) return;
-        
-        const key = commodity.name?.toLowerCase().replace(/\s+/g, '_') || commodity.id;
-        const label = commodity.name || commodity.id;
-        
-        if (!commodityMap.has(key)) {
-          commodityMap.set(key, { key, label, units: new Set() });
-        }
-        
-        // Add units from actual offers
-        if (offer.unit) {
-          commodityMap.get(key)!.units.add(offer.unit);
-        }
-        
-        // Add all convertible units for this commodity from conversion profiles
-        const commodityUnits = getCommodityUnits(key);
-        commodityUnits.forEach(unit => {
-          commodityMap.get(key)!.units.add(unit);
-        });
-      });
-      
-      // Convert to response format with canonical unit labels only
-      const commodities = Array.from(commodityMap.values()).map(({ key, label, units }) => ({
-        key,
-        label,
-        units: Array.from(units).sort()
-      })).sort((a, b) => a.label.localeCompare(b.label));
-      
-      res.json({ commodities });
+      res.json(buildMarketplaceOptions(records));
     } catch (error) {
-      console.error("Error fetching offer options:", error);
+      console.error(
+        `Error fetching offer options: ${safeErrorMessage(error)}`,
+      );
       res.status(500).json({ message: "Failed to fetch offer options" });
     }
   });
 
-  // Offer list endpoint with cross-unit normalization
   app.get('/api/offers', async (req: any, res) => {
     try {
-      // SERVER GUARD: Block unit parameter to prevent filtering  
-      const { unit, normalizeUnit, targetUnit, ...rest } = req.query as any;
-      if (unit) {
-        // Refuse to use unit for filtering; keep for backward-compat but never filter by it
-        delete (req.query as any).unit;
-        console.log('[SERVER GUARD] Blocked unit filter in list endpoint:', unit);
-      }
-      
-      const filter = req.query.filter; // 'my', 'marketplace', 'interested'
-      
-      // For user-specific filters, require authentication
+      const filter = req.query.filter;
       if (filter === 'my' || filter === 'interested') {
         if (!req.isAuthenticated() || !req.user?.claims?.sub) {
           return res.status(401).json({ message: "Unauthorized" });
         }
-        
+
         const userId = req.user.claims.sub;
-        
         if (filter === 'my') {
-          // Only user's own offers
-          const offers = await storage.getOffers(userId);
-          return res.json(offers);
-        } else if (filter === 'interested') {
-          // User's interested offers
-          const offers = (await storage.getUserInterestedOffers(userId)).map(item => item.offer);
-          return res.json(offers);
+          return res.json(await storage.getOffers(userId));
         }
+        const offers = (
+          await storage.getUserInterestedOffers(userId)
+        ).map((item) => item.offer);
+        return res.json(offers);
       }
-      
-      // For marketplace/public offers, use filtering without unit filtering
+
       const marketFilter = resolveFilters(req);
-      const listNormalizeUnit = req.query.normalizeUnit as string; // Target unit for normalization
-      const commodityKey = marketFilter.commodityKey;
-      
-      // Get all offers and apply base filtering
-      const allOffers = await storage.getOffers();
-      const baseFiltered = allOffers.filter(offer => 
-        offer.verified === true && 
-        offer.sellerOrgVerified === true &&
-        offer.status === 'active'
+      const targetUnit = canon(req.query.normalizeUnit as string);
+      const records = filterPublishedMarketplaceOffers(
+        await getPublishedMarketplaceOfferRecords(),
+        marketFilter,
       );
-      
-      // Apply all filters (unit filtering is now permanently removed from applyAllFilters)
-      const filteredOffers = applyAllFilters(baseFiltered, marketFilter);
-      
-      // Normalize offers with conversion information
-      const normalizedOffers = filteredOffers.map(offer => {
-        const unitPrice = typeof offer.pricePerUnit === 'number' ? offer.pricePerUnit : 
-                         typeof offer.price === 'number' ? offer.price :
-                         parseFloat(String(offer.pricePerUnit || offer.price || 0));
-        
-        let normalizedUnit = offer.unit;
-        let normalizedUnitPrice = unitPrice;
-        let normalizedQty = offer.quantity;
-        let isConverted = false;
-        let convertible = true;
-        
-        // Apply normalization if target unit and commodity are specified
-        if (listNormalizeUnit && commodityKey && offer.unit !== listNormalizeUnit) {
-          const offerHints: OfferHints = {
-            apiGravity: offer.apiGravity,
-            densityKgPerL: offer.densityKgPerL,
-            bagWeightKg: offer.bagWeightKg,
-            barWeightOz: offer.barWeightOz
-          };
-          
-          const conversionFactor = qtyFactor(commodityKey, offer.unit as any, listNormalizeUnit as any, offerHints);
-          
-          if (conversionFactor) {
-            normalizedUnit = listNormalizeUnit;
-            normalizedUnitPrice = unitPrice / conversionFactor; // Price per target unit
-            normalizedQty = (typeof offer.quantity === 'number' ? offer.quantity : parseFloat(String(offer.quantity || 0))) * conversionFactor;
-            isConverted = true;
-          } else {
-            convertible = false;
-          }
-        }
-        
-        return {
-          ...offer,
-          normalizedUnit,
-          normalizedUnitPrice: Number.isFinite(normalizedUnitPrice) ? Math.round(normalizedUnitPrice * 100) / 100 : unitPrice,
-          normalizedQty: Number.isFinite(normalizedQty) ? normalizedQty : offer.quantity,
-          isConverted,
-          convertible
-        };
-      });
-      
-      // For dev-mode assertion (remove in production)
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[DEV] List endpoint filtered count: ${filteredOffers.length}`);
-      }
-      
+      const offers = records.map(({ offer }) =>
+        normalizePublishedOffer(
+          offer,
+          marketFilter.commodityKey,
+          targetUnit,
+        ),
+      );
+
       res.json({
-        offers: normalizedOffers,
-        totalCount: normalizedOffers.length
+        offers,
+        totalCount: offers.length,
+        publicationPolicy:
+          "verified_offer_and_verified_seller_organization",
       });
     } catch (error) {
       console.error(`Error fetching offers: ${safeErrorMessage(error)}`);
@@ -708,12 +432,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/offers/search', async (req, res) => {
     try {
-      const query = req.query.q as string || '';
-      const category = req.query.category as string;
-      const offers = await storage.searchOffers(query, category);
-      res.json(offers);
+      const records = filterPublishedMarketplaceOffers(
+        await getPublishedMarketplaceOfferRecords(),
+        {
+          q: (req.query.q as string) || "",
+          category: req.query.category as string,
+        },
+      );
+      const offers = records.map(({ offer }) => offer);
+      res.json({
+        offers,
+        totalCount: offers.length,
+        publicationPolicy:
+          "verified_offer_and_verified_seller_organization",
+      });
     } catch (error) {
-      console.error("Error searching offers:", error);
+      console.error(`Error searching offers: ${safeErrorMessage(error)}`);
       res.status(500).json({ message: "Failed to search offers" });
     }
   });
