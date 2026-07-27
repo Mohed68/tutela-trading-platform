@@ -15,6 +15,14 @@ interface SecureUploaderProps {
   children?: React.ReactNode;
 }
 
+interface UploadUrlResponse {
+  uploadURL: string;
+}
+
+interface CompletedUploadResponse {
+  id: string;
+}
+
 export function SecureUploader({ documentType, onUploadComplete, accept, maxFiles, className, children }: SecureUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -67,10 +75,12 @@ export function SecureUploader({ documentType, onUploadComplete, accept, maxFile
         description: "Generating secure upload URL...",
       });
 
-      const { uploadURL } = await apiRequest('/api/verification/upload-url', {
-        method: 'POST',
-        body: { documentType }
-      });
+      const uploadUrlResponse = await apiRequest(
+        'POST',
+        '/api/verification/upload-url',
+        { documentType },
+      );
+      const { uploadURL } = await uploadUrlResponse.json() as UploadUrlResponse;
 
       setUploadProgress(25);
 
@@ -104,16 +114,18 @@ export function SecureUploader({ documentType, onUploadComplete, accept, maxFile
       const urlPath = new URL(uploadURL).pathname;
       const documentPath = `/kyb-documents${urlPath.split('/kyb-documents')[1]}`;
 
-      const completeResponse = await apiRequest('/api/verification/complete-upload', {
-        method: 'POST',
-        body: {
+      const completeResponse = await apiRequest(
+        'POST',
+        '/api/verification/complete-upload',
+        {
           documentType,
           fileName: selectedFile.name,
           fileSize: selectedFile.size,
           mimeType: selectedFile.type,
           documentPath,
-        }
-      });
+        },
+      );
+      await completeResponse.json() as CompletedUploadResponse;
 
       setUploadProgress(100);
 
@@ -123,7 +135,6 @@ export function SecureUploader({ documentType, onUploadComplete, accept, maxFile
         variant: "default",
       });
 
-      onUploadComplete(completeResponse.id);
       setSelectedFile(null);
 
     } catch (error) {
