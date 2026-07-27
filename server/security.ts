@@ -4,8 +4,9 @@
  * This file contains comprehensive security header configurations
  * for protecting against common web vulnerabilities.
  */
+import type { HelmetOptions } from "helmet";
 
-export const securityHeaders = {
+export const securityHeaders: HelmetOptions = {
   // Content Security Policy configuration
   contentSecurityPolicy: {
     directives: {

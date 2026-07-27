@@ -242,7 +242,7 @@ export async function seedDemoData() {
 
     // Create demo offers - 3 for each category (9 total)
     console.log("💼 Creating demo offers...");
-    const demoOffers = [
+    const demoOffers: Array<typeof offers.$inferInsert> = [
       // Fuel & Hydrocarbons Offers
       {
         userId: demoUsers[0].id,
@@ -253,7 +253,7 @@ export async function seedDemoData() {
         pricePerUnit: "78.45",
         currency: "USD",
         location: "Houston, TX",
-        minQuantity: "1000",
+        minOrderQty: "1000",
         validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         deliveryTerms: "FOB Houston Ship Channel, 15-day delivery window",
         paymentTerms: "Letter of Credit, 30 days from B/L date",
@@ -270,7 +270,7 @@ export async function seedDemoData() {
         pricePerUnit: "2.85",
         currency: "USD", 
         location: "Henry Hub, LA",
-        minQuantity: "10000",
+        minOrderQty: "10000",
         validUntil: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000), // 45 days
         deliveryTerms: "Pipeline delivery, firm transportation",
         paymentTerms: "Monthly invoice, net 15 days",
@@ -287,7 +287,7 @@ export async function seedDemoData() {
         pricePerUnit: "82.20",
         currency: "USD",
         location: "Rotterdam, Netherlands",
-        minQuantity: "5000",
+        minOrderQty: "5000",
         validUntil: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000), // 21 days
         deliveryTerms: "CIF Rotterdam, Aframax tanker lots",
         paymentTerms: "Documentary Credit, sight payment",
@@ -306,7 +306,7 @@ export async function seedDemoData() {
         pricePerUnit: "775000",
         currency: "USD",
         location: "London, UK",
-        minQuantity: "10",
+        minOrderQty: "10",
         validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
         deliveryTerms: "LBMA approved vault, allocated storage",
         paymentTerms: "Wire transfer, T+2 settlement",
@@ -323,7 +323,7 @@ export async function seedDemoData() {
         pricePerUnit: "23500",
         currency: "USD",
         location: "New York, NY",
-        minQuantity: "50",
+        minOrderQty: "50",
         validUntil: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000), // 28 days
         deliveryTerms: "COMEX approved warehouse, warrant delivery",
         paymentTerms: "Certified funds, delivery vs payment",
@@ -340,7 +340,7 @@ export async function seedDemoData() {
         pricePerUnit: "8450",
         currency: "USD",
         location: "Shanghai, China",
-        minQuantity: "25",
+        minOrderQty: "25",
         validUntil: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000), // 35 days
         deliveryTerms: "CIF Shanghai, LME warehouse delivery",
         paymentTerms: "T/T 30% advance, 70% against documents",
@@ -359,7 +359,7 @@ export async function seedDemoData() {
         pricePerUnit: "285",
         currency: "USD",
         location: "Kansas City, MO",
-        minQuantity: "500",
+        minOrderQty: "500",
         validUntil: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days
         deliveryTerms: "FOB Kansas City, rail or truck loading",
         paymentTerms: "Cash against documents, 7 days",
@@ -376,7 +376,7 @@ export async function seedDemoData() {
         pricePerUnit: "445",
         currency: "USD",
         location: "Chicago, IL",
-        minQuantity: "1000",
+        minOrderQty: "1000",
         validUntil: new Date(Date.now() + 42 * 24 * 60 * 60 * 1000), // 42 days
         deliveryTerms: "CIF destination, containerized shipment",
         paymentTerms: "Irrevocable L/C at sight",
@@ -393,7 +393,7 @@ export async function seedDemoData() {
         pricePerUnit: "195",
         currency: "USD",
         location: "Bogotá, Colombia",
-        minQuantity: "20",
+        minOrderQty: "20",
         validUntil: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000), // 25 days
         deliveryTerms: "FOB Buenaventura Port, GrainPro bags",
         paymentTerms: "50% advance, 50% against shipping docs",
@@ -410,7 +410,7 @@ export async function seedDemoData() {
 
     // Create additional offers for fuller marketplace (6 more offers)
     console.log("💼 Creating additional marketplace offers...");
-    const additionalOffers = [
+    const additionalOffers: Array<typeof offers.$inferInsert> = [
       // Additional Fuel & Hydrocarbons Offers
       {
         userId: demoUsers[0].id,
@@ -421,7 +421,7 @@ export async function seedDemoData() {
         pricePerUnit: "77.80",
         currency: "USD",
         location: "Cushing, OK",
-        minQuantity: "2000",
+        minOrderQty: "2000",
         validUntil: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000), // 45 days
         deliveryTerms: "FOB Cushing terminal, pipeline delivery",
         paymentTerms: "Documentary Credit, 15 days",
@@ -438,7 +438,7 @@ export async function seedDemoData() {
         pricePerUnit: "81.50",
         currency: "USD",
         location: "Sullom Voe, Scotland",
-        minQuantity: "3000",
+        minOrderQty: "3000",
         validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         deliveryTerms: "FOB Sullom Voe terminal",
         paymentTerms: "Letter of Credit at sight",
@@ -457,7 +457,7 @@ export async function seedDemoData() {
         pricePerUnit: "772500",
         currency: "USD",
         location: "Zurich, Switzerland",
-        minQuantity: "5",
+        minOrderQty: "5",
         validUntil: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000), // 21 days
         deliveryTerms: "Swiss bank vault delivery",
         paymentTerms: "Swift wire transfer, T+1",
@@ -474,7 +474,7 @@ export async function seedDemoData() {
         pricePerUnit: "8350",
         currency: "USD",
         location: "Hamburg, Germany",
-        minQuantity: "50",
+        minOrderQty: "50",
         validUntil: new Date(Date.now() + 40 * 24 * 60 * 60 * 1000), // 40 days
         deliveryTerms: "CIF Hamburg, LME warehouse",
         paymentTerms: "Bank guarantee, 21 days",
@@ -493,7 +493,7 @@ export async function seedDemoData() {
         pricePerUnit: "290",
         currency: "USD",
         location: "Minneapolis, MN",
-        minQuantity: "1000",
+        minOrderQty: "1000",
         validUntil: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000), // 35 days
         deliveryTerms: "FOB Minneapolis, rail delivery",
         paymentTerms: "Cash on delivery",
@@ -510,7 +510,7 @@ export async function seedDemoData() {
         pricePerUnit: "185",
         currency: "USD",
         location: "New York, NY",
-        minQuantity: "50",
+        minOrderQty: "50",
         validUntil: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000), // 20 days
         deliveryTerms: "CIF New York Port",
         paymentTerms: "Documentary Credit, 30 days",

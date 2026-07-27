@@ -51,7 +51,18 @@ export async function logAdminAction(params: {
     // Get storage from global context - this will be passed from routes
     const storage = (global as any).adminStorage as DatabaseStorage;
     if (storage) {
-      await storage.createAuditLog(auditEntry);
+      await storage.createAuditLog({
+        userId: auditEntry.userId,
+        userRole: auditEntry.userRole ?? null,
+        action: auditEntry.action,
+        entityType: auditEntry.entityType,
+        entityId: auditEntry.entityId,
+        beforeValue: auditEntry.beforeValue ?? null,
+        afterValue: auditEntry.afterValue ?? null,
+        reason: auditEntry.reason ?? null,
+        ipAddress: auditEntry.ipAddress ?? null,
+        userAgent: auditEntry.userAgent ?? null,
+      });
       console.log(`[AUDIT] ${params.action} on ${params.entityType}:${params.entityId} by user:${params.userId}`);
     }
   } catch (error) {
