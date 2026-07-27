@@ -11,7 +11,7 @@
     "check": "tsc",
     "test:api-request": "tsx --test client/src/lib/queryClient.test.ts",
     "test:migrations": "tsx --test scripts/migrations/rehearsal-lib.test.ts",
-    "test:recovery": "tsx --test server/recoveryMode.test.ts",
+    "test:recovery": "tsx --test server/recoveryMode.test.ts server/services/openaiClient.test.ts",
     "migration:rehearsal": "node --env-file=.env --import tsx scripts/migration-rehearsal.ts",
     "db:push": "drizzle-kit push",
     "db:migrate:auth": "node scripts/run-auth-migration.mjs",

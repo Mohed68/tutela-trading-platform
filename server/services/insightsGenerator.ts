@@ -1,11 +1,9 @@
-import OpenAI from "openai";
 import { storage } from "../storage";
+import { getOpenAIClient } from "./openaiClient";
 import type {
   NewPerformanceInsightsReport,
   PerformanceInsightsReport,
 } from "@shared/schema";
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 type GeneratedInsights = Pick<
   NewPerformanceInsightsReport,
@@ -93,7 +91,7 @@ Format the response as JSON with the following structure:
   "opportunities": ["string"]
 }`;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAIClient().chat.completions.create({
       model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
       messages: [
         {

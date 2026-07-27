@@ -1,7 +1,4 @@
-import OpenAI from "openai";
-
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { getOpenAIClient } from "./openaiClient";
 
 export interface DocumentValidationResult {
   isValid: boolean;
@@ -45,7 +42,7 @@ export async function validateDocument(filePath: string, documentType: string): 
       - Potential fraud indicators
     `;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAIClient().chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
@@ -129,7 +126,7 @@ export async function analyzeCommodityMarket(commodityType: string, quantity: nu
       Consider current market conditions, seasonal factors, and regional pricing.
     `;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAIClient().chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
@@ -191,7 +188,7 @@ export async function validatePartnerCredentials(partnerData: {
       }
     `;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAIClient().chat.completions.create({
       model: "gpt-4o",
       messages: [
         {

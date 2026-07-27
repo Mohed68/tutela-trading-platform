@@ -1,9 +1,6 @@
 // AI Recommendations Service
-import OpenAI from "openai";
 import { storage } from "../storage";
-
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { getOpenAIClient } from "./openaiClient";
 
 export interface PersonalizedRecommendation {
   id: string;
@@ -89,7 +86,7 @@ Respond with JSON in this exact format:
 }
     `;
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAIClient().chat.completions.create({
       model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
       messages: [
         {
