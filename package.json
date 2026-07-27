@@ -13,6 +13,7 @@
     "test:auth-characterization": "node --env-file=.env --import tsx --test server/password.test.ts scripts/auth/legacy-auth.characterization.test.ts",
     "test:auth-runtime": "node --env-file=.env --import tsx --test scripts/auth/phase-4a.runtime.characterization.test.ts",
     "auth:migration": "node --env-file=.env --import tsx scripts/auth/auth-migration.ts",
+    "auth:recovery-user": "node --env-file=.env --import tsx scripts/auth/recovery-user.ts",
     "test:marketplace-characterization": "node --env-file=.env --import tsx --test scripts/marketplace/legacy-offer.characterization.test.ts",
     "test:marketplace-policy": "node --env-file=.env --import tsx --test server/marketplace/publicMarketplace.test.ts",
     "test:marketplace-presentation": "tsx --test client/src/features/offers/marketplacePresentation.test.ts",
