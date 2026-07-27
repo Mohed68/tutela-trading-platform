@@ -26,6 +26,7 @@ import {
 import { ObjectPermission } from "./objectAcl";
 import { resolveFilters, applyAllFilters } from "./filters/publicOffers";
 import { qtyFactor, getCommodityUnits, type OfferHints } from "./conversion";
+import { shouldRunStartupSeeding } from "./recoveryMode";
 
 // Initialize Stripe
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -1593,40 +1594,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
   
-  // Seed demo data on startup if no offers exist
-  // Force demo data seeding for all environments to ensure marketplace has content
-  setTimeout(async () => {
-    try {
-      console.log("🔍 Checking for existing data...");
-      const existingOffers = await storage.getOffers();
-      const verifiedOffers = existingOffers.filter(offer => offer.verified && offer.sellerOrgVerified);
-      const uniqueTraders = new Set(verifiedOffers.map(offer => offer.userId)).size;
-      
-      console.log(`📊 Found ${existingOffers.length} existing offers`);
-      console.log(`✅ Found ${uniqueTraders} verified traders`);
-      
-      // Seed if we don't have enough verified traders (need exactly 9)
-      if (uniqueTraders < 9) {
-        console.log(`🌱 Only ${uniqueTraders} verified traders found, need 9. Clearing and seeding demo data...`);
-        await clearDemoData();
-        await seedDemoData();
-        console.log("✅ Demo data seeding completed for deployment");
-      } else {
-        console.log("📦 Sufficient verified traders found, skipping demo data seeding");
-      }
-    } catch (error) {
-      console.error("❌ Failed to seed demo data on startup:", error);
-      // Force seeding to ensure marketplace has content
+  if (shouldRunStartupSeeding()) {
+    // Preserve the existing deployment behavior outside controlled recovery.
+    setTimeout(async () => {
       try {
-        console.log("🔄 Attempting forced demo data seeding...");
-        await clearDemoData();
-        await seedDemoData();
-        console.log("✅ Forced demo data seeding completed");
-      } catch (seedError) {
-        console.error("❌ Forced seeding also failed:", seedError);
+        console.log("🔍 Checking for existing data...");
+        const existingOffers = await storage.getOffers();
+        const verifiedOffers = existingOffers.filter(offer => offer.verified && offer.sellerOrgVerified);
+        const uniqueTraders = new Set(verifiedOffers.map(offer => offer.userId)).size;
+        
+        console.log(`📊 Found ${existingOffers.length} existing offers`);
+        console.log(`✅ Found ${uniqueTraders} verified traders`);
+        
+        if (uniqueTraders < 9) {
+          console.log(`🌱 Only ${uniqueTraders} verified traders found, need 9. Clearing and seeding demo data...`);
+          await clearDemoData();
+          await seedDemoData();
+          console.log("✅ Demo data seeding completed for deployment");
+        } else {
+          console.log("📦 Sufficient verified traders found, skipping demo data seeding");
+        }
+      } catch (error) {
+        console.error("❌ Failed to seed demo data on startup:", error);
+        try {
+          console.log("🔄 Attempting forced demo data seeding...");
+          await clearDemoData();
+          await seedDemoData();
+          console.log("✅ Forced demo data seeding completed");
+        } catch (seedError) {
+          console.error("❌ Forced seeding also failed:", seedError);
+        }
       }
-    }
-  }, 1000); // Reduced timeout for faster deployment
+    }, 1000);
+  } else {
+    console.warn("Controlled recovery mode: startup demo-data mutation disabled");
+  }
   
   return httpServer;
 }

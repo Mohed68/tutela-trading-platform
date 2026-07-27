@@ -8,8 +8,17 @@ import { securityHeaders, permissionsPolicy, additionalHeaders, productionHeader
 import { initializeServerMonitoring, setupSentryMiddleware, setupSentryErrorHandler } from "./monitoring";
 import { verifyDatabaseSchema } from "./databaseHealth";
 import { pool } from "./db";
+import {
+  assertRecoveryModeIsLocal,
+  isRecoveryMode,
+  recoveryModeGuard,
+} from "./recoveryMode";
+import { safeErrorMessage } from "./safeErrors";
 
-// Initialize Sentry monitoring first
+assertRecoveryModeIsLocal();
+const recoveryMode = isRecoveryMode();
+
+// Initialize Sentry monitoring first (disabled in controlled recovery mode).
 initializeServerMonitoring();
 
 const app = express();
@@ -58,6 +67,7 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(recoveryModeGuard);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -90,8 +100,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await verifyDatabaseSchema();
+  const schemaVerification = await verifyDatabaseSchema({
+    allowLegacyAuthenticationSchema: recoveryMode,
+  });
   log("database connectivity and required schema verified");
+  if (schemaVerification.legacyAuthenticationColumnsMissing.length > 0) {
+    console.warn(
+      "Controlled recovery mode: unresolved local-authentication columns " +
+        "remain unavailable; authentication writes are blocked",
+    );
+  }
 
   const server = await registerRoutes(app);
 
@@ -150,6 +168,6 @@ app.use((req, res, next) => {
   process.once("SIGTERM", () => shutdown("SIGTERM"));
   process.once("SIGINT", () => shutdown("SIGINT"));
 })().catch((error) => {
-  console.error("TUTELA failed to start:", error);
+  console.error(`TUTELA failed to start: ${safeErrorMessage(error)}`);
   process.exit(1);
 });

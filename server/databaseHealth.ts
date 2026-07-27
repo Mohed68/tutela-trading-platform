@@ -9,7 +9,13 @@ const REQUIRED_USER_COLUMNS = [
   "last_login_at",
 ] as const;
 
-export async function verifyDatabaseSchema(): Promise<void> {
+export interface DatabaseSchemaVerification {
+  legacyAuthenticationColumnsMissing: string[];
+}
+
+export async function verifyDatabaseSchema(options?: {
+  allowLegacyAuthenticationSchema?: boolean;
+}): Promise<DatabaseSchemaVerification> {
   const tableResult = await pool.query<{ table_name: string }>(`
     SELECT table_name
     FROM information_schema.tables
@@ -34,10 +40,17 @@ export async function verifyDatabaseSchema(): Promise<void> {
   const missingColumns = REQUIRED_USER_COLUMNS.filter((name) => !columns.has(name));
 
   if (missingColumns.length > 0) {
+    if (options?.allowLegacyAuthenticationSchema) {
+      await pool.query("SELECT 1");
+      return {
+        legacyAuthenticationColumnsMissing: [...missingColumns],
+      };
+    }
     throw new Error(
       `Local authentication migration is incomplete. Missing users column(s): ${missingColumns.join(", ")}. Apply migrations/0001_local_auth.sql before starting TUTELA.`,
     );
   }
 
   await pool.query("SELECT 1");
+  return { legacyAuthenticationColumnsMissing: [] };
 }

@@ -1,9 +1,15 @@
 import * as Sentry from "@sentry/node";
 import type { Express } from "express";
+import { shouldInitializeExternalMonitoring } from "./recoveryMode";
+
+function configuredSentryDsn(): string | undefined {
+  if (!shouldInitializeExternalMonitoring()) return undefined;
+  return process.env.SENTRY_BACKEND_DSN || process.env.SENTRY_DSN;
+}
 
 // Initialize Sentry for server-side monitoring
 export function initializeServerMonitoring() {
-  const sentryDsn = process.env.SENTRY_BACKEND_DSN || process.env.SENTRY_DSN;
+  const sentryDsn = configuredSentryDsn();
   
   if (!sentryDsn) {
     console.warn("SENTRY_BACKEND_DSN not configured - server monitoring disabled");
@@ -38,7 +44,7 @@ export function initializeServerMonitoring() {
 
 // Setup Express middleware for request tracking
 export function setupSentryMiddleware(app: Express) {
-  const sentryDsn = process.env.SENTRY_BACKEND_DSN || process.env.SENTRY_DSN;
+  const sentryDsn = configuredSentryDsn();
   if (!sentryDsn) return;
 
   // Sentry request handler middleware
@@ -51,7 +57,7 @@ export function setupSentryMiddleware(app: Express) {
 
 // Setup error handler (must be after all routes)
 export function setupSentryErrorHandler(app: Express) {
-  const sentryDsn = process.env.SENTRY_BACKEND_DSN || process.env.SENTRY_DSN;
+  const sentryDsn = configuredSentryDsn();
   if (!sentryDsn) return;
 
   app.use((error: any, req: any, res: any, next: any) => {

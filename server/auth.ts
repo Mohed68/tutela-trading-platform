@@ -8,6 +8,7 @@ import { z } from "zod";
 import { Pool as PgPool } from "pg";
 import { storage } from "./storage";
 import { hashPassword, verifyPassword } from "./password";
+import { isRecoveryMode } from "./recoveryMode";
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const COOKIE_NAME = "tutela.sid";
@@ -59,7 +60,12 @@ export function getSession() {
   const PgStore = connectPgSimple(session);
   return session({
     name: COOKIE_NAME,
-    store: new PgStore({ pool: getSessionPool(), tableName: "sessions", createTableIfMissing: false }),
+    store: new PgStore({
+      pool: getSessionPool(),
+      tableName: "sessions",
+      createTableIfMissing: false,
+      ...(isRecoveryMode() ? { pruneSessionInterval: false } : {}),
+    }),
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
