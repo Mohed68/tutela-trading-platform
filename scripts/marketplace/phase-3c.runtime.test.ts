@@ -9,7 +9,7 @@ import {
 } from "../migrations/rehearsal-lib.js";
 
 const EXPECTED_FINGERPRINT =
-  "1654ed34b5a19cef9edc6fe3e996553e59c370f311207a89348811f969e3def8";
+  "e79139302ae53b2dafb58a2eaf54ab47873df4a15dd3c0026ea0024d424da659";
 const PORT = "5056";
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 const TABLES = [

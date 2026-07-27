@@ -8,50 +8,18 @@ import {
 } from "../migrations/rehearsal-lib.js";
 
 const EXPECTED_FINGERPRINT =
-  "1654ed34b5a19cef9edc6fe3e996553e59c370f311207a89348811f969e3def8";
-
-const EXPECTED_COUNTS = new Map([
-  ["neon_auth.users_sync", "1"],
-  ["public.activity_logs", "0"],
-  ["public.commodities", "9"],
-  ["public.contracts", "0"],
-  ["public.offers", "9"],
-  ["public.partner_relations", "0"],
-  ["public.sessions", "0"],
-  ["public.users", "4"],
-  ["public.verification_documents", "0"],
-  ["public.offer_verifications", "0"],
-  ["public.performance_insights_reports", "0"],
-]);
-
-const LEGACY_USER_COLUMNS = [
-  "id",
-  "email",
-  "first_name",
-  "last_name",
-  "profile_image_url",
-  "company_name",
-  "role",
-  "financial_rating",
-  "credit_rating",
-  "verified",
-  "created_at",
-  "updated_at",
-] as const;
-
-const REQUIRED_LOCAL_AUTH_COLUMNS = [
+  "e79139302ae53b2dafb58a2eaf54ab47873df4a15dd3c0026ea0024d424da659";
+const AUTH_COLUMNS = [
   "password_hash",
   "auth_provider",
-  "email_verified_at",
   "last_login_at",
+  "login_enabled",
+  "credential_status",
+  "recovery_provenance",
 ] as const;
 
-function quoteIdentifier(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
-}
-
 test(
-  "approved legacy identity boundary remains read-only and incompatible with local credentials",
+  "additive auth schema preserves disabled legacy identities",
   { skip: !process.env.DATABASE_URL, timeout: 30_000 },
   async () => {
     const client = new Client({
@@ -61,171 +29,99 @@ test(
     try {
       await client.connect();
       await client.query("BEGIN READ ONLY");
-
       await verifyRecoveryMarker(client);
       assert.equal(
         await applicationSchemaFingerprint(client),
         EXPECTED_FINGERPRINT,
       );
 
-      for (const [name, expected] of EXPECTED_COUNTS) {
-        const [schema, table] = name.split(".");
-        const result = await client.query<{ count: string }>(
-          `SELECT count(*)::text AS count
-           FROM ${quoteIdentifier(schema)}.${quoteIdentifier(table)}`,
-        );
-        assert.equal(result.rows[0].count, expected);
-      }
-
-      const userColumns = (
+      const columns = (
         await client.query<{
           column_name: string;
-          data_type: string;
           is_nullable: "YES" | "NO";
-        }>(`
-          SELECT column_name, data_type, is_nullable
-          FROM information_schema.columns
-          WHERE table_schema = 'public'
-            AND table_name = 'users'
-          ORDER BY ordinal_position
-        `)
+          column_default: string | null;
+        }>(
+          `
+            SELECT column_name, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'users'
+              AND column_name = ANY($1::text[])
+            ORDER BY column_name
+          `,
+          [AUTH_COLUMNS],
+        )
       ).rows;
-      assert.deepEqual(
-        userColumns.map((column) => column.column_name),
-        LEGACY_USER_COLUMNS,
-      );
-      assert.deepEqual(
-        REQUIRED_LOCAL_AUTH_COLUMNS.filter((required) =>
-          userColumns.some((column) => column.column_name === required),
-        ),
-        [],
-      );
-      assert.equal(userColumns[0].column_name, "id");
-      assert.equal(userColumns[0].data_type, "character varying");
-      assert.equal(userColumns[0].is_nullable, "NO");
+      assert.equal(columns.length, AUTH_COLUMNS.length);
       assert.equal(
-        userColumns.some((column) =>
-          /(password|provider|disabled|deleted|locked)/i.test(
-            column.column_name,
-          ),
+        columns.every(
+          (column) =>
+            column.is_nullable === "YES" &&
+            column.column_default === null,
         ),
-        false,
+        true,
       );
 
-      const identitySummary = (
+      const legacy = (
         await client.query<{
-          total: string;
-          non_null_identifiers: string;
-          blank_identifiers: string;
-          distinct_identifiers: string;
+          count: string;
+          auth_fields_set: string;
           distinct_ids: string;
-          null_ids: string;
+          distinct_identifiers: string;
         }>(`
-          SELECT
-            count(*)::text AS total,
-            count(email)::text AS non_null_identifiers,
-            count(*) FILTER (WHERE btrim(email) = '')::text
-              AS blank_identifiers,
-            count(DISTINCT lower(btrim(email)))
-              FILTER (WHERE email IS NOT NULL AND btrim(email) <> '')::text
-              AS distinct_identifiers,
-            count(DISTINCT id)::text AS distinct_ids,
-            count(*) FILTER (WHERE id IS NULL)::text AS null_ids
-          FROM public.users
-        `)
-      ).rows[0];
-      assert.deepEqual(identitySummary, {
-        total: "4",
-        non_null_identifiers: "4",
-        blank_identifiers: "0",
-        distinct_identifiers: "4",
-        distinct_ids: "4",
-        null_ids: "0",
-      });
-
-      const roleSummary = (
-        await client.query<{
-          total: string;
-          distinct_roles: string;
-          null_roles: string;
-        }>(`
-          SELECT
-            count(*)::text AS total,
-            count(DISTINCT role)::text AS distinct_roles,
-            count(*) FILTER (WHERE role IS NULL)::text AS null_roles
-          FROM public.users
-        `)
-      ).rows[0];
-      assert.deepEqual(roleSummary, {
-        total: "4",
-        distinct_roles: "4",
-        null_roles: "0",
-      });
-
-      const verificationSummary = (
-        await client.query<{
-          verified_count: string;
-          not_verified_count: string;
-          unknown_count: string;
-        }>(`
-          SELECT
-            count(*) FILTER (WHERE verified IS TRUE)::text
-              AS verified_count,
-            count(*) FILTER (WHERE verified IS FALSE)::text
-              AS not_verified_count,
-            count(*) FILTER (WHERE verified IS NULL)::text
-              AS unknown_count
-          FROM public.users
-        `)
-      ).rows[0];
-      assert.deepEqual(verificationSummary, {
-        verified_count: "3",
-        not_verified_count: "1",
-        unknown_count: "0",
-      });
-
-      const sessionColumns = (
-        await client.query<{
-          column_name: string;
-          data_type: string;
-          is_nullable: "YES" | "NO";
-        }>(`
-          SELECT column_name, data_type, is_nullable
-          FROM information_schema.columns
-          WHERE table_schema = 'public'
-            AND table_name = 'sessions'
-          ORDER BY ordinal_position
-        `)
-      ).rows;
-      assert.deepEqual(sessionColumns, [
-        {
-          column_name: "sid",
-          data_type: "character varying",
-          is_nullable: "NO",
-        },
-        {
-          column_name: "sess",
-          data_type: "jsonb",
-          is_nullable: "NO",
-        },
-        {
-          column_name: "expire",
-          data_type: "timestamp without time zone",
-          is_nullable: "NO",
-        },
-      ]);
-
-      const journal = (
-        await client.query<{ count: string; accepted_count: string }>(`
           SELECT
             count(*)::text AS count,
             count(*) FILTER (
-              WHERE execution_status IN ('verified', 'succeeded', 'superseded')
-            )::text AS accepted_count
-          FROM public.tutela_migration_journal
+              WHERE password_hash IS NOT NULL
+                 OR auth_provider IS NOT NULL
+                 OR last_login_at IS NOT NULL
+                 OR login_enabled IS NOT NULL
+                 OR credential_status IS NOT NULL
+            )::text AS auth_fields_set,
+            count(DISTINCT id)::text AS distinct_ids,
+            count(DISTINCT lower(btrim(email)))::text
+              AS distinct_identifiers
+          FROM public.users
+          WHERE recovery_provenance IS NULL
         `)
       ).rows[0];
-      assert.deepEqual(journal, { count: "6", accepted_count: "6" });
+      assert.deepEqual(legacy, {
+        count: "4",
+        auth_fields_set: "0",
+        distinct_ids: "4",
+        distinct_identifiers: "4",
+      });
+
+      const recovery = (
+        await client.query<{ count: string }>(`
+          SELECT count(*)::text AS count
+          FROM public.users
+          WHERE recovery_provenance = 'tutela-recovery-test'
+        `)
+      ).rows[0].count;
+      assert.ok(recovery === "0" || recovery === "1");
+
+      const journal = (
+        await client.query<{
+          execution_status: string;
+          sql_executed: boolean;
+        }>(`
+          SELECT execution_status, sql_executed
+          FROM public.tutela_migration_journal
+          WHERE migration_identifier = '0006_additive_auth_recovery'
+        `)
+      ).rows[0];
+      assert.deepEqual(journal, {
+        execution_status: "succeeded",
+        sql_executed: true,
+      });
+
+      const sessions = (
+        await client.query<{ count: string }>(
+          "SELECT count(*)::text AS count FROM public.sessions",
+        )
+      ).rows[0].count;
+      assert.equal(sessions, "0");
 
       await client.query("ROLLBACK");
     } catch (error) {

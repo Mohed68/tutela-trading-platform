@@ -23,6 +23,18 @@ const COOKIE_NAME = "tutela.sid";
 let sessionPool: PgPool | undefined;
 let unavailableCredentialHash: Promise<string> | undefined;
 
+export function getSessionCookieSettings(
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: environment.NODE_ENV === "production",
+    path: "/",
+    maxAge: SESSION_TTL_MS,
+  };
+}
+
 function getSessionPool(): PgPool {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL must be set before starting the server.");
@@ -116,13 +128,7 @@ export function getSession() {
     saveUninitialized: false,
     rolling: false,
     proxy: isProduction,
-    cookie: {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProduction,
-      path: "/",
-      maxAge: SESSION_TTL_MS,
-    },
+    cookie: getSessionCookieSettings(),
   });
 }
 
