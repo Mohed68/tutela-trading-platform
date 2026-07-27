@@ -8,6 +8,7 @@ import {
   verificationDocuments,
   interestedOffers,
   partnerRelations,
+  performanceInsightsReports,
   auditLogs,
   temporaryDocumentLinks,
   type User,
@@ -26,6 +27,8 @@ import {
   type InterestedOffer,
   type NewInterestedOffer,
   type PartnerRelation,
+  type PerformanceInsightsReport,
+  type NewPerformanceInsightsReport,
   type AuditLog,
   type ActivityLog,
   type TemporaryDocumentLink,
@@ -114,7 +117,11 @@ export interface IStorage {
   }>;
   
   // Performance Insights operations
-  getLatestInsightsReport(userId: string): Promise<any>;
+  getLatestInsightsReport(userId: string): Promise<PerformanceInsightsReport | undefined>;
+  createInsightsReport(report: Pick<
+    NewPerformanceInsightsReport,
+    "userId" | "summary" | "insights" | "recommendations" | "riskFactors" | "opportunities" | "generatedAt"
+  >): Promise<PerformanceInsightsReport>;
 }
 
 // MemStorage was inactive and is preserved in archive/legacy/server-mem-storage.ts.disabled.
@@ -564,6 +571,31 @@ export class DatabaseStorage implements IStorage {
       verificationQueue: verificationQueueResult?.count || 0,
       totalVolume: totalVolumeResult?.total || "0",
     };
+  }
+
+  async getLatestInsightsReport(userId: string): Promise<PerformanceInsightsReport | undefined> {
+    const [report] = await db
+      .select()
+      .from(performanceInsightsReports)
+      .where(eq(performanceInsightsReports.userId, userId))
+      .orderBy(desc(performanceInsightsReports.generatedAt))
+      .limit(1);
+
+    return report;
+  }
+
+  async createInsightsReport(
+    report: Pick<
+      NewPerformanceInsightsReport,
+      "userId" | "summary" | "insights" | "recommendations" | "riskFactors" | "opportunities" | "generatedAt"
+    >,
+  ): Promise<PerformanceInsightsReport> {
+    const [created] = await db
+      .insert(performanceInsightsReports)
+      .values(report)
+      .returning();
+
+    return created;
   }
 
   // Admin methods

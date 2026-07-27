@@ -307,6 +307,42 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export interface PerformanceInsightSummary {
+  totalTrades: number;
+  totalVolume: string;
+  successRate: number;
+  riskScore: number;
+}
+
+export interface PerformanceInsightItem {
+  id: string;
+  type: "trend" | "opportunity" | "risk" | "recommendation";
+  title: string;
+  description: string;
+  impact: "high" | "medium" | "low";
+  confidence: number;
+  category: string;
+  actionable: boolean;
+  metric?: {
+    value: string | number;
+    change?: number;
+    unit?: string;
+  };
+}
+
+export const performanceInsightsReports = pgTable("performance_insights_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  summary: jsonb("summary").$type<PerformanceInsightSummary>().notNull(),
+  insights: jsonb("insights").$type<PerformanceInsightItem[]>().notNull(),
+  recommendations: jsonb("recommendations").$type<string[]>().notNull(),
+  riskFactors: jsonb("risk_factors").$type<string[]>().notNull(),
+  opportunities: jsonb("opportunities").$type<string[]>().notNull(),
+  generatedAt: timestamp("generated_at").notNull().defaultNow(),
+}, (table) => [
+  index("performance_insights_user_generated_idx").on(table.userId, table.generatedAt),
+]);
+
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -359,6 +395,8 @@ export type NewInterestedOffer = z.infer<typeof insertInterestedOfferSchema>;
 export type PartnerRelation = typeof partnerRelations.$inferSelect;
 export type NewPartnerRelation = typeof partnerRelations.$inferInsert;
 export type Order = typeof orders.$inferSelect;
+export type PerformanceInsightsReport = typeof performanceInsightsReports.$inferSelect;
+export type NewPerformanceInsightsReport = typeof performanceInsightsReports.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type ActivityLog = typeof auditLogs.$inferSelect; // Use audit logs as activity logs
 export type TemporaryDocumentLink = typeof temporaryDocumentLinks.$inferSelect;

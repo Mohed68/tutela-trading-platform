@@ -1,9 +1,18 @@
 import OpenAI from "openai";
 import { storage } from "../storage";
+import type {
+  NewPerformanceInsightsReport,
+  PerformanceInsightsReport,
+} from "@shared/schema";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export async function generatePerformanceInsights(userId: string): Promise<any> {
+type GeneratedInsights = Pick<
+  NewPerformanceInsightsReport,
+  "summary" | "insights" | "recommendations" | "riskFactors" | "opportunities"
+>;
+
+export async function generatePerformanceInsights(userId: string): Promise<PerformanceInsightsReport> {
   try {
     // Get user's trading data
     const [orders, offers, contracts, activity] = await Promise.all([
@@ -19,17 +28,19 @@ export async function generatePerformanceInsights(userId: string): Promise<any> 
       totalOffers: offers.length,
       totalContracts: contracts.length,
       recentActivity: activity.length,
-      orderTypes: orders.reduce((acc: any, order) => {
-        acc[order.type] = (acc[order.type] || 0) + 1;
+      orderTypes: orders.reduce<Record<string, number>>((acc, order) => {
+        const orderRole = order.buyerId === userId ? "buyer" : "seller";
+        acc[orderRole] = (acc[orderRole] || 0) + 1;
         return acc;
       }, {}),
-      commodityCategories: offers.reduce((acc: any, offer) => {
-        const category = offer.commodity?.category || 'unknown';
+      commodityCategories: offers.reduce<Record<string, number>>((acc, offer) => {
+        const category = offer.commodity?.type || "unknown";
         acc[category] = (acc[category] || 0) + 1;
         return acc;
       }, {}),
-      contractStatuses: contracts.reduce((acc: any, contract) => {
-        acc[contract.status] = (acc[contract.status] || 0) + 1;
+      contractStatuses: contracts.reduce<Record<string, number>>((acc, contract) => {
+        const status = contract.status || "unknown";
+        acc[status] = (acc[status] || 0) + 1;
         return acc;
       }, {})
     };
@@ -98,18 +109,24 @@ Format the response as JSON with the following structure:
       temperature: 0.7
     });
 
-    const insights = JSON.parse(response.choices[0].message.content || "{}");
-    
-    return {
-      id: Date.now().toString(),
-      generatedAt: new Date().toISOString(),
-      ...insights
-    };
+    const insights = JSON.parse(
+      response.choices[0].message.content || "{}",
+    ) as GeneratedInsights;
+
+    return storage.createInsightsReport({
+      userId,
+      generatedAt: new Date(),
+      ...insights,
+    });
 
   } catch (error) {
     console.error("Error generating insights:", error);
     
     // Fallback to basic insights if AI fails
-    return storage.getLatestInsightsReport(userId);
+    const latestReport = await storage.getLatestInsightsReport(userId);
+    if (!latestReport) {
+      throw error;
+    }
+    return latestReport;
   }
 }
