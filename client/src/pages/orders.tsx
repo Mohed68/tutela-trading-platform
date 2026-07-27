@@ -19,6 +19,7 @@ import {
   Plus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 import type { Order } from "@shared/schema";
 
 interface OrderWithDetails extends Order {
@@ -58,13 +59,14 @@ const paymentStatusConfig = {
 export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const [activeTab, setActiveTab] = useState("incoming");
+  const { user, isLoading: isAuthLoading } = useAuth();
 
   const { data: orders = [], isLoading } = useQuery<OrderWithDetails[]>({
     queryKey: ["/api/orders"],
   });
 
-  const incomingOrders = orders.filter(order => order.type === "sell"); // Orders where user is selling
-  const outgoingOrders = orders.filter(order => order.type === "buy"); // Orders where user is buying
+  const incomingOrders = orders.filter(order => order.sellerId === user?.id);
+  const outgoingOrders = orders.filter(order => order.buyerId === user?.id);
 
   const getProgressValue = (status: string): number => {
     const progress = {
@@ -78,7 +80,7 @@ export default function Orders() {
     return progress[status as keyof typeof progress] || 0;
   };
 
-  if (isLoading) {
+  if (isLoading || isAuthLoading) {
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center gap-3">
@@ -134,7 +136,7 @@ export default function Orders() {
               <span className="text-muted-foreground">Total Value:</span>
               <div className="font-semibold flex items-center gap-1">
                 <DollarSign className="h-3 w-3" />
-                ${Number(order.totalValue).toLocaleString()}
+                ${Number(order.totalAmount).toLocaleString()}
               </div>
             </div>
             <div>
@@ -194,7 +196,7 @@ export default function Orders() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              ${orders.reduce((sum, order) => sum + Number(order.totalValue), 0).toLocaleString()}
+              ${orders.reduce((sum, order) => sum + Number(order.totalAmount), 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>

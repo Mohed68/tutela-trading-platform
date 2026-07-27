@@ -129,7 +129,10 @@ export class DatabaseStorage implements IStorage {
   // Order operations
   async getOrders(userId?: string): Promise<Order[]> {
     if (userId) {
-      return await db.select().from(orders).where(eq(orders.userId, userId));
+      return await db
+        .select()
+        .from(orders)
+        .where(or(eq(orders.buyerId, userId), eq(orders.sellerId, userId)));
     }
     return await db.select().from(orders);
   }
