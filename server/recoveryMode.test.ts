@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   assertRecoveryModeIsLocal,
   isRecoveryMode,
+  isSafeRecoveryRequest,
   shouldInitializeExternalMonitoring,
   shouldRunStartupSeeding,
 } from "./recoveryMode.js";
@@ -46,6 +47,22 @@ test("recovery mode rejects production and Render environments", () => {
       }),
     /Render/,
   );
+});
+
+test("recovery mode allows only approved read-only marketplace routes", () => {
+  for (const path of [
+    "/api/offers",
+    "/api/offers/options",
+    "/api/offers/search",
+    "/api/offers/summary",
+  ]) {
+    assert.equal(isSafeRecoveryRequest("GET", path), true);
+    assert.equal(isSafeRecoveryRequest("HEAD", path), true);
+    assert.equal(isSafeRecoveryRequest("POST", path), false);
+  }
+
+  assert.equal(isSafeRecoveryRequest("GET", "/api/offers/private"), false);
+  assert.equal(isSafeRecoveryRequest("GET", "/admin"), false);
 });
 
 test("safe errors redact configured secrets and URL credentials", () => {

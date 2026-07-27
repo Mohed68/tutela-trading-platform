@@ -11,6 +11,8 @@
     "check": "tsc",
     "test:api-request": "tsx --test client/src/lib/queryClient.test.ts",
     "test:marketplace-characterization": "node --env-file=.env --import tsx --test scripts/marketplace/legacy-offer.characterization.test.ts",
+    "test:marketplace-policy": "node --env-file=.env --import tsx --test server/marketplace/publicMarketplace.test.ts",
+    "test:marketplace-runtime": "node --env-file=.env --import tsx --test scripts/marketplace/phase-3c.runtime.test.ts",
     "test:migrations": "tsx --test scripts/migrations/rehearsal-lib.test.ts",
     "test:recovery": "tsx --test server/recoveryMode.test.ts server/services/openaiClient.test.ts",
     "migration:rehearsal": "node --env-file=.env --import tsx scripts/migration-rehearsal.ts",
