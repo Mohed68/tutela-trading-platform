@@ -65,6 +65,18 @@ test("recovery mode allows only approved read-only marketplace routes", () => {
   assert.equal(isSafeRecoveryRequest("GET", "/admin"), false);
 });
 
+test("recovery mode permits anonymous current-user characterization but blocks auth writes", () => {
+  assert.equal(isSafeRecoveryRequest("GET", "/api/auth/user"), true);
+  assert.equal(isSafeRecoveryRequest("HEAD", "/api/auth/user"), true);
+  assert.equal(isSafeRecoveryRequest("POST", "/api/auth/login"), false);
+  assert.equal(isSafeRecoveryRequest("POST", "/api/auth/logout"), false);
+  assert.equal(isSafeRecoveryRequest("GET", "/api/logout"), false);
+  assert.equal(
+    isSafeRecoveryRequest("GET", "/api/dashboard/metrics"),
+    false,
+  );
+});
+
 test("safe errors redact configured secrets and URL credentials", () => {
   const databaseUrl =
     "postgresql://private-user:private-password@example.invalid/database";
