@@ -11,19 +11,10 @@ import { VWAPTile } from "@/components/VWAPTile";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import clsx from "clsx";
-
-interface OffersSummary {
-  activeOffers: number;
-  marketValueUsd: number;
-  verifiedTraders: number;
-  avgPrice?: number | null;
-  avgPriceUnit?: string;
-  avgPriceCount?: number;
-  avgPriceCoverage?: { used: number; skipped: number };
-  median?: number | null;
-  p25?: number | null;
-  p75?: number | null;
-}
+import type {
+  PublicMarketplaceOffersResponse,
+  PublicMarketplaceSummary,
+} from "@shared/marketplace";
 
 export default function Marketplace() {
   // URL state management
@@ -71,7 +62,8 @@ export default function Marketplace() {
     return `/api/offers?${params.toString()}`;
   };
 
-  const { data: offersResponse } = useQuery({
+  const { data: offersResponse } =
+    useQuery<PublicMarketplaceOffersResponse>({
     queryKey: ['/api/offers', selectedCategory, commodityKey, unit, searchQuery],
     queryFn: async () => {
       const url = await buildApiUrl();
@@ -82,11 +74,10 @@ export default function Marketplace() {
     retry: false,
   });
 
-  // Extract offers from response (handle both old and new format)
-  const offers = Array.isArray(offersResponse) ? offersResponse : (offersResponse?.offers || []);
+  const offers = offersResponse?.offers ?? [];
 
   // Fetch enhanced summary with VWAP data
-  const { data: summary } = useQuery<OffersSummary>({
+  const { data: summary } = useQuery<PublicMarketplaceSummary>({
     queryKey: ['/api/offers/summary', selectedCategory, commodityKey, unit, searchQuery],
     queryFn: async () => {
       const { canon } = await import('@shared/constants/units');
@@ -192,7 +183,8 @@ export default function Marketplace() {
             Marketplace
           </h1>
           <p className="text-gray-600">
-            Discover verified commodity offers from trusted traders worldwide
+            Only offers with confirmed offer and seller-organization
+            verification are published.
           </p>
         </div>
 

@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { TrendingUp, Users, DollarSign, Clock, AlertCircle } from "lucide-react";
 import { fmtMoney, fmtNumber } from "@/lib/formatting";
 import clsx from "clsx";
+import type { PublicMarketplaceSummary } from "@shared/marketplace";
 
 interface MarketplaceInsightsProps {
   offers: any[];
@@ -13,12 +14,6 @@ interface MarketplaceInsightsProps {
   commodityKey?: string;
   unit?: string;
   variant?: 'hero' | 'compact';
-}
-
-interface OffersSummary {
-  activeOffers: number;
-  marketValueUsd: number;
-  verifiedTraders: number;
 }
 
 export function MarketplaceInsights({ 
@@ -32,7 +27,8 @@ export function MarketplaceInsights({
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   // Fetch complete summary from backend
-  const { data: summary, isLoading, error } = useQuery<OffersSummary>({
+  const { data: summary, isLoading, error } =
+    useQuery<PublicMarketplaceSummary>({
     queryKey: ['/api/offers/summary', category, commodityKey, unit, searchQuery],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -105,104 +101,18 @@ export function MarketplaceInsights({
   }
 
   if (error || !summary) {
-    // Fallback: Calculate basic metrics from offers data
-    const fallbackSummary = {
-      activeOffers: offers.length,
-      marketValueUsd: offers.reduce((sum, offer) => {
-        const price = parseFloat(offer.price || '0');
-        const qty = parseFloat(offer.quantity || '0');
-        return sum + (price * qty);
-      }, 0),
-      verifiedTraders: new Set(offers.filter(o => o.verified).map(o => o.seller || o.userId)).size
-    };
-
     return (
-      <TooltipProvider>
-        <Card className={clsx(
-          "bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-200",
-          variant === 'hero' ? 'col-span-full' : ''
-        )}>
-          <CardContent className={clsx("p-6", variant === 'hero' ? 'py-8' : 'py-4')}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className={clsx(
-                "font-semibold text-gray-700 flex items-center gap-2",
-                variant === 'hero' ? 'text-lg' : 'text-sm'
-              )}>
-                <TrendingUp className={clsx("text-amber-600", variant === 'hero' ? 'w-5 h-5' : 'w-4 h-4')} />
-                Market Overview
-              </h3>
-              <div className="flex items-center text-xs text-amber-600 gap-1">
-                <Clock className="w-3 h-3" />
-                Estimated
-              </div>
-            </div>
-
-            <div className={clsx(
-              "grid gap-6",
-              variant === 'hero' 
-                ? 'grid-cols-1 md:grid-cols-3' 
-                : 'grid-cols-3'
-            )}>
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <TrendingUp className={clsx(
-                    "text-green-600 mr-2",
-                    variant === 'hero' ? 'w-6 h-6' : 'w-4 h-4'
-                  )} />
-                  <span className={clsx(
-                    "text-gray-600",
-                    variant === 'hero' ? 'text-sm' : 'text-xs'
-                  )}>Active Offers</span>
-                </div>
-                <div className={clsx(
-                  "font-bold text-green-700",
-                  variant === 'hero' ? 'text-3xl' : 'text-lg'
-                )}>
-                  {fmtNumber(fallbackSummary.activeOffers)}
-                </div>
-              </div>
-
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <DollarSign className={clsx(
-                    "text-blue-600 mr-2",
-                    variant === 'hero' ? 'w-6 h-6' : 'w-4 h-4'
-                  )} />
-                  <span className={clsx(
-                    "text-gray-600",
-                    variant === 'hero' ? 'text-sm' : 'text-xs'
-                  )}>Market Value</span>
-                </div>
-                <div className={clsx(
-                  "font-bold text-blue-700",
-                  variant === 'hero' ? 'text-3xl' : 'text-lg'
-                )}>
-                  {fmtMoney(fallbackSummary.marketValueUsd)}
-                </div>
-              </div>
-
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Users className={clsx(
-                    "text-purple-600 mr-2",
-                    variant === 'hero' ? 'w-6 h-6' : 'w-4 h-4'
-                  )} />
-                  <span className={clsx(
-                    "text-gray-600",
-                    variant === 'hero' ? 'text-sm' : 'text-xs'
-                  )}>Verified Traders</span>
-                </div>
-                <div className={clsx(
-                  "font-bold text-purple-700",
-                  variant === 'hero' ? 'text-3xl' : 'text-lg'
-                )}>
-                  {fmtNumber(fallbackSummary.verifiedTraders)}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </TooltipProvider>
+      <Card className={clsx(
+        "bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-200",
+        variant === 'hero' ? 'col-span-full' : ''
+      )}>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center text-sm text-amber-700">
+            <AlertCircle className="w-4 h-4 mr-2" />
+            Verified marketplace summary is temporarily unavailable.
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -238,8 +148,8 @@ export function MarketplaceInsights({
             <div className={clsx(
               "grid gap-6",
               variant === 'hero' 
-                ? 'grid-cols-1 md:grid-cols-3' 
-                : 'grid-cols-3'
+              ? 'grid-cols-1 md:grid-cols-2'
+              : 'grid-cols-2'
             )}>
               {/* Active Offers */}
               <Tooltip>
@@ -253,7 +163,7 @@ export function MarketplaceInsights({
                       <span className={clsx(
                         "text-gray-600",
                         variant === 'hero' ? 'text-sm' : 'text-xs'
-                      )}>Active Offers</span>
+                      )}>Published Offers</span>
                     </div>
                     <div className={clsx(
                       "font-bold text-green-700",
@@ -264,7 +174,7 @@ export function MarketplaceInsights({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Verified & active offers matching current filters</p>
+                  <p>Offers with both required verification states confirmed</p>
                   <p className="text-xs text-gray-500">Total in marketplace: {summary.activeOffers}</p>
                 </TooltipContent>
               </Tooltip>
@@ -296,32 +206,6 @@ export function MarketplaceInsights({
                 </TooltipContent>
               </Tooltip>
 
-              {/* Verified Traders */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center mb-2">
-                      <Users className={clsx(
-                        "text-purple-600 mr-2",
-                        variant === 'hero' ? 'w-6 h-6' : 'w-4 h-4'
-                      )} />
-                      <span className={clsx(
-                        "text-gray-600",
-                        variant === 'hero' ? 'text-sm' : 'text-xs'
-                      )}>Verified Traders</span>
-                    </div>
-                    <div className={clsx(
-                      "font-bold text-purple-700",
-                      variant === 'hero' ? 'text-3xl' : 'text-lg'
-                    )}>
-                      {fmtNumber(summary.verifiedTraders)}
-                    </div>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Unique verified traders offering these commodities</p>
-                </TooltipContent>
-              </Tooltip>
             </div>
           )}
         </CardContent>

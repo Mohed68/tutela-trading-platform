@@ -4,9 +4,13 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Package } from "lucide-react";
 import OfferCardDetailed from "../components/OfferCardDetailed";
 import { useAuth } from "@/hooks/useAuth";
+import type {
+  PublicMarketplaceOffer,
+  PublicMarketplaceOffersResponse,
+} from "@shared/marketplace";
 
 interface OfferListProps {
-  offers?: any[]; // Direct offers array
+  offers?: PublicMarketplaceOffer[];
   variant?: 'detailed' | 'compact';
   filter?: 'marketplace' | 'user' | 'interested';
   searchQuery?: string;
@@ -28,7 +32,8 @@ export default function OfferList({
 
   // Use direct offers if provided, otherwise fetch
   const shouldFetch = !directOffers;
-  const { data: fetchedOffers = [], isLoading } = useQuery({
+  const { data: fetchedResponse, isLoading } =
+    useQuery<PublicMarketplaceOffersResponse>({
     queryKey: ["/api/offers", filter, selectedCategory],
     queryFn: async () => {
       let url = "/api/offers";
@@ -43,41 +48,57 @@ export default function OfferList({
     enabled: shouldFetch,
   });
 
-  // Fetch commodities for additional data
-  const { data: commodities = [] } = useQuery({
-    queryKey: ["/api/commodities"],
-    retry: false,
-  });
-
-  // Use direct offers or fetched offers
-  const baseOffers = directOffers || fetchedOffers;
+  const baseOffers = directOffers ?? fetchedResponse?.offers ?? [];
 
   // Filter offers based on search and category (only if not using direct offers)
-  const filteredOffers = directOffers ? baseOffers : baseOffers.filter((offer: any) => {
+  const filteredOffers = directOffers ? baseOffers : baseOffers.filter((offer) => {
     const matchesSearch = !searchQuery || 
-      offer.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      offer.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      offer.commodity?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+      offer.commodity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      offer.location.toLowerCase().includes(searchQuery.toLowerCase());
       
     const matchesCategory = selectedCategory === 'all' || 
-      offer.commodity?.type === selectedCategory ||
-      offer.commodity?.category === selectedCategory;
+      offer.commodity.category === selectedCategory;
       
     return matchesSearch && matchesCategory;
   });
 
-  // Enrich offers with commodity data
-  const enrichedOffers = filteredOffers.map((offer: any) => {
-    const commodity = (commodities as any[]).find((c: any) => c.id === offer.commodityId);
-    return {
-      ...offer,
-      commodity: commodity || {
-        id: offer.commodityId,
-        name: offer.title,
-        type: 'unknown',
-        category: 'Other'
-      }
-    };
+  // The legacy card receives only public fields, and only after both explicit
+  // verification states are proven. Unknown states are not converted to
+  // boolean false and cannot enter the render path.
+  const publishedOffers = filteredOffers.flatMap((offer) => {
+    if (
+      offer.trust.offerVerification.state !== "verified" ||
+      offer.trust.sellerOrganizationVerification.state !== "verified" ||
+      offer.visibility.state !== "published"
+    ) {
+      return [];
+    }
+
+    return [{
+      id: offer.id,
+      commodityId: offer.commodity.id,
+      commodity: {
+        ...offer.commodity,
+        type: offer.commodity.category,
+      },
+      type: offer.offerType,
+      quantity: Number(offer.quantity.value),
+      unit: offer.quantity.unit,
+      pricePerUnit: Number(offer.pricing.amountPerUnit),
+      currency: offer.pricing.currency,
+      minOrderQty: offer.terms.minimumQuantity
+        ? Number(offer.terms.minimumQuantity)
+        : 0,
+      location: offer.location,
+      deliveryTerms: offer.terms.delivery ?? undefined,
+      paymentTerms: offer.terms.payment ?? undefined,
+      status: offer.status,
+      verified: true,
+      sellerOrgVerified: true,
+      validUntil: offer.terms.validUntil ?? undefined,
+      createdAt: offer.createdAt ?? "",
+      updatedAt: offer.updatedAt ?? "",
+    }];
   });
 
   if (isLoading) {
@@ -107,14 +128,16 @@ export default function OfferList({
     );
   }
 
-  if (enrichedOffers.length === 0) {
+  if (publishedOffers.length === 0) {
     return (
       <div className="col-span-full text-center py-12">
         <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">No offers found</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">
+          No verified offers are currently available
+        </h3>
         <p className="text-gray-600">
           {filter === 'marketplace' ? 
-            "Try adjusting your search terms or check back later for new offers." :
+            "Offers appear only after both offer and seller-organization verification are confirmed." :
             filter === 'user' ?
             "Create your first offer to get started with trading." :
             "Browse marketplace to find interesting offers to track."
@@ -126,7 +149,7 @@ export default function OfferList({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {enrichedOffers.map((offer: any) => (
+      {publishedOffers.map((offer) => (
         <OfferCardDetailed
           key={offer.id}
           offer={offer}

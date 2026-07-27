@@ -47,14 +47,6 @@ export default function OfferDetailModal({ offer, isOpen, onClose }: OfferDetail
   // Extract numbers safely using shared utilities
   const numbers = extractOfferNumbers(offer);
   
-  // Debug table for development
-  console.table({ 
-    unitPrice: offer.unitPrice || offer.pricePerUnit || offer.price, 
-    typeofUnitPrice: typeof (offer.unitPrice || offer.pricePerUnit || offer.price), 
-    quantity: offer.quantity, 
-    typeofQuantity: typeof offer.quantity 
-  });
-
   // Guard against invalid data
   if (!numbers.isValid) {
     console.error('Invalid offer data in modal:', { offerId: offer.id, numbers });
@@ -128,30 +120,28 @@ export default function OfferDetailModal({ offer, isOpen, onClose }: OfferDetail
 
           <Separator />
 
-          {/* Trader Information */}
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="font-semibold text-lg mb-2">Trader Information</h3>
-              <div className="flex items-center gap-3 mb-2">
-                <Building className="h-4 w-4 text-gray-400" />
-                <span className="font-medium">{offer.seller || offer.user?.companyName || 'Trading Company'}</span>
-              </div>
-              <div className="flex items-center gap-3 mb-2">
+          {/* Public verification information */}
+          <div>
+            <h3 className="font-semibold text-lg mb-2">
+              Marketplace verification
+            </h3>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
                 <Shield className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-gray-600">Verified Trader</span>
+                <span className="text-sm text-gray-600">
+                  Offer verification confirmed
+                </span>
               </div>
-              <div className="flex items-center gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                ))}
-                <span className="text-xs text-gray-500 ml-1">5.0 Rating</span>
+              <div className="flex items-center gap-3">
+                <Building className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-gray-600">
+                  Seller-organization verification confirmed
+                </span>
               </div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-600">Contact Person</div>
-              <div className="font-medium">
-                {offer.user?.firstName || offer.contactName || 'Trade'} {offer.user?.lastName || offer.contactLastName || 'Manager'}
-              </div>
+              <p className="text-xs text-gray-500">
+                Seller identity and personal contact information are not
+                included in the public listing.
+              </p>
             </div>
           </div>
 

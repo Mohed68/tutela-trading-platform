@@ -3,22 +3,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   MapPin, 
-  Shield, 
   ShieldCheck,
-  Star, 
   Eye, 
   Heart,
-  Package,
-  User,
-  Calendar,
-  FileCheck,
-  Building2
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import CommodityIcon, { CommodityIcon as NewCommodityIcon } from "@/components/ui/CommodityIcon";
-import { toNum, isNum } from "@/lib/insights";
+import { CommodityIcon as NewCommodityIcon } from "@/components/ui/CommodityIcon";
+import { isNum } from "@/lib/insights";
 import { BarSpec, toOz, CATEGORY_LABEL, fmtMoney, fmtMoneyCompact, UNIT_LABEL, Unit } from "@/lib/formatting";
-import { PackagingSpec, toKg, toOz as packageToOz } from "@/lib/packaging";
+import { PackagingSpec, toKg } from "@/lib/packaging";
 
 // Number utilities
 const toNumber = (v: any) =>
@@ -26,7 +19,6 @@ const toNumber = (v: any) =>
 
 interface Offer {
   id: string;
-  userId: string;
   commodityId: string;
   commodity?: {
     id: string;
@@ -49,19 +41,7 @@ interface Offer {
   // Packaging Specification for Agricultural
   packaging?: PackagingSpec;
   
-  // Company/Organization info
-  sellerOrgId?: string;
-  sellerOrgName?: string;
   sellerOrgVerified?: boolean;
-  sellerOrgRating?: number;
-  sellerOrgLocation?: string;
-  sellerOrgCountry?: string;
-  
-  // Delegate info
-  delegateId?: string;
-  delegateFullName?: string;
-  delegateRoleTitle?: string;
-  delegateIsAuthorized?: boolean;
   location: string;
   deliveryTerms?: string;
   paymentTerms?: string;
@@ -111,26 +91,16 @@ export default function OfferCardDetailed({
     // Could add Sentry logging here if needed
   }
   
-  // MOQ from policy when needed
-  let moq = toNumber(offer.minOrderQty || offer.minOrderQuantity || 0);
-  if (!isNum(moq) || moq <= 0) {
-    // Use basic defaults based on commodity type
-    if (offer.unit === 'barrel' || offer.unit === 'bbl') {
-      moq = 1000; // 1,000 barrels
-    } else if (offer.unit === 'metric_ton' || offer.unit === 'MT') {
-      moq = 500; // 500 MT
-    } else if (offer.unit === 'troy_ounce') {
-      moq = 10; // 10 troy oz
-    } else {
-      moq = Math.max(1, Math.floor(q * 0.1)); // 10% of available
-    }
-  }
+  const parsedMoq = toNumber(
+    offer.minOrderQty || offer.minOrderQuantity || 0,
+  );
   
   // Use safe values for display
   const unitPrice = p;
   const quantity = q;
   const totalValue = p * q;
-  const minOrderQty = moq;
+  const minOrderQty =
+    isNum(parsedMoq) && parsedMoq > 0 ? parsedMoq : null;
   const unitLabel = u;
   
   // Use canonical unit system
@@ -140,14 +110,7 @@ export default function OfferCardDetailed({
   const commodityName = offer.commodity?.name || offer.title || 'Commodity';
   const categoryDisplay = offer.commodity?.category || 'Category';
   
-  // Organization info with fallbacks
-  const companyName = offer.sellerOrgName || 'Company';
-  const companyRating = offer.sellerOrgRating;
-  const delegateName = offer.delegateFullName || 'Delegate';
-  const delegateRole = offer.delegateRoleTitle;
-  const isAuthorized = offer.delegateIsAuthorized ?? false;
-  
-  // Verified-only guard - don't show modal for unverified offers
+  // Public cards render only after both authoritative states are proven.
   const isVerified = offer.verified && offer.sellerOrgVerified;
   if (!isVerified) {
     return null; // Don't render unverified offers
@@ -187,40 +150,28 @@ export default function OfferCardDetailed({
 
           {/* Right cluster: badges stacked, never overlapping */}
           <div className="shrink-0 flex flex-col items-end gap-1">
-            {offer.sellerOrgVerified ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <Badge variant="default" className="bg-emerald-100 text-emerald-700 border-emerald-200 leading-none">
-                      <ShieldCheck className="w-3 h-3 mr-1" />
-                      ✓ Verified <span className="opacity-70">(KYB)</span>
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>KYB verification completed. Company identity and business registration verified.</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200 leading-none">
-                      <Shield className="w-3 h-3 mr-1" />
-                      ⏳ Pending KYB
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>KYB verification in progress. Company documents under review.</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            {companyRating && (
-              <span className="inline-flex items-center gap-1 text-amber-600 text-xs md:text-sm xs:hidden sm:inline-flex" title={`${companyRating} rating`}>
-                ★ {typeof companyRating === 'number' ? companyRating.toFixed(1) : parseFloat(String(companyRating) || '0').toFixed(1)}
-              </span>
-            )}
+            <Tooltip>
+              <TooltipTrigger>
+                <Badge variant="default" className="bg-emerald-100 text-emerald-700 border-emerald-200 leading-none">
+                  <ShieldCheck className="w-3 h-3 mr-1" />
+                  Offer verified
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Authoritative offer verification is confirmed.</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger>
+                <Badge variant="default" className="bg-emerald-100 text-emerald-700 border-emerald-200 leading-none">
+                  <ShieldCheck className="w-3 h-3 mr-1" />
+                  Seller organization verified
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Authoritative seller-organization verification is confirmed.</p>
+              </TooltipContent>
+            </Tooltip>
             {offer.barSpec?.label && (
               <Badge variant="outline" className="text-xs">
                 {offer.barSpec.label}
@@ -278,12 +229,16 @@ export default function OfferCardDetailed({
           </div>
           <div>
             <div className="text-xs text-muted-foreground">Min Order</div>
-            <div className="font-medium">{minOrderQty.toLocaleString()} {UNIT_LABEL[unit] || offer.unit}</div>
+            <div className="font-medium">
+              {minOrderQty === null
+                ? "Not specified"
+                : `${minOrderQty.toLocaleString()} ${UNIT_LABEL[unit] || offer.unit}`}
+            </div>
             {/* Secondary MOQ conversions */}
-            {unit === 'bar' && offer.barSpec && (
+            {minOrderQty !== null && unit === 'bar' && offer.barSpec && (
               <div className="text-xs text-muted-foreground">≈ {(minOrderQty * toOz(offer.barSpec.weight)!).toLocaleString()} troy oz</div>
             )}
-            {unit === 'bag' && offer.packaging && (
+            {minOrderQty !== null && unit === 'bag' && offer.packaging && (
               <div className="text-xs text-muted-foreground">≈ {(minOrderQty * toKg(offer.packaging)!).toLocaleString()} kg</div>
             )}
           </div>
@@ -296,19 +251,10 @@ export default function OfferCardDetailed({
             <span className="text-gray-700">{offer.location}</span>
           </div>
           
-          {/* Identity block (fixed two lines) */}
           <div className="mt-2">
-            <div className="font-medium truncate" title={companyName}>
-              {companyName}
-            </div>
             <div className="text-sm text-muted-foreground flex items-center gap-2">
-              <span className="truncate"
-                    title={`${delegateName}${delegateRole ? ` (${delegateRole})` : ''}`}>
-                {delegateName}{delegateRole ? ` (${delegateRole})` : ''}
-              </span>
-              {isAuthorized && (
-                <ShieldCheck className="h-4 w-4 text-emerald-600" aria-label="Authorized delegate" />
-              )}
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              <span>Seller identity is not included in the public listing.</span>
             </div>
           </div>
         </div>
@@ -322,18 +268,26 @@ export default function OfferCardDetailed({
               return !label || label === city ? incoterm : `${incoterm} ${label}`;
             };
             
-            const deliveryTerm = offer.deliveryTerms || 'FOB Origin';
-            
-            const paymentTerm = offer.paymentTerms || 'Irrevocable LC';
+            const deliveryTerm = offer.deliveryTerms;
+            const paymentTerm = offer.paymentTerms;
             
             return (
               <>
-                <span className="px-2 py-1 rounded-full bg-gray-100 text-xs">
-                  {deliveryTerm}
-                </span>
-                <span className="px-2 py-1 rounded-full bg-gray-100 text-xs">
-                  {paymentTerm}
-                </span>
+                {deliveryTerm && (
+                  <span className="px-2 py-1 rounded-full bg-gray-100 text-xs">
+                    {deliveryTerm}
+                  </span>
+                )}
+                {paymentTerm && (
+                  <span className="px-2 py-1 rounded-full bg-gray-100 text-xs">
+                    {paymentTerm}
+                  </span>
+                )}
+                {!deliveryTerm && !paymentTerm && (
+                  <span className="text-xs text-muted-foreground">
+                    Terms not specified
+                  </span>
+                )}
               </>
             );
           })()}
