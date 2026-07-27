@@ -77,7 +77,7 @@ export default function Contracts() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Smart Contracts</h1>
           <p className="mt-2 text-gray-600">
-            Manage your blockchain-secured commodity trading contracts
+            Manage commodity contracts with simulated smart-contract tracking
           </p>
         </div>
 
@@ -176,7 +176,7 @@ export default function Contracts() {
                         <div>
                           <p className="text-xs text-gray-600">Total Value</p>
                           <p className="font-medium">
-                            {formatPrice(contract.totalPrice, contract.offer?.currency)}
+                            {formatPrice(contract.totalAmount, contract.currency)}
                           </p>
                         </div>
                       </div>
@@ -216,13 +216,13 @@ export default function Contracts() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                           <Link className="h-4 w-4 text-blue-600" />
-                          <span className="text-sm font-medium">Blockchain Status</span>
+                          <span className="text-sm font-medium">Simulation Status</span>
                         </div>
-                        {contract.blockchainTxHash ? (
+                        {contract.smartContractAddress ? (
                           <div className="text-right">
-                            <p className="text-xs text-gray-600">Transaction Hash</p>
+                            <p className="text-xs text-gray-600">Simulated Contract Address</p>
                             <p className="font-mono text-sm text-blue-600">
-                              {contract.blockchainTxHash.slice(0, 10)}...{contract.blockchainTxHash.slice(-8)}
+                              {contract.smartContractAddress.slice(0, 10)}...{contract.smartContractAddress.slice(-8)}
                             </p>
                           </div>
                         ) : (
@@ -242,10 +242,10 @@ export default function Contracts() {
                           Edit Contract
                         </Button>
                       )}
-                      {contract.blockchainTxHash && (
-                        <Button variant="outline" className="tutela-btn-secondary">
-                          View on Blockchain
-                        </Button>
+                      {contract.smartContractAddress && (
+                        <Badge variant="outline" className="px-3">
+                          Simulation only
+                        </Badge>
                       )}
                     </div>
                   </CardContent>

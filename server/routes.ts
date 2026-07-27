@@ -926,24 +926,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const contract = await storage.createContract(validatedData);
       
       // Log contract signing event
-      BusinessEvents.contractSigned(contract.id, validatedData.buyerId || userId, validatedData.sellerId || userId, validatedData.totalPrice);
+      BusinessEvents.contractSigned(
+        contract.id,
+        validatedData.buyerId || userId,
+        validatedData.sellerId || userId,
+        parseFloat(validatedData.totalAmount),
+      );
       
-      // Create smart contract on blockchain (mock)
+      // Create an explicitly simulated smart contract.
       try {
-        const blockchainTxHash = await createSmartContract(contract);
-        await storage.updateContractStatus(contract.id, "pending_approval");
+        const offer = await storage.getOfferById(contract.offerId);
+        if (!offer) {
+          throw new Error("Contract offer not found for simulation");
+        }
+
+        const simulation = await createSmartContract({
+          buyerId: contract.buyerId,
+          sellerId: contract.sellerId,
+          commodity: offer.commodity.name,
+          quantity: contract.quantity,
+          price: contract.totalAmount,
+          terms: {
+            paymentTerms: contract.paymentTerms,
+            deliveryTerms: contract.deliveryTerms,
+            specifications: contract.specifications,
+          },
+        });
+        await storage.updateContractSmartContract(
+          contract.id,
+          simulation.contractAddress,
+          simulation.status,
+        );
         
         res.status(201).json({ 
-          ...contract, 
-          blockchainTxHash,
-          message: "Contract created and deployed to blockchain" 
+          ...contract,
+          smartContractAddress: simulation.contractAddress,
+          smartContractStatus: simulation.status,
+          simulation: true,
+          message: "Contract created with simulated smart-contract deployment",
         });
       } catch (blockchainError) {
-        console.error("Blockchain deployment failed:", blockchainError);
+        console.error("Smart-contract simulation failed:", blockchainError);
         BusinessEvents.blockchainError(contract.id, blockchainError instanceof Error ? blockchainError.message : 'Unknown blockchain error');
         res.status(201).json({ 
-          ...contract, 
-          message: "Contract created, blockchain deployment pending" 
+          ...contract,
+          simulation: true,
+          message: "Contract created, smart-contract simulation pending",
         });
       }
     } catch (error) {
@@ -970,11 +998,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Contract not found" });
       }
       
-      if (!contract.blockchainTxHash) {
-        return res.json({ status: "not_deployed" });
+      if (!contract.smartContractAddress) {
+        return res.json({
+          status: contract.smartContractStatus || "not_deployed",
+          simulation: true,
+        });
       }
       
-      const blockchainStatus = await getContractStatus(contract.blockchainTxHash);
+      const blockchainStatus = await getContractStatus(contract.smartContractAddress);
       res.json(blockchainStatus);
     } catch (error) {
       console.error("Error fetching blockchain status:", error);

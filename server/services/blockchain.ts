@@ -1,15 +1,14 @@
 // Mock blockchain service for smart contracts
 export interface SmartContractResult {
-  txHash: string;
   contractAddress: string;
   status: "pending" | "deployed" | "failed";
+  simulation: true;
 }
 
 export interface ContractStatus {
-  txHash: string;
-  status: "pending" | "confirmed" | "failed";
-  blockNumber?: number;
-  confirmations?: number;
+  contractAddress: string;
+  status: SmartContractResult["status"];
+  simulation: true;
 }
 
 export async function createSmartContract(
@@ -19,31 +18,33 @@ export async function createSmartContract(
     commodity: string;
     quantity: string;
     price: string;
-    terms: any;
+    terms: {
+      paymentTerms: string | null;
+      deliveryTerms: string | null;
+      specifications: string | null;
+    };
   }
 ): Promise<SmartContractResult> {
-  // Simulate blockchain transaction delay
+  // Simulate smart-contract deployment delay.
   await new Promise(resolve => setTimeout(resolve, 1000));
   
-  // Generate mock transaction hash
-  const txHash = `0x${Math.random().toString(16).substr(2, 64)}`;
+  // This address identifies only the local simulation; no on-chain transaction occurs.
   const contractAddress = `0x${Math.random().toString(16).substr(2, 40)}`;
   
   return {
-    txHash,
     contractAddress,
-    status: "deployed"
+    status: "deployed",
+    simulation: true,
   };
 }
 
-export async function getContractStatus(txHash: string): Promise<ContractStatus> {
-  // Simulate blockchain query delay
+export async function getContractStatus(contractAddress: string): Promise<ContractStatus> {
+  // Simulate a status query delay.
   await new Promise(resolve => setTimeout(resolve, 500));
   
   return {
-    txHash,
-    status: "confirmed",
-    blockNumber: Math.floor(Math.random() * 1000000) + 15000000,
-    confirmations: Math.floor(Math.random() * 100) + 12
+    contractAddress,
+    status: "deployed",
+    simulation: true,
   };
 }

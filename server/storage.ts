@@ -76,6 +76,11 @@ export interface IStorage {
   getContractById(id: string): Promise<(Contract & { offer: Offer & { commodity: Commodity }; buyer: User; seller: User }) | undefined>;
   createContract(contract: NewContract): Promise<Contract>;
   updateContractStatus(id: string, status: string): Promise<void>;
+  updateContractSmartContract(
+    id: string,
+    smartContractAddress: Contract["smartContractAddress"],
+    smartContractStatus: Contract["smartContractStatus"],
+  ): Promise<void>;
   
   // Verification operations
   getVerificationDocuments(userId: string): Promise<VerificationDocument[]>;
@@ -373,6 +378,17 @@ export class DatabaseStorage implements IStorage {
 
   async updateContractStatus(id: string, status: any): Promise<void> {
     await db.update(contracts).set({ status, updatedAt: new Date() }).where(eq(contracts.id, id));
+  }
+
+  async updateContractSmartContract(
+    id: string,
+    smartContractAddress: Contract["smartContractAddress"],
+    smartContractStatus: Contract["smartContractStatus"],
+  ): Promise<void> {
+    await db
+      .update(contracts)
+      .set({ smartContractAddress, smartContractStatus, updatedAt: new Date() })
+      .where(eq(contracts.id, id));
   }
 
   // Verification operations
