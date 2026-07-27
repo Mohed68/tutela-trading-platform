@@ -1,0 +1,525 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Search, Plus, TrendingUp, Package, MapPin, Shield, Star, Eye, FileCheck, User, Globe, Heart, Settings } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import CreateOfferModal from "@/components/offers/CreateOfferModal";
+import OfferDetailModal from "@/components/offers/OfferDetailModal";
+import { OfferVerificationModal } from "@/components/offers/OfferVerificationModal";
+import OfferCardDetailed from "@/components/offers/OfferCardDetailed";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { isUnauthorizedError } from "@/lib/authUtils";
+import { isDemo, getDemoData, getDemoOffers } from "@/lib/demo";
+import { useTypingFreeze } from "@/hooks/useTypingFreeze";
+import { motion, AnimatePresence } from "framer-motion";
+
+export default function Commodities() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [activeTab, setActiveTab] = useState("my-offers"); // Default to user's offers
+  const [cardVariant, setCardVariant] = useState<'detailed' | 'compact'>('detailed'); // Default to detailed view
+  const [isCreateOfferOpen, setIsCreateOfferOpen] = useState(false);
+  const [selectedOffer, setSelectedOffer] = useState(null);
+  const [isOfferDetailOpen, setIsOfferDetailOpen] = useState(false);
+  const [isVerificationOpen, setIsVerificationOpen] = useState(false);
+  const [verificationOffer, setVerificationOffer] = useState(null);
+  const { toast } = useToast();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
+  const freezeAnimations = useTypingFreeze();
+
+  // Get user's own offers (only when authenticated)
+  const { data: userOffers = [], isLoading: userOffersLoading } = useQuery({
+    queryKey: ["/api/offers", { filter: "my" }],
+    queryFn: async () => {
+      const response = await fetch("/api/offers?filter=my");
+      if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+      return response.json();
+    },
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  // Get interested offers (only when authenticated)
+  const { data: interestedOffers = [], isLoading: interestedLoading } = useQuery({
+    queryKey: ["/api/offers", { filter: "interested" }],
+    queryFn: async () => {
+      const response = await fetch("/api/offers?filter=interested");
+      if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+      return response.json();
+    },
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  // Mutation for toggling interested status
+  const toggleInterestedMutation = useMutation({
+    mutationFn: async ({ offerId, isCurrentlyInterested }: { offerId: string, isCurrentlyInterested: boolean }) => {
+      // Check if user is authenticated first
+      if (!isAuthenticated) {
+        throw new Error("401: Authentication required");
+      }
+      
+      if (isCurrentlyInterested) {
+        const response = await fetch(`/api/interested-offers/${offerId}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+      } else {
+        const response = await fetch('/api/interested-offers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offerId })
+        });
+        if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+      }
+    },
+    onSuccess: () => {
+      // Invalidate all offer queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/offers"] });
+      toast({
+        title: "Success",
+        description: "Interested offers updated successfully",
+      });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Login Required",
+          description: "Please log in to save interested offers",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 1500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: "Failed to update interested offers",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isOffersLoading = userOffersLoading || interestedLoading;
+
+  // Function to handle offer creation and trigger verification
+  const handleOfferCreated = (createdOffer: any) => {
+    setVerificationOffer(createdOffer);
+    setIsVerificationOpen(true);
+  };
+
+  // Get current offers based on active tab
+  const getCurrentOffers = () => {
+    switch (activeTab) {
+      case "my-offers":
+        return isAuthenticated ? userOffers : [];
+      case "interested":
+        return isAuthenticated ? interestedOffers : [];
+      default:
+        return isAuthenticated ? userOffers : [];
+    }
+  };
+
+  const currentOffers = getCurrentOffers();
+
+  const { data: commodities = [] } = useQuery({
+    queryKey: ["/api/commodities"],
+    retry: false,
+  });
+
+  const categories = [
+    { value: "all", label: "All Categories" },
+    { value: "fuel_hydrocarbons", label: "Fuel & Hydrocarbons" },
+    { value: "metals_precious", label: "Metals & Precious Metals" },
+    { value: "agricultural", label: "Agricultural Products" },
+  ];
+
+  const getCommodityIcon = (type: string) => {
+    switch (type) {
+      case "fuel_hydrocarbons":
+        return "⛽";
+      case "metals_precious":
+        return "🥇";
+      case "agricultural":
+        return "🌾";
+      default:
+        return "📦";
+    }
+  };
+
+  const getCategoryFromId = (commodityId: string) => {
+    if (["c1", "c4", "c5", "c6"].includes(commodityId)) return "fuel_hydrocarbons";
+    if (["c2", "c7", "c8", "c9"].includes(commodityId)) return "metals_precious";
+    if (["c3", "c10", "c11", "c12"].includes(commodityId)) return "agricultural";
+    return "unknown";
+  };
+
+  const formatPrice = (price: string, currency: string) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency || 'USD',
+    }).format(parseFloat(price));
+  };
+
+  const formatCommodityType = (type: string) => {
+    if (!type) return 'Unknown Category';
+    return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  return (
+    <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>My Offers</h1>
+            <p className="mt-2 text-gray-600">
+              Manage your commodity offers and track interested opportunities
+            </p>
+          </div>
+          <Button onClick={() => setIsCreateOfferOpen(true)} className="tutela-btn-primary mt-4 sm:mt-0">
+            <Plus className="mr-2 h-4 w-4" />
+            Create Offer
+          </Button>
+        </div>
+
+        {/* Market Overview */}
+        {!isOffersLoading && currentOffers.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <Card className="tutela-metric-card">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="p-2 rounded-lg" style={{ background: 'var(--tutela-blue-100)' }}>
+                    <Package className="h-5 w-5" style={{ color: 'var(--tutela-primary)' }} />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">
+                      {activeTab === "my-offers" ? "My Active Offers" : "Interested Offers"}
+                    </p>
+                    <p className="text-2xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>{currentOffers.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="tutela-metric-card">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="p-2 rounded-lg" style={{ background: 'var(--tutela-gray-100)' }}>
+                    <TrendingUp className="h-5 w-5" style={{ color: 'var(--tutela-accent)' }} />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">
+                      {activeTab === "my-offers" ? "My Offers Value" : "Interested Value"}
+                    </p>
+                    <p className="text-2xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>
+                      {new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: 'USD',
+                        notation: 'compact',
+                        maximumFractionDigits: 1
+                      }).format(
+                        currentOffers.reduce((total: number, offer: any) => 
+                          total + (parseFloat(offer.price || '0') * parseFloat(offer.quantity || '0')), 0
+                        )
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="tutela-metric-card">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="p-2 rounded-lg" style={{ background: 'var(--tutela-gray-100)' }}>
+                    <TrendingUp className="h-5 w-5" style={{ color: 'var(--tutela-accent)' }} />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Value</p>
+                    <p className="text-2xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>
+                      {new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: 'USD',
+                        notation: 'compact',
+                        maximumFractionDigits: 1
+                      }).format(
+                        currentOffers.reduce((total: number, offer: any) => 
+                          total + (parseFloat(offer.price || '0') * parseFloat(offer.quantity || '0')), 0
+                        )
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="tutela-metric-card">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="p-2 rounded-lg" style={{ background: 'var(--tutela-blue-50)' }}>
+                    <Shield className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Verified Status</p>
+                    <p className="text-2xl font-bold" style={{ color: 'var(--tutela-secondary)' }}>
+                      {activeTab === "my-offers" ? 
+                        `${(userOffers as any[]).filter((offer: any) => offer.status === 'verified' || offer.status === 'active').length}/${(userOffers as any[]).length}` :
+                        `${currentOffers.filter((offer: any) => offer.verified).length} Verified`
+                      }
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Tabs for different offer views */}
+        <div className="flex items-center justify-between mb-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="my-offers" className="flex items-center space-x-2">
+                <User className="h-4 w-4" />
+                <span>My Offers</span>
+                {isAuthenticated && userOffers.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {userOffers.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="interested" disabled={!isAuthenticated} className="flex items-center space-x-2">
+                <Heart className="h-4 w-4" />
+                <span>Interested</span>
+                {isAuthenticated && interestedOffers.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {interestedOffers.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
+          {/* Card Variant Toggle */}
+          <div className="flex items-center space-x-2 ml-4">
+            <Button
+              variant={cardVariant === 'detailed' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setCardVariant('detailed')}
+              className="px-3"
+            >
+              Detailed
+            </Button>
+            <Button
+              variant={cardVariant === 'compact' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setCardVariant('compact')}
+              className="px-3"
+            >
+              Compact
+            </Button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="mt-6">
+            {/* Offers Grid */}
+            {isOffersLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i} className="tutela-metric-card">
+                <CardHeader>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-gray-200 rounded-full loading-pulse"></div>
+                    <div className="flex-1">
+                      <div className="h-4 bg-gray-200 rounded loading-pulse mb-2"></div>
+                      <div className="h-3 bg-gray-200 rounded loading-pulse w-2/3"></div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="h-3 bg-gray-200 rounded loading-pulse"></div>
+                    <div className="h-3 bg-gray-200 rounded loading-pulse w-3/4"></div>
+                    <div className="h-8 bg-gray-200 rounded loading-pulse"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {(currentOffers as any[]).length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No offers found</h3>
+                <p className="text-gray-600">
+                  Try adjusting your search terms or create a new offer to get started.
+                </p>
+              </div>
+            ) : (
+              (currentOffers as any[]).map((offer: any) => (
+                <OfferCardDetailed
+                  key={offer.id}
+                  offer={offer}
+                  variant={cardVariant}
+                  onViewDetails={(offer) => {
+                    setSelectedOffer(offer);
+                    setIsOfferDetailOpen(true);
+                  }}
+                  onToggleInterested={activeTab === "interested" ? (offerId, isCurrentlyInterested) => {
+                    toggleInterestedMutation.mutate({ 
+                      offerId: offerId, 
+                      isCurrentlyInterested: isCurrentlyInterested 
+                    });
+                  } : undefined}
+                  isInterested={activeTab === "interested"}
+                />
+              ))
+            )}
+          </div>
+        )}
+        </div>
+                          {offer.location}
+                        </div>
+                        
+                        {/* Trader Company Info */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Shield className="mr-2 h-4 w-4 text-green-500" />
+                            <span className="font-medium">{offer.user?.companyName || 'Gulf Energy Trading LLC'}</span>
+                          </div>
+                          <div className="flex items-center space-x-1">
+                            {[...Array(5)].map((_, i) => (
+                              <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Verified Trader Badge */}
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center text-green-700">
+                            <Shield className="mr-2 h-4 w-4 text-green-500" />
+                            <span className="font-medium">Verified Trader</span>
+                          </div>
+                        </div>
+                        
+                        {/* Trader Details */}
+                        <div className="text-sm text-gray-700">
+                          <strong>{offer.user?.firstName || 'Demo'} {offer.user?.lastName || 'Trader'}</strong> • {offer.user?.companyName || 'TUTELA Verified Trader'}
+                        </div>
+                      </div>
+
+                      {/* Terms Preview */}
+                      {(offer.deliveryTerms || offer.paymentTerms) && (
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <div className="text-xs font-semibold text-gray-700 mb-2">TRADING TERMS</div>
+                          {offer.deliveryTerms && (
+                            <div className="text-xs text-gray-600 mb-1">
+                              <strong>Delivery:</strong> {offer.deliveryTerms.substring(0, 45)}...
+                            </div>
+                          )}
+                          {offer.paymentTerms && (
+                            <div className="text-xs text-gray-600">
+                              <strong>Payment:</strong> {offer.paymentTerms.substring(0, 45)}...
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="pt-3 border-t space-y-2">
+                        <div className="flex gap-2">
+                          <Button 
+                            className="flex-1 tutela-btn-primary text-sm font-semibold py-2.5"
+                            onClick={() => {
+                              setSelectedOffer(offer);
+                              setIsOfferDetailOpen(true);
+                            }}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Details
+                          </Button>
+                          
+                          {/* Show remove button for interested offers */}
+                          {activeTab === "interested" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                toggleInterestedMutation.mutate({ 
+                                  offerId: offer.id, 
+                                  isCurrentlyInterested: true 
+                                });
+                              }}
+                              disabled={toggleInterestedMutation.isPending}
+                              className="px-3 text-gray-400 hover:text-red-500 transition-colors"
+                              title="Remove from interested"
+                            >
+                              <Heart className="h-5 w-5 fill-red-500 text-red-500" />
+                            </Button>
+                          )}
+                        </div>
+                        
+                        {activeTab === "my-offers" && offer.status === "pending" && (
+                          <Button 
+                            variant="outline"
+                            className="w-full text-sm font-semibold py-2.5 border-green-200 text-green-700 hover:bg-green-50"
+                            onClick={() => {
+                              setVerificationOffer(offer);
+                              setIsVerificationOpen(true);
+                            }}
+                          >
+                            <FileCheck className="mr-2 h-4 w-4" />
+                            Verify Documents
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        )}
+          </TabsContent>
+        </Tabs>
+
+        {/* Create Offer Modal */}
+        <CreateOfferModal
+          isOpen={isCreateOfferOpen}
+          onClose={() => setIsCreateOfferOpen(false)}
+          commodities={commodities as any[]}
+          onOfferCreated={handleOfferCreated}
+        />
+
+        {/* Offer Detail Modal */}
+        <OfferDetailModal
+          offer={selectedOffer}
+          isOpen={isOfferDetailOpen}
+          onClose={() => {
+            setIsOfferDetailOpen(false);
+            setSelectedOffer(null);
+          }}
+        />
+
+        {/* Offer Verification Modal */}
+        <OfferVerificationModal
+          isOpen={isVerificationOpen}
+          onClose={() => {
+            setIsVerificationOpen(false);
+            setVerificationOffer(null);
+          }}
+          offer={verificationOffer}
+          onVerificationComplete={(offer) => {
+            toast({
+              title: "Verification Submitted",
+              description: "Your offer verification has been submitted successfully",
+            });
+            setIsVerificationOpen(false);
+            setVerificationOffer(null);
+          }}
+        />
+    </div>
+  );
+}

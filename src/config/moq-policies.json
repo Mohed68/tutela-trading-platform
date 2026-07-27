@@ -1,0 +1,72 @@
+{
+  "crude_oil": {
+    "defaultUnit": "bbl",
+    "allowedUnits": ["bbl", "MT"],
+    "minOrder": [
+      {"unit": "bbl", "type": "fixed", "value": 1000, "step": 250},
+      {"unit": "MT", "type": "fixed", "value": 150, "step": 50}
+    ],
+    "notes": "Don't convert MT<->bbl (density varies)."
+  },
+  "diesel": {
+    "defaultUnit": "MT",
+    "allowedUnits": ["MT", "bbl"],
+    "minOrder": [
+      {"unit": "MT", "type": "fixed", "value": 500, "step": 50},
+      {"unit": "bbl", "type": "fixed", "value": 10000, "step": 500}
+    ]
+  },
+  "gasoline": {
+    "defaultUnit": "MT",
+    "allowedUnits": ["MT", "bbl"],
+    "minOrder": [
+      {"unit": "MT", "type": "fixed", "value": 300, "step": 50},
+      {"unit": "bbl", "type": "fixed", "value": 6000, "step": 500}
+    ]
+  },
+  "gold_bullion": {
+    "defaultUnit": "kg",
+    "allowedUnits": ["kg", "gram", "troy_ounce"],
+    "minOrder": [
+      {"unit": "kg", "type": "fixed", "value": 1, "step": 1},
+      {"unit": "troy_ounce", "type": "fixed", "value": 32, "step": 1},
+      {"unit": "gram", "type": "fixed", "value": 1000, "step": 100}
+    ]
+  },
+  "silver_bullion": {
+    "defaultUnit": "troy_ounce",
+    "allowedUnits": ["troy_ounce", "kg"],
+    "minOrder": [
+      {"unit": "troy_ounce", "type": "fixed", "value": 1000, "step": 50},
+      {"unit": "kg", "type": "fixed", "value": 31, "step": 1}
+    ]
+  },
+  "hard_red_winter_wheat": {
+    "defaultUnit": "MT",
+    "allowedUnits": ["MT"],
+    "minOrder": [
+      {"unit": "MT", "type": "fixed", "value": 500, "step": 50}
+    ]
+  },
+  "premium_soybeans": {
+    "defaultUnit": "MT",
+    "allowedUnits": ["MT"],
+    "minOrder": [
+      {"unit": "MT", "type": "fixed", "value": 100, "step": 25}
+    ]
+  },
+  "arabica_coffee_beans": {
+    "defaultUnit": "MT",
+    "allowedUnits": ["MT"],
+    "minOrder": [
+      {"unit": "MT", "type": "fixed", "value": 18, "step": 1}
+    ]
+  },
+  "default": {
+    "defaultUnit": "unit",
+    "allowedUnits": ["unit"],
+    "minOrder": [
+      {"unit": "unit", "type": "by_pct_of_qty", "pct": 0.05, "floor": 10, "step": 1}
+    ]
+  }
+}

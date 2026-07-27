@@ -1,0 +1,512 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Enhanced smooth animations and transitions */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Enhanced button hover effects */
+button, .btn, [role="button"] {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced card hover effects */
+.card, [class*="card"], [class*="rounded"] {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Smooth logo hover effect */
+img[alt*="TUTELA"], img[alt*="Logo"] {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Playful Micro-Interaction Animations */
+@keyframes floating {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.02); opacity: 0.9; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+@keyframes slideInLeft {
+  0% { transform: translateX(-100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInRight {
+  0% { transform: translateX(100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInTop {
+  0% { transform: translateY(-100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInBottom {
+  0% { transform: translateY(100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes ripple {
+  to { transform: scale(4); opacity: 0; }
+}
+
+@keyframes loadingDots {
+  0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+  40% { transform: scale(1.2); opacity: 1; }
+}
+
+@keyframes morphing {
+  0%, 100% { border-radius: 50%; transform: rotate(0deg); }
+  25% { border-radius: 0 50% 50% 50%; transform: rotate(90deg); }
+  50% { border-radius: 50%; transform: rotate(180deg); }
+  75% { border-radius: 50% 0 50% 50%; transform: rotate(270deg); }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotateZ(0); }
+  /* Removed dizzy motion - now static for readability */
+}
+
+/* Interactive hover effects */
+.animate-on-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-on-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
+}
+
+/* Gradient text animation */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.gradient-text {
+  background: linear-gradient(-45deg, #10b981, #3b82f6, #8b5cf6, #f59e0b);
+  background-size: 400% 400%;
+  animation: gradientShift 3s ease infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Smooth enter animations */
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-scale {
+  animation: fadeInScale 0.5s ease-out forwards;
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Button special effects */
+.btn-sparkle {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-sparkle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.btn-sparkle:hover::before {
+  left: 100%;
+}
+
+/* Loading states */
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* GPU hint for smoother transforms and jitter prevention */
+.animated-layer {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+/* Stable card heights to prevent layout shifts */
+.stable-card {
+  min-height: 420px;
+  contain: layout paint;
+}
+
+/* Reserved height containers to prevent jumps */
+.reserved-height-40 {
+  min-height: 40px;
+}
+
+.reserved-height-60 {
+  min-height: 60px;
+}
+
+:root {
+  --background: hsl(0, 0%, 100%);
+  --foreground: hsl(20, 14.3%, 4.1%);
+  --muted: hsl(60, 4.8%, 95.9%);
+  --muted-foreground: hsl(25, 5.3%, 44.7%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(20, 14.3%, 4.1%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(20, 14.3%, 4.1%);
+  --border: hsl(20, 5.9%, 90%);
+  --input: hsl(20, 5.9%, 90%);
+  --primary: hsl(207, 90%, 54%);
+  --primary-foreground: hsl(211, 100%, 99%);
+  --secondary: hsl(60, 4.8%, 95.9%);
+  --secondary-foreground: hsl(24, 9.8%, 10%);
+  --accent: hsl(60, 4.8%, 95.9%);
+  --accent-foreground: hsl(24, 9.8%, 10%);
+  --destructive: hsl(0, 84.2%, 60.2%);
+  --destructive-foreground: hsl(60, 9.1%, 97.8%);
+  --ring: hsl(20, 14.3%, 4.1%);
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: hsl(240, 10%, 3.9%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 3.7%, 15.9%);
+  --muted-foreground: hsl(240, 5%, 64.9%);
+  --popover: hsl(240, 10%, 3.9%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 3.9%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 3.7%, 15.9%);
+  --input: hsl(240, 3.7%, 15.9%);
+  --primary: hsl(207, 90%, 54%);
+  --primary-foreground: hsl(211, 100%, 99%);
+  --secondary: hsl(240, 3.7%, 15.9%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --accent: hsl(240, 3.7%, 15.9%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 62.8%, 30.6%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: hsl(240, 4.9%, 83.9%);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+/* TUTELA Brand Colors - Based on Official Logo */
+:root {
+  /* Primary brand colors from logo */
+  --tutela-primary: hsl(220, 85%, 55%); /* Bright blue from logo */
+  --tutela-secondary: hsl(220, 20%, 25%); /* Dark charcoal from logo */
+  --tutela-accent: hsl(220, 85%, 65%); /* Lighter blue accent */
+  
+  /* Extended palette */
+  --tutela-blue-50: hsl(220, 100%, 97%);
+  --tutela-blue-100: hsl(220, 95%, 94%);
+  --tutela-blue-200: hsl(220, 90%, 88%);
+  --tutela-blue-500: hsl(220, 85%, 55%);
+  --tutela-blue-600: hsl(220, 85%, 50%);
+  --tutela-blue-700: hsl(220, 85%, 45%);
+  
+  --tutela-gray-50: hsl(220, 15%, 97%);
+  --tutela-gray-100: hsl(220, 15%, 94%);
+  --tutela-gray-200: hsl(220, 15%, 88%);
+  --tutela-gray-800: hsl(220, 20%, 25%);
+  --tutela-gray-900: hsl(220, 25%, 15%);
+  
+  /* Status colors that complement the brand */
+  --tutela-success: hsl(145, 65%, 45%);
+  --tutela-warning: hsl(45, 85%, 55%);
+  --tutela-error: hsl(0, 75%, 55%);
+  
+  /* Gradient from logo */
+  --tutela-gradient: linear-gradient(135deg, var(--tutela-secondary) 0%, var(--tutela-primary) 100%);
+}
+
+/* TUTELA Brand Components */
+.tutela-sidebar {
+  @apply w-64 border-r;
+  background: linear-gradient(180deg, var(--tutela-gray-50) 0%, white 100%);
+  border-color: var(--tutela-gray-200);
+}
+
+.tutela-nav-item {
+  @apply flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 mb-1 mx-2;
+  color: var(--tutela-gray-800);
+}
+
+.tutela-nav-item:hover {
+  background: var(--tutela-blue-50);
+  color: var(--tutela-primary);
+}
+
+.tutela-nav-item.active {
+  background: var(--tutela-gradient);
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.tutela-metric-card {
+  @apply bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300 p-6;
+  border-color: var(--tutela-gray-200);
+}
+
+.tutela-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(59, 130, 246, 0.1);
+}
+
+.tutela-btn-primary {
+  @apply px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center;
+  background: var(--tutela-gradient);
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+.tutela-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
+}
+
+.tutela-btn-secondary {
+  @apply px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center border-2;
+  background: white;
+  color: var(--tutela-secondary);
+  border-color: var(--tutela-gray-200);
+}
+
+.tutela-btn-secondary:hover {
+  background: var(--tutela-blue-50);
+  border-color: var(--tutela-primary);
+  color: var(--tutela-primary);
+}
+
+.tutela-logo {
+  @apply flex items-center space-x-3;
+}
+
+.tutela-logo-icon {
+  @apply w-10 h-10 rounded-lg flex items-center justify-center;
+  background: var(--tutela-gradient);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+.tutela-insight-card {
+  @apply border rounded-xl p-6 transition-all duration-200;
+}
+
+.tutela-insight-card.info {
+  background: var(--tutela-blue-50);
+  border-color: var(--tutela-blue-200);
+}
+
+.tutela-insight-card.success {
+  background: var(--tutela-gray-50);
+  border-color: var(--tutela-success);
+}
+
+.tutela-insight-card.warning {
+  background: hsl(45, 100%, 97%);
+  border-color: var(--tutela-warning);
+}
+
+/* Modern gradient overlays */
+.tutela-header-gradient {
+  background: linear-gradient(135deg, var(--tutela-blue-50) 0%, white 100%);
+}
+
+.tutela-card-header {
+  background: linear-gradient(135deg, var(--tutela-blue-50) 0%, var(--tutela-gray-50) 100%);
+}
+
+.tutela-insight-card.warning {
+  @apply bg-yellow-50 border-yellow-200;
+}
+
+.tutela-insight-card.error {
+  @apply bg-red-50 border-red-200;
+}
+
+/* Status badge styles */
+.status-badge {
+  @apply inline-flex px-2 py-1 text-xs font-semibold rounded-full;
+}
+
+.status-badge.active {
+  @apply bg-green-100 text-green-800;
+}
+
+.status-badge.pending {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.status-badge.closed {
+  @apply bg-gray-100 text-gray-800;
+}
+
+.status-badge.sell {
+  @apply bg-green-100 text-green-800;
+}
+
+.status-badge.buy {
+  @apply bg-blue-100 text-blue-800;
+}
+
+/* Table styles */
+.tutela-table {
+  @apply min-w-full divide-y divide-gray-200;
+}
+
+.tutela-table thead {
+  @apply bg-gray-50;
+}
+
+.tutela-table th {
+  @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+}
+
+.tutela-table td {
+  @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+}
+
+.tutela-table tr:hover {
+  @apply bg-gray-50;
+}
+
+/* Loading states */
+.loading-pulse {
+  @apply animate-pulse bg-gray-200 rounded;
+}
+
+/* Form styles */
+.tutela-form-group {
+  @apply space-y-2;
+}
+
+.tutela-form-label {
+  @apply block text-sm font-medium text-gray-700;
+}
+
+.tutela-form-input {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200;
+}
+
+.tutela-form-select {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200;
+}
+
+.tutela-form-textarea {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-200;
+}
+
+/* Modal styles */
+.tutela-modal-overlay {
+  @apply fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50;
+}
+
+.tutela-modal-content {
+  @apply relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white;
+}
+
+/* Activity timeline */
+.activity-dot {
+  @apply w-2 h-2 rounded-full mt-2;
+}
+
+.activity-dot.success {
+  @apply bg-green-500;
+}
+
+.activity-dot.info {
+  @apply bg-blue-500;
+}
+
+.activity-dot.warning {
+  @apply bg-yellow-500;
+}
+
+.activity-dot.error {
+  @apply bg-red-500;
+}

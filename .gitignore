@@ -1,0 +1,142 @@
+# Dependencies and package-manager state
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+!.yarn/patches/
+!.yarn/plugins/
+!.yarn/releases/
+!.yarn/sdks/
+!.yarn/versions/
+
+# Compiled and generated build output
+dist/
+build/
+out/
+.output/
+.vercel/
+.netlify/
+*.tsbuildinfo
+
+# Test, coverage, and browser-test artifacts
+coverage/
+*.lcov
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+cypress/screenshots/
+cypress/videos/
+
+# Tool and framework caches
+.vite/
+.cache/
+cache/
+.parcel-cache/
+.turbo/
+.eslintcache
+.stylelintcache
+.swc/
+.rollup.cache/
+node_modules/.cache/
+
+# Logs and runtime process state
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+pids/
+*.pid
+*.pid.lock
+*.seed
+
+# Environment files: commit examples only
+.env
+.env.*
+!.env.example
+!.env.*.example
+client/.env
+client/.env.*
+server/.env
+server/.env.*
+
+# Local credentials, certificates, and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials*.json
+service-account*.json
+service_account*.json
+secrets*.json
+*-credentials.json
+
+# Local databases and runtime uploads
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+uploads/*
+!uploads/.gitkeep
+
+# Temporary, backup, and patch files
+tmp/
+temp/
+.tmp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.rej
+*.patch
+*~
+server/temp_clean.ts
+fix_offers.js
+backup-auth-migration/
+
+# Generated audits and reports
+lighthouse-*-report.html
+lighthouse-summary.json
+audit-*.csv
+backfill-*.csv
+scripts/*backfill*-report-*.csv
+reports/generated/
+artifacts/
+
+# Imported development-session artifacts (not runtime assets)
+attached_assets/
+generated-icon.png
+
+# Editor and IDE state
+.vscode/
+.idea/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# Operating-system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Local platform metadata not required by Render
+.replit
+.upm/
+replit.nix
