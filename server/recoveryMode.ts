@@ -10,6 +10,12 @@ const SAFE_RECOVERY_API_ROUTES = new Set([
   "/api/offers/search",
   "/api/offers/summary",
   "/api/auth/user",
+  "/api/dashboard/metrics",
+]);
+
+const SAFE_RECOVERY_AUTH_WRITES = new Map([
+  ["/api/auth/login", new Set(["POST"])],
+  ["/api/auth/logout", new Set(["POST"])],
 ]);
 
 export type RecoveryEnvironment = Readonly<
@@ -49,6 +55,9 @@ export function shouldInitializeExternalMonitoring(
 }
 
 export function isSafeRecoveryRequest(method: string, path: string): boolean {
+  if (SAFE_RECOVERY_AUTH_WRITES.get(path)?.has(method)) {
+    return true;
+  }
   return (
     (method === "GET" || method === "HEAD") &&
     SAFE_RECOVERY_API_ROUTES.has(path)

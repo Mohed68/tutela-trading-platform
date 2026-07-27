@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getAuth } from "@/lib/session";
 import { isDemo, disableDemo } from "@/lib/demo";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface AppHeaderProps {
   onMenuToggle: () => void;
@@ -36,13 +37,14 @@ export function AppHeader({ onMenuToggle, isMenuOpen }: AppHeaderProps) {
   const demoMode = isDemo();
   const freezeAnimations = useTypingFreeze();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (demoMode) {
       disableDemo();
       setLocation("/");
     } else {
-      // For real logout, redirect to logout endpoint
-      window.location.href = "/api/logout";
+      await apiRequest("POST", "/api/auth/logout");
+      queryClient.setQueryData(["/api/auth/user"], null);
+      setLocation("/home");
     }
   };
 
