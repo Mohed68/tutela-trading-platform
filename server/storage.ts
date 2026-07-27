@@ -35,6 +35,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql } from "drizzle-orm";
+import type { AuthenticationIdentity } from "@shared/auth";
 
 type UpsertUser = Partial<NewUser> & { id: string };
 type InsertOrder = typeof orders.$inferInsert;
@@ -44,8 +45,9 @@ export interface IStorage {
   // User operations (mandatory for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getAuthenticationUser(id: string): Promise<AuthenticationIdentity | undefined>;
+  getAuthenticationUserByEmail(email: string): Promise<AuthenticationIdentity | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
-  createLocalUser(user: NewUser & { email: string; passwordHash: string }): Promise<User>;
   updateLastLogin(userId: string): Promise<void>;
   updateUserPreferences(userId: string, preferences: {
     language?: string;
@@ -164,12 +166,37 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async createLocalUser(userData: NewUser & { email: string; passwordHash: string }): Promise<User> {
-    const [user] = await db.insert(users).values({
-      ...userData,
-      email: userData.email.trim().toLowerCase(),
-      authProvider: "local",
-    }).returning();
+  private authenticationProjection() {
+    return {
+      id: users.id,
+      email: users.email,
+      passwordHash: users.passwordHash,
+      authProvider: users.authProvider,
+      lastLoginAt: users.lastLoginAt,
+      loginEnabled: users.loginEnabled,
+      credentialStatus: users.credentialStatus,
+      recoveryProvenance: users.recoveryProvenance,
+      role: users.role,
+    };
+  }
+
+  async getAuthenticationUser(
+    id: string,
+  ): Promise<AuthenticationIdentity | undefined> {
+    const [user] = await db
+      .select(this.authenticationProjection())
+      .from(users)
+      .where(eq(users.id, id));
+    return user;
+  }
+
+  async getAuthenticationUserByEmail(
+    email: string,
+  ): Promise<AuthenticationIdentity | undefined> {
+    const [user] = await db
+      .select(this.authenticationProjection())
+      .from(users)
+      .where(eq(users.email, email.trim().toLowerCase()));
     return user;
   }
 

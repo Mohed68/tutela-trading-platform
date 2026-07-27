@@ -5,8 +5,10 @@ const REQUIRED_USER_COLUMNS = [
   "email",
   "password_hash",
   "auth_provider",
-  "email_verified_at",
   "last_login_at",
+  "login_enabled",
+  "credential_status",
+  "recovery_provenance",
 ] as const;
 
 export interface DatabaseSchemaVerification {

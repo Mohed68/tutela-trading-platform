@@ -2,11 +2,14 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { ClientEvents, UserContext, ClientPerformance } from "@/lib/monitoring";
 import { useAuth } from "./useAuth";
-import type { User } from "@shared/schema";
+import type { CurrentUserDto } from "@shared/auth";
 
 export function useMonitoring() {
   const [location] = useLocation();
-  const { user, isAuthenticated } = useAuth() as { user: User | null; isAuthenticated: boolean };
+  const { user, isAuthenticated } = useAuth() as {
+    user: CurrentUserDto | null;
+    isAuthenticated: boolean;
+  };
 
   // Track page views
   useEffect(() => {
@@ -20,7 +23,7 @@ export function useMonitoring() {
   // Set user context when authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
-      UserContext.setUser(user.id, user.email || undefined, user.currentPlan || undefined);
+      UserContext.setUser(user.id);
     } else {
       UserContext.clearUser();
     }
