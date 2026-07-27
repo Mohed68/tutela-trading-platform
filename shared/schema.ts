@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   jsonb,
   pgTable,
@@ -10,6 +11,7 @@ import {
   integer,
   boolean,
   pgEnum,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -239,6 +241,28 @@ export const interestedOffers = pgTable("interested_offers", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const partnerRelations = pgTable("partner_relations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requesterId: varchar("requester_id").notNull().references(() => users.id),
+  partnerId: varchar("partner_id").notNull().references(() => users.id),
+  status: varchar("status", {
+    enum: ["pending", "approved", "rejected"],
+  }).notNull().default("pending"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("partner_relations_requester_idx").on(table.requesterId),
+  index("partner_relations_partner_idx").on(table.partnerId),
+  check("partner_relations_no_self", sql`${table.requesterId} <> ${table.partnerId}`),
+  uniqueIndex("partner_relations_active_pair_unique")
+    .on(
+      sql`LEAST(${table.requesterId}, ${table.partnerId})`,
+      sql`GREATEST(${table.requesterId}, ${table.partnerId})`,
+    )
+    .where(sql`${table.status} IN ('pending', 'approved')`),
+]);
+
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   contractId: varchar("contract_id").notNull().references(() => contracts.id),
@@ -315,6 +339,8 @@ export type Commodity = typeof commodities.$inferSelect;
 export type NewCommodity = z.infer<typeof insertCommoditySchema>;
 export type InterestedOffer = typeof interestedOffers.$inferSelect;
 export type NewInterestedOffer = z.infer<typeof insertInterestedOfferSchema>;
+export type PartnerRelation = typeof partnerRelations.$inferSelect;
+export type NewPartnerRelation = typeof partnerRelations.$inferInsert;
 export type Order = typeof orders.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type ActivityLog = typeof auditLogs.$inferSelect; // Use audit logs as activity logs

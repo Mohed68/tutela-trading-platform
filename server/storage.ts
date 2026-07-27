@@ -6,6 +6,7 @@ import {
   contracts,
   verificationDocuments,
   interestedOffers,
+  partnerRelations,
   auditLogs,
   temporaryDocumentLinks,
   type User,
@@ -21,6 +22,7 @@ import {
   type NewVerificationDocument,
   type InterestedOffer,
   type NewInterestedOffer,
+  type PartnerRelation,
   type AuditLog,
   type ActivityLog,
   type TemporaryDocumentLink,
@@ -30,16 +32,7 @@ import { eq, desc, and, or, like, sql } from "drizzle-orm";
 
 type UpsertUser = Partial<NewUser> & { id: string };
 type InsertOrder = typeof orders.$inferInsert;
-
-interface PartnerRelation {
-  id: string;
-  requesterId: string;
-  partnerId: string;
-  status: string | null;
-  notes: string | null;
-  createdAt: Date | null;
-  updatedAt: Date | null;
-}
+type PartnerRelationStatus = NonNullable<PartnerRelation["status"]>;
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
@@ -87,7 +80,7 @@ export interface IStorage {
   // Partner operations
   getPartnerRelations(userId: string): Promise<(PartnerRelation & { requester: User; partner: User })[]>;
   createPartnerRelation(requesterId: string, partnerId: string, notes?: string): Promise<PartnerRelation>;
-  updatePartnerRelationStatus(id: string, status: string): Promise<void>;
+  updatePartnerRelationStatus(id: string, status: PartnerRelationStatus): Promise<void>;
   
   // Activity operations
   getRecentActivity(userId: string, limit?: number): Promise<ActivityLog[]>;
@@ -436,7 +429,7 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updatePartnerRelationStatus(id: string, status: string): Promise<void> {
+  async updatePartnerRelationStatus(id: string, status: PartnerRelationStatus): Promise<void> {
     await db.update(partnerRelations).set({ status, updatedAt: new Date() }).where(eq(partnerRelations.id, id));
   }
 
