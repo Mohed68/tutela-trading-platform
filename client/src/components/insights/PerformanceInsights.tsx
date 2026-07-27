@@ -58,7 +58,7 @@ export default function PerformanceInsights() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: latestReport, isLoading } = useQuery({
+  const { data: latestReport, isLoading } = useQuery<PerformanceReport>({
     queryKey: ["/api/insights/latest"],
     retry: false,
   });
@@ -66,7 +66,7 @@ export default function PerformanceInsights() {
   const generateInsightsMutation = useMutation({
     mutationFn: async () => {
       setIsGenerating(true);
-      return await apiRequest("/api/insights/generate", "POST");
+      return await apiRequest("POST", "/api/insights/generate");
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/insights/latest"] });

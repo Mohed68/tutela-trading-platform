@@ -174,10 +174,7 @@ export default function MyOffers() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ offerId, status }: { offerId: string; status: string }) => {
-      await apiRequest(`/api/offers/${offerId}/status`, {
-        method: 'PATCH',
-        body: { status },
-      });
+      await apiRequest("PATCH", `/api/offers/${offerId}/status`, { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/offers'] });

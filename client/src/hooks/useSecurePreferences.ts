@@ -16,13 +16,7 @@ export function useSecurePreferences() {
 
   const updatePreferences = useMutation({
     mutationFn: async (preferences: UserPreferences) => {
-      return await apiRequest("/api/auth/preferences", {
-        method: "PATCH",
-        body: JSON.stringify(preferences),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      return await apiRequest("PATCH", "/api/auth/preferences", preferences);
     },
     onSuccess: (updatedUser) => {
       // Invalidate and refetch user data

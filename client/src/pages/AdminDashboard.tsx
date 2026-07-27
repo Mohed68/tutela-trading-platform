@@ -146,9 +146,10 @@ export default function AdminDashboard() {
 
   const handleKYBDecision = async (companyId: string, decision: string, reason: string) => {
     try {
-      await apiRequest(`/admin/kyb/${companyId}/decision`, {
-        method: 'POST',
-        body: { decision, reason, verificationLevel: decision === 'enhanced' ? 'enhanced' : 'basic' }
+      await apiRequest("POST", `/admin/kyb/${companyId}/decision`, {
+        decision,
+        reason,
+        verificationLevel: decision === 'enhanced' ? 'enhanced' : 'basic',
       });
       // Refresh data
       window.location.reload();
@@ -159,9 +160,9 @@ export default function AdminDashboard() {
 
   const handleOfferModeration = async (offerId: string, action: string, reason: string) => {
     try {
-      await apiRequest(`/admin/offers/${offerId}/moderate`, {
-        method: 'POST',
-        body: { action, reason }
+      await apiRequest("POST", `/admin/offers/${offerId}/moderate`, {
+        action,
+        reason,
       });
       setModerationDialog({ open: false, offer: null });
       setModerationReason('');

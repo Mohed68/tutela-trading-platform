@@ -55,7 +55,7 @@ export default function PlaceOrderModal({ offer, isOpen, onClose }: PlaceOrderMo
 
   const placeOrderMutation = useMutation({
     mutationFn: async (orderData: any) => {
-      return apiRequest("/api/orders", "POST", orderData);
+      return apiRequest("POST", "/api/orders", orderData);
     },
     onSuccess: () => {
       toast({
