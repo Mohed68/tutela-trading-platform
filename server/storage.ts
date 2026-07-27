@@ -22,12 +22,24 @@ import {
   type InterestedOffer,
   type NewInterestedOffer,
   type AuditLog,
+  type ActivityLog,
   type TemporaryDocumentLink,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql } from "drizzle-orm";
 
 type UpsertUser = Partial<NewUser> & { id: string };
+type InsertOrder = typeof orders.$inferInsert;
+
+interface PartnerRelation {
+  id: string;
+  requesterId: string;
+  partnerId: string;
+  status: string | null;
+  notes: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+}
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
@@ -46,12 +58,12 @@ export interface IStorage {
   // Commodity operations
   getCommodities(): Promise<Commodity[]>;
   getCommodityById(id: string): Promise<Commodity | undefined>;
-  createCommodity(commodity: InsertCommodity): Promise<Commodity>;
+  createCommodity(commodity: NewCommodity): Promise<Commodity>;
   
   // Offer operations
-  getOffers(userId?: string): Promise<(Offer & { commodity: Commodity; user: User })[]>;
+  getOffers(userId?: string, includeHidden?: boolean): Promise<(Offer & { commodity: Commodity; user: User })[]>;
   getOfferById(id: string): Promise<(Offer & { commodity: Commodity; user: User }) | undefined>;
-  createOffer(userId: string, offer: InsertOffer): Promise<Offer>;
+  createOffer(userId: string, offer: NewOffer): Promise<Offer>;
   updateOfferStatus(id: string, status: string): Promise<void>;
   searchOffers(query: string, category?: string): Promise<(Offer & { commodity: Commodity; user: User })[]>;
   
@@ -63,12 +75,12 @@ export interface IStorage {
   // Contract operations
   getContracts(userId?: string): Promise<(Contract & { offer: Offer & { commodity: Commodity }; buyer: User; seller: User })[]>;
   getContractById(id: string): Promise<(Contract & { offer: Offer & { commodity: Commodity }; buyer: User; seller: User }) | undefined>;
-  createContract(contract: InsertContract): Promise<Contract>;
+  createContract(contract: NewContract): Promise<Contract>;
   updateContractStatus(id: string, status: string): Promise<void>;
   
   // Verification operations
   getVerificationDocuments(userId: string): Promise<VerificationDocument[]>;
-  createVerificationDocument(userId: string, document: InsertVerificationDocument): Promise<VerificationDocument>;
+  createVerificationDocument(userId: string, document: NewVerificationDocument): Promise<VerificationDocument>;
   updateVerificationStatus(id: string, status: string, aiResult?: any, notes?: string): Promise<void>;
   getPendingVerifications(): Promise<(VerificationDocument & { user: User })[]>;
   
@@ -196,13 +208,13 @@ export class DatabaseStorage implements IStorage {
     return commodity;
   }
 
-  async createCommodity(commodity: InsertCommodity): Promise<Commodity> {
+  async createCommodity(commodity: NewCommodity): Promise<Commodity> {
     const [created] = await db.insert(commodities).values(commodity).returning();
     return created;
   }
 
   // Offer operations
-  async getOffers(userId?: string): Promise<(Offer & { commodity: Commodity; user: User })[]> {
+  async getOffers(userId?: string, _includeHidden?: boolean): Promise<(Offer & { commodity: Commodity; user: User })[]> {
     const baseQuery = db
       .select()
       .from(offers)
@@ -238,7 +250,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async createOffer(userId: string, offer: InsertOffer): Promise<Offer> {
+  async createOffer(userId: string, offer: NewOffer): Promise<Offer> {
     const [created] = await db.insert(offers).values({ ...offer, userId }).returning();
     
     await this.logActivity(userId, "create_offer", "offer", created.id);
@@ -331,7 +343,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async createContract(contract: InsertContract): Promise<Contract> {
+  async createContract(contract: NewContract): Promise<Contract> {
     const [created] = await db.insert(contracts).values(contract).returning();
     
     await this.logActivity(contract.buyerId, "create_contract", "contract", created.id);
@@ -352,7 +364,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(verificationDocuments.uploadedAt));
   }
 
-  async createVerificationDocument(userId: string, document: InsertVerificationDocument): Promise<VerificationDocument> {
+  async createVerificationDocument(userId: string, document: NewVerificationDocument): Promise<VerificationDocument> {
     const [created] = await db
       .insert(verificationDocuments)
       .values({ ...document, userId })
@@ -542,15 +554,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Admin methods
-  async getAllUsers(filters?: { adminRole?: string; kybStatus?: string; }): Promise<User[]> {
-    let query = db.select().from(users);
+  async getAllUsers(filters?: { adminRole?: string; kybStatus?: string }): Promise<User[]> {
+    let query = db.select().from(users).$dynamic();
     const conditions = [];
     
     if (filters?.adminRole) {
-      conditions.push(eq(users.adminRole, filters.adminRole));
+      conditions.push(sql`${users.adminRole} = ${filters.adminRole}`);
     }
     if (filters?.kybStatus) {
-      conditions.push(eq(users.kybStatus, filters.kybStatus));
+      conditions.push(sql`${users.kybStatus} = ${filters.kybStatus}`);
     }
     
     if (conditions.length > 0) {
@@ -560,7 +572,7 @@ export class DatabaseStorage implements IStorage {
     return query.orderBy(desc(users.createdAt));
   }
 
-  async updateUserAdminRole(userId: string, adminRole: string | null): Promise<User> {
+  async updateUserAdminRole(userId: string, adminRole: User["adminRole"]): Promise<User> {
     const [updatedUser] = await db
       .update(users)
       .set({ adminRole })
@@ -603,7 +615,12 @@ export class DatabaseStorage implements IStorage {
     return updatedUser;
   }
 
-  async moderateOffer(offerId: string, moderationStatus: string, reason?: string, moderatedBy?: string): Promise<Offer> {
+  async moderateOffer(
+    offerId: string,
+    moderationStatus: NonNullable<Offer["moderationStatus"]>,
+    reason?: string,
+    moderatedBy?: string,
+  ): Promise<Offer> {
     const [updatedOffer] = await db
       .update(offers)
       .set({
@@ -719,7 +736,7 @@ export class DatabaseStorage implements IStorage {
     limit?: number;
     offset?: number;
   }): Promise<AuditLog[]> {
-    let query = db.select().from(auditLogs);
+    let query = db.select().from(auditLogs).$dynamic();
     const conditions = [];
     
     if (filters?.userId) {
@@ -799,8 +816,11 @@ export class DatabaseStorage implements IStorage {
       .where(sql`expires_at < NOW()`);
   }
 
-  async getKYBQueue(filters?: { status?: string; assignedTo?: string; }): Promise<User[]> {
-    let query = db.select().from(users);
+  async getKYBQueue(filters?: {
+    status?: NonNullable<User["kybStatus"]>;
+    assignedTo?: NonNullable<User["adminRole"]>;
+  }): Promise<User[]> {
+    const query = db.select().from(users);
     const conditions = [
       or(
         eq(users.kybStatus, 'pending'),
