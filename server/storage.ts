@@ -2,6 +2,7 @@ import {
   users,
   commodities,
   offers,
+  offerVerifications,
   orders,
   contracts,
   verificationDocuments,
@@ -15,6 +16,8 @@ import {
   type NewCommodity,
   type Offer,
   type NewOffer,
+  type OfferVerification,
+  type NewOfferVerification,
   type Order,
   type Contract,
   type NewContract,
@@ -94,13 +97,13 @@ export interface IStorage {
 
   // Offer verification operations
   createOfferVerification(verification: {
-    offerId: string;
-    userId: string;
-    documents: string;
-    notes: string;
-    status: string;
-    submittedAt: Date;
-  }): Promise<any>;
+    offerId: NewOfferVerification["offerId"];
+    submittedBy: NewOfferVerification["submittedBy"];
+    documents: NewOfferVerification["documents"];
+    notes: NewOfferVerification["notes"];
+    status: NewOfferVerification["status"];
+    submittedAt: NewOfferVerification["submittedAt"];
+  }): Promise<OfferVerification>;
   
   // Dashboard metrics
   getDashboardMetrics(userId: string): Promise<{
@@ -256,6 +259,20 @@ export class DatabaseStorage implements IStorage {
 
   async updateOfferStatus(id: string, status: any): Promise<void> {
     await db.update(offers).set({ status, updatedAt: new Date() }).where(eq(offers.id, id));
+  }
+
+  async createOfferVerification(
+    verification: Pick<
+      NewOfferVerification,
+      "offerId" | "submittedBy" | "documents" | "notes" | "status" | "submittedAt"
+    >,
+  ): Promise<OfferVerification> {
+    const [created] = await db
+      .insert(offerVerifications)
+      .values(verification)
+      .returning();
+
+    return created;
   }
 
   async searchOffers(query: string, category?: string): Promise<(Offer & { commodity: Commodity; user: User })[]> {

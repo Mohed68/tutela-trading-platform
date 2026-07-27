@@ -687,7 +687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store verification submission
       const verification = await storage.createOfferVerification({
         offerId,
-        userId,
+        submittedBy: userId,
         documents: JSON.stringify(documents),
         notes: notes || '',
         status: 'pending',
@@ -746,7 +746,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const offer = await storage.createOffer(userId, validatedData);
       
       // Log business event for offer creation
-      BusinessEvents.offerCreated(userId, offer.commodityId, offer.type, parseFloat(offer.quantity), offer.currency, parseFloat(offer.pricePerUnit));
+      BusinessEvents.offerCreated(
+        userId,
+        offer.id,
+        offer.commodityId,
+        parseFloat(offer.quantity) * parseFloat(offer.pricePerUnit),
+      );
       
       // Log activity
       await storage.logActivity(userId, "create_offer", "offer", offer.id);
@@ -755,7 +760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         await storage.createOfferVerification({
           offerId: offer.id,
-          userId,
+          submittedBy: userId,
           documents: JSON.stringify({}), // Empty documents initially
           notes: 'Automatic verification started after offer creation - pending document upload',
           status: 'pending',

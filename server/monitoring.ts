@@ -129,6 +129,19 @@ export const BusinessEvents = {
     Sentry.captureMessage(`Offer Created: ${commodity} - $${value}`, "info");
   },
 
+  offerVerificationSubmitted: (userId: string, offerId: string, documentCount: number) => {
+    Sentry.addBreadcrumb({
+      category: "trading",
+      message: "Offer verification submitted",
+      level: "info",
+      data: { userId, offerId, documentCount },
+    });
+
+    Sentry.setTag("event_type", "offer_verification_submitted");
+    Sentry.setContext("offer_verification", { offerId, documentCount });
+    Sentry.captureMessage("Offer Verification Submitted", "info");
+  },
+
   contractSigned: (contractId: string, buyerId: string, sellerId: string, value: number) => {
     Sentry.addBreadcrumb({
       category: "trading",

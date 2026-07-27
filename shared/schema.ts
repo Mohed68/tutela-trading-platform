@@ -140,6 +140,21 @@ export const offers = pgTable("offers", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const offerVerifications = pgTable("offer_verifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  offerId: varchar("offer_id").notNull().references(() => offers.id),
+  submittedBy: varchar("submitted_by").notNull().references(() => users.id),
+  documents: text("documents").notNull(),
+  notes: text("notes"),
+  status: varchar("status", { enum: ["pending"] }).notNull().default("pending"),
+  submittedAt: timestamp("submitted_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("offer_verifications_offer_idx").on(table.offerId),
+  index("offer_verifications_submitter_idx").on(table.submittedBy),
+]);
+
 // Audit Log Table
 export const auditLogs = pgTable("audit_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -331,6 +346,8 @@ export type User = typeof users.$inferSelect;
 export type NewUser = z.infer<typeof insertUserSchema>;
 export type Offer = typeof offers.$inferSelect;
 export type NewOffer = z.infer<typeof insertOfferSchema>;
+export type OfferVerification = typeof offerVerifications.$inferSelect;
+export type NewOfferVerification = typeof offerVerifications.$inferInsert;
 export type Contract = typeof contracts.$inferSelect;
 export type NewContract = z.infer<typeof insertContractSchema>;
 export type VerificationDocument = typeof verificationDocuments.$inferSelect;
