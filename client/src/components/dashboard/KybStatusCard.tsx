@@ -9,9 +9,13 @@ interface KybStatusCardProps {
 
 type VerificationStatus = "not_started" | "in_progress" | "pending" | "verified" | "rejected";
 
+function getInitialVerificationStatus(): VerificationStatus {
+  return "not_started";
+}
+
 export default function KybStatusCard({ onContinueVerification }: KybStatusCardProps) {
   // In a real app, this would come from the user's verification status
-  const verificationStatus: VerificationStatus = "not_started";
+  const verificationStatus = getInitialVerificationStatus();
   
   const getStatusConfig = () => {
     switch (verificationStatus) {

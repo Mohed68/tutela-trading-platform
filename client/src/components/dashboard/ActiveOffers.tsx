@@ -6,31 +6,48 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Package } from "lucide-react";
 import CreateOfferModal from "@/components/offers/CreateOfferModal";
+import type { Commodity } from "@shared/schema";
+
+interface DashboardOffer {
+  id: string;
+  type: string;
+  quantity: string;
+  pricePerUnit: string;
+  currency: string;
+  unit: string;
+  location: string;
+  status: string;
+  commodity?: Commodity;
+}
+
+interface OffersResponse {
+  offers: DashboardOffer[];
+}
 
 export default function ActiveOffers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isCreateOfferOpen, setIsCreateOfferOpen] = useState(false);
 
-  const { data: offersResponse, isLoading } = useQuery({
+  const { data: offersResponse, isLoading } = useQuery<OffersResponse>({
     queryKey: ["/api/offers"],
     retry: false,
   });
 
   const offers = offersResponse?.offers || [];
 
-  const { data: commodities = [] } = useQuery({
+  const { data: commodities = [] } = useQuery<Commodity[]>({
     queryKey: ["/api/commodities"],
     retry: false,
   });
 
-  const filteredOffers = offers.filter((offer: any) => {
+  const filteredOffers = offers.filter((offer) => {
     const matchesSearch = offer.commodity?.name?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === "all" || offer.commodity?.type === categoryFilter;
     return matchesSearch && matchesCategory;
   }).slice(0, 5); // Show only top 5 offers
 
-  const getCommodityIcon = (type: string) => {
+  const getCommodityIcon = (type?: string) => {
     switch (type) {
       case "fuel_hydrocarbons":
         return "⛽";
@@ -131,7 +148,7 @@ export default function ActiveOffers() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOffers.map((offer: any) => (
+                  {filteredOffers.map((offer) => (
                     <tr key={offer.id}>
                       <td>
                         <div className="flex items-center">

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface ErrorFallbackProps {
   error?: Error;

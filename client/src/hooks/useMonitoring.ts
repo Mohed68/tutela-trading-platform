@@ -20,7 +20,7 @@ export function useMonitoring() {
   // Set user context when authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
-      UserContext.setUser(user.id, user.email || undefined, user.plan || undefined);
+      UserContext.setUser(user.id, user.email || undefined, user.currentPlan || undefined);
     } else {
       UserContext.clearUser();
     }

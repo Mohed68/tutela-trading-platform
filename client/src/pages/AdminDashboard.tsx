@@ -28,14 +28,14 @@ import { apiRequest } from '@/lib/queryClient';
 
 interface AdminUser {
   id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  companyName: string;
   role: string;
   permissions: string[];
   requires2FA: boolean;
   is2FAVerified: boolean;
+}
+
+interface AdminAuthInfo {
+  user: AdminUser;
 }
 
 interface Company {
@@ -68,46 +68,59 @@ interface AuditLog {
   timestamp: string;
 }
 
+interface MarketInsights {
+  activeOffers: number;
+  totalValue: string;
+  avgPrice: string;
+  topCommodities: Array<{ name: string; count: number }>;
+}
+
+interface ComplianceInsights {
+  kybPending: number;
+  kybApproved: number;
+  avgProcessingTime: number;
+}
+
 export default function AdminDashboard() {
-  const [match] = useRoute('/admin/:section?');
-  const section = match?.section || 'overview';
+  const [, params] = useRoute('/admin/:section?');
+  const section = params?.section || 'overview';
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [moderationDialog, setModerationDialog] = useState<{ open: boolean; offer: Offer | null }>({ open: false, offer: null });
   const [moderationReason, setModerationReason] = useState('');
 
   // Admin authentication check
-  const { data: adminUser, isLoading: adminLoading, error: adminError } = useQuery({
+  const { data: adminUser, isLoading: adminLoading, error: adminError } = useQuery<AdminAuthInfo>({
     queryKey: ['/admin/auth/info'],
     retry: false,
   });
 
   // Data queries for different sections
-  const { data: kybQueue = [] } = useQuery({
+  const { data: kybQueue = [] } = useQuery<Company[]>({
     queryKey: ['/admin/kyb'],
     enabled: section === 'kyb' && !!adminUser,
   });
 
-  const { data: companies = [] } = useQuery({
+  const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ['/admin/companies'],
     enabled: section === 'companies' && !!adminUser,
   });
 
-  const { data: offers = [] } = useQuery({
+  const { data: offers = [] } = useQuery<Offer[]>({
     queryKey: ['/admin/offers'],
     enabled: section === 'offers' && !!adminUser,
   });
 
-  const { data: marketInsights } = useQuery({
+  const { data: marketInsights } = useQuery<MarketInsights>({
     queryKey: ['/admin/insights/market'],
     enabled: section === 'insights' && !!adminUser,
   });
 
-  const { data: complianceInsights } = useQuery({
+  const { data: complianceInsights } = useQuery<ComplianceInsights>({
     queryKey: ['/admin/insights/compliance'],
     enabled: section === 'insights' && !!adminUser,
   });
 
-  const { data: auditLogs = [] } = useQuery({
+  const { data: auditLogs = [] } = useQuery<AuditLog[]>({
     queryKey: ['/admin/audit'],
     enabled: section === 'audit' && !!adminUser,
   });
@@ -563,7 +576,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="space-y-2">
                     <h4 className="font-semibold">Top Commodities</h4>
-                    {marketInsights?.topCommodities?.map((commodity: any, index: number) => (
+                    {marketInsights?.topCommodities?.map((commodity, index) => (
                       <div key={index} className="flex justify-between items-center">
                         <span className="text-sm">{commodity.name}</span>
                         <Badge variant="outline">{commodity.count} offers</Badge>

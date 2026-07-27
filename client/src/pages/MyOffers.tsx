@@ -36,7 +36,7 @@ import {
   User,
   Shield
 } from "lucide-react";
-import { fmtMoney, fmtCompactMoney, UNIT_LABEL, type UnitKey, toNumber, isNum } from "@/lib/formatting";
+import { fmtMoney, fmtCompactMoney, UNIT_LABEL, type Unit, toNumber, isNum } from "@/lib/formatting";
 
 interface Offer {
   id: string;
@@ -282,7 +282,7 @@ export default function MyOffers() {
     const unitPrice = toNumber(offer.pricePerUnit || offer.price || 0);
     const quantity = toNumber(offer.quantity || 0);
     const totalValue = unitPrice * quantity;
-    const unitLabel = UNIT_LABEL[offer.unit as UnitKey] || offer.unit;
+    const unitLabel = UNIT_LABEL[offer.unit as Unit] || offer.unit;
     const commodityName = offer.commodity?.name || offer.commodityName || offer.title || 'Unknown Commodity';
 
     return (

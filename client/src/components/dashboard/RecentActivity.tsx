@@ -1,8 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+interface ActivityItem {
+  id: string;
+  action: string;
+  createdAt: string;
+}
+
 export default function RecentActivity() {
-  const { data: activities = [], isLoading } = useQuery({
+  const { data: activities = [], isLoading } = useQuery<ActivityItem[]>({
     queryKey: ["/api/dashboard/activity"],
     retry: false,
   });
@@ -22,7 +28,7 @@ export default function RecentActivity() {
     }
   };
 
-  const formatActivityText = (activity: any) => {
+  const formatActivityText = (activity: ActivityItem) => {
     switch (activity.action) {
       case "create_offer":
         return "Created a new commodity offer";
@@ -79,7 +85,7 @@ export default function RecentActivity() {
           </div>
         ) : (
           <div className="space-y-4">
-            {activities.map((activity: any) => (
+            {activities.map((activity) => (
               <div key={activity.id} className="flex items-start space-x-3">
                 <div className={`activity-dot ${getActivityIcon(activity.action)}`}></div>
                 <div className="flex-1">
