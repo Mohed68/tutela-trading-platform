@@ -28,6 +28,7 @@
     "test:draft-validation": "tsx --test shared/draftValidation.test.ts server/drafts/policy.test.ts",
     "test:draft-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-5b.runtime.test.ts",
     "test:submission-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-5c.runtime.test.ts",
+    "test:organization-verification-architecture": "tsx --test server/organization-verification/architecture.test.ts",
     "test:verification-engine": "tsx --test server/verification/engine.test.ts server/verification/architecture.test.ts",
     "test:verification-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-6b.runtime.test.ts",
     "test:migrations": "tsx --test scripts/migrations/rehearsal-lib.test.ts",
