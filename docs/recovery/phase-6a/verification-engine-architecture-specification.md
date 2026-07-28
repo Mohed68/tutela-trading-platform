@@ -156,23 +156,52 @@ negative proof.
    draft/submission flow. It does not redesign generic offers, KYB, or the
    marketplace.
 
-## 6. Component model
+## 6. Resolved architecture decisions
+
+The following decisions are authoritative for the proposed architecture:
+
+| Question | Architecture decision |
+|---|---|
+| Who starts verification? | Tutela starts it automatically after a successful owner submission. The submission transaction creates a durable, platform-owned verification command for the new submission revision. |
+| Does the HTTP request execute the engine? | No. Submission records the private `submitted` state and durable command. A worker claims that command as soon as possible. The request does not run policy rules or choose an outcome. |
+| Can an administrator start ordinary verification? | No. An administrator is not the initiator and cannot select or override an engine decision. A future manual-review authority is a separate service and permission model. |
+| What does a scheduler do? | It only wakes the worker and recovers expired claims. It does not create business authority or make decisions. |
+| Can a future workflow engine start it? | Yes, through the same internal `VerificationTrigger` port and idempotency key. It replaces transport/orchestration, not engine rules. |
+| Can verification execute twice? | Physical delivery and evaluation may retry. Only one logical attempt can complete for a given submission revision and attempt sequence. A new business attempt is created after correction and resubmission. |
+| How is concurrency prevented? | Durable idempotency key, unique database constraints, one active attempt per submission revision, row locking, worker claim/lease tokens, and compare-and-set completion. |
+| Are attempts immutable? | Attempt identity, input snapshot, submission revision, engine version, and policy version are immutable from creation. A terminal decision is write-once. After completion, the entire attempt is immutable. |
+| How is history preserved after return to draft? | `REVISION_REQUIRED` completes and preserves its attempt before the offer returns to `draft`. Edits create no rewrite; the next submission increments the submission revision and creates a new attempt. |
+| How is the current result identified? | It is the highest attempt sequence for the offer's current submission revision. It is derived by key, never by mutating historical rows or trusting chronological order alone. |
+| How are process and decision separated? | Process is `not_started → queued → running → completed`. Decision is absent until completion, then exactly one of `approved`, `revision_required`, or `manual_review`. |
+| How does KYB integrate? | A downstream eligibility coordinator consumes separate offer-verification and KYB/organization proofs. KYB is never a rule or dependency of this engine. |
+| How does AI integrate? | A separate advisory provider may attach non-authoritative recommendations. The deterministic engine contract and decision catalog do not change. |
+| How does publication integrate? | A publication-eligibility service consumes a stable verification read model plus other independent proofs. It does not query engine tables or infer approval from offer status. |
+
+No scheduler, worker, outbox, trigger, administrator workflow, or schema object
+is created in Phase 6A. These are design decisions for a later approved
+implementation.
+
+## 7. Component model
 
 ```mermaid
 flowchart LR
-    A["Internal verification command<br/>offer ID only"] --> B["Verification orchestrator"]
-    B --> C["Offer repository<br/>lock and load submitted offer"]
-    C --> D["Immutable verification input"]
-    D --> E["Technical validation layer"]
-    D --> F["Commercial validation layer"]
-    G["Versioned verification policy"] --> E
-    G --> F
-    E --> H["Structured findings"]
-    F --> H
-    H --> I["Decision engine"]
-    I --> J["Exactly one terminal decision"]
-    J --> K["Verification-result repository"]
-    K --> L["Atomic result completion<br/>and private lifecycle transition"]
+    A["Owner submits draft"] --> B["Submission transaction"]
+    B --> C["Private submitted offer<br/>new submission revision"]
+    B --> D["Durable verification command"]
+    D --> E["Verification worker<br/>claim with lease"]
+    E --> F["Verification orchestrator"]
+    F --> G["Offer repository<br/>lock and load submitted revision"]
+    G --> H["Immutable verification input"]
+    H --> I["Technical validation layer"]
+    H --> J["Commercial validation layer"]
+    K["Versioned verification policy"] --> I
+    K --> J
+    I --> L["Structured findings"]
+    J --> L
+    L --> M["Decision engine"]
+    M --> N["Exactly one terminal decision"]
+    N --> O["Verification-attempt repository"]
+    O --> P["Atomic result completion<br/>and private lifecycle transition"]
 ```
 
 Recommended feature boundaries:
@@ -181,15 +210,19 @@ Recommended feature boundaries:
 - **Technical rule layer:** schema and field-integrity rules.
 - **Commercial rule layer:** versioned platform-policy rules.
 - **Decision core:** deterministic finding-to-decision reduction.
+- **Trigger port:** creates one durable command for each submission revision.
+- **Worker adapter:** claims commands, renews leases, and retries delivery.
 - **Orchestrator:** authorization boundary, locking, snapshot creation,
   idempotency, and transaction coordination.
-- **Persistence adapter:** verification-attempt history only.
+- **Persistence adapter:** verification-attempt and append-only event history.
+- **Eligibility read-model port:** exposes a stable, minimal result to future
+  downstream workflow consumers without exposing persistence tables.
 
 The decision core has no Express, PostgreSQL, Drizzle, authentication, UI, AI,
 or marketplace dependency. The orchestrator depends on repository interfaces,
 not on generic route storage methods.
 
-## 7. Offer lifecycle
+## 8. Offer lifecycle
 
 ```mermaid
 stateDiagram-v2
@@ -204,7 +237,7 @@ stateDiagram-v2
 There is deliberately no edge from any state to `active`, `published`, an
 order, a contract, a payment, or a blockchain operation.
 
-### 7.1 Lifecycle meanings
+### 8.1 Lifecycle meanings
 
 | Offer status | Meaning in the recovered workflow | Mutable by owner |
 |---|---|---|
@@ -215,7 +248,7 @@ order, a contract, a payment, or a blockchain operation.
 The proposed `verified` lifecycle value is not the legacy `offers.verified`
 Boolean and is not a publication flag.
 
-### 7.2 Transition invariants
+### 8.2 Transition invariants
 
 - Verification can start only when the stored offer status is exactly
   `submitted`.
@@ -232,51 +265,119 @@ Boolean and is not a publication flag.
 - No transition copies a verification decision into a user, organization,
   moderation, or publication field.
 
-## 8. Verification state and decision model
+### 8.3 Complete lifecycle transition matrix
 
-### 8.1 External/domain state
+| From | Trigger | Required authority/evidence | To | Allowed |
+|---|---|---|---|---|
+| `draft` | owner submits | Authenticated owner; current editable revision passes submission validation | `submitted` | Yes; queues verification |
+| `submitted` | engine completes | Current attempt decision `approved` | `verified` | Yes |
+| `submitted` | engine completes | Current attempt decision `revision_required` | `draft` | Yes |
+| `submitted` | engine completes | Current attempt decision `manual_review` | `submitted` | Yes; no lifecycle mutation |
+| `draft` | engine starts/completes | Any | unchanged | No |
+| `verified` | automatic engine retry | Any | unchanged | No; completed attempt is immutable |
+| any | administrator chooses engine result | Administrator action alone | unchanged | No |
+| any | queued/running process state | No terminal decision | unchanged | No |
+| any | missing/stale historical result | Not current submission revision | unchanged | No |
+| any | engine approval alone | No independent publication proofs | `active`/public | No |
 
-The owner-safe verification state is:
+Human-review resolutions, withdrawal, rejection, re-verification of a verified
+offer, moderation, and publication transitions require separate future
+business decisions and are not present in the engine lifecycle.
+
+## 9. Verification process and decision model
+
+### 9.1 Verification process state
+
+Verification process and verification decision are two independent axes.
+
+The process state is:
 
 ```text
 not_started
-in_progress
+queued
+running
+completed
+```
+
+- `not_started` is a projection when no attempt exists for the current
+  submission.
+- `queued` means the submission transaction created a durable attempt/command
+  that has not yet been claimed.
+- `running` means a worker holds a valid claim and is evaluating the immutable
+  attempt input.
+- `completed` means one terminal decision was persisted. It does not describe
+  which decision.
+
+```mermaid
+stateDiagram-v2
+    [*] --> not_started
+    not_started --> queued: submission transaction commits
+    queued --> running: worker claims command
+    running --> queued: claim expires before completion
+    running --> completed: terminal decision commits
+    completed --> [*]
+```
+
+Claim expiry returns the same logical attempt to `queued`; it does not create a
+new business attempt or clear prior immutable events.
+
+### 9.2 Verification decision
+
+Decision is absent while the process is `not_started`, `queued`, or `running`.
+On `completed`, the engine has exactly one decision:
+
+```text
 approved
 revision_required
 manual_review
 ```
 
-- `not_started` is a projection when no attempt exists for the current
-  submission.
-- `in_progress` means an attempt exists without a terminal decision.
-- The remaining three values are terminal results.
+Domain constants may use uppercase names. The mapping is one-to-one and
+exhaustive.
 
-### 8.2 Terminal decision
-
-The engine returns exactly one:
-
-```text
-APPROVED
-REVISION_REQUIRED
-MANUAL_REVIEW
+```mermaid
+stateDiagram-v2
+    [*] --> undecided
+    undecided --> approved: all authoritative rules pass
+    undecided --> revision_required: owner-correctable findings
+    undecided --> manual_review: ambiguity or platform-review finding
+    approved --> [*]
+    revision_required --> [*]
+    manual_review --> [*]
 ```
 
-The persistence representation may use lowercase values, but the mapping must
-be one-to-one and exhaustive.
+### 9.3 Process/decision invariants
 
-### 8.3 State is not authority for unrelated decisions
-
+- Process state never encodes a decision.
+- Decision never encodes whether work is queued or running.
+- `completed` requires exactly one decision.
+- `not_started`, `queued`, and `running` require no decision.
 - `approved` is authoritative only for offer technical/commercial eligibility.
 - `revision_required` means the owner can correct the offer; it is not a fraud,
   trust, or compliance judgment.
 - `manual_review` means the automated engine could not safely decide; it is not
   failure or rejection.
-- `not_started`, `in_progress`, and missing values are never equivalent to an
+- `not_started`, `queued`, `running`, and missing values are never equivalent to an
   approval or a rejection.
 
-## 9. Validation layers
+### 9.4 Complete process transition matrix
 
-### 9.1 Authoritative input
+| From | Event | To | Creates a new logical attempt |
+|---|---|---|---|
+| `not_started` | successful submission transaction | `queued` | Yes |
+| `queued` | valid worker claim | `running` | No |
+| `running` | terminal completion transaction | `completed` | No |
+| `running` | lease expiry and recovery | `queued` | No |
+| `queued` | duplicate durable delivery | `queued` | No |
+| `completed` | duplicate delivery or retry | `completed` | No |
+| `completed` | corrected draft is resubmitted | new attempt `queued` on a new submission revision | Yes |
+
+No process transition changes a terminal decision. No decision transition
+changes a completed attempt.
+
+## 10. Validation layers
+
+### 10.1 Authoritative input
 
 The engine loads data from the stored offer and referenced commodity inside the
 server boundary. The caller supplies only the offer ID.
@@ -299,7 +400,7 @@ It contains no user profile, password/authentication data, KYB data,
 organization trust data, documents, sessions, payment data, or public
 marketplace projection.
 
-### 9.2 Technical validation
+### 10.2 Technical validation
 
 Technical rules determine whether the stored offer is structurally valid:
 
@@ -318,7 +419,7 @@ These rules revalidate authoritative stored data even though draft creation
 already validates it. This protects the engine from legacy records, schema
 drift, and future write paths.
 
-### 9.3 Commercial validation
+### 10.3 Commercial validation
 
 Commercial rules apply a versioned policy:
 
@@ -335,7 +436,7 @@ not a permanent global currency or measurement design.
 Commercial validation does not normalize, convert, infer, or replace the
 customer's submitted quantity, unit, price, or currency.
 
-## 10. Decision algorithm
+## 11. Decision algorithm
 
 Each rule emits zero or more structured findings. A finding contains:
 
@@ -362,9 +463,9 @@ persistence. An unexpected exception is converted at the orchestration boundary
 to `MANUAL_REVIEW` with `UNKNOWN_VALIDATION_ERROR`; raw exception text is never
 persisted or returned.
 
-## 11. Reason-code model
+## 12. Reason-code model
 
-### 11.1 Initial catalog
+### 12.1 Initial catalog
 
 | Code | Layer | Default disposition | Meaning |
 |---|---|---|---|
@@ -389,7 +490,7 @@ persisted or returned.
 | `OFFER_STATE_CONFLICT` | orchestration | platform review | Offer state/version changed during verification |
 | `UNKNOWN_VALIDATION_ERROR` | orchestration | platform review | Fail-closed fallback for an unexpected internal error |
 
-### 11.2 Code rules
+### 12.2 Code rules
 
 - Codes are stable machine identifiers, never localized sentences.
 - Human copy is mapped in the UI from a versioned localization catalog.
@@ -402,12 +503,14 @@ persisted or returned.
 - The generic `COMMERCIAL_POLICY_FAILED` and `UNKNOWN_VALIDATION_ERROR` codes
   are fallbacks, not substitutes for a known specific code.
 
-## 12. Persistence model
+## 13. Persistence and history model
 
-### 12.1 Separate engine history
+### 13.1 Separate engine history
 
-The recommended new relation is `offer_verification_runs`. It is separate from
-the existing `offer_verifications` document-submission table.
+The recommended future relation is `offer_verification_attempts`. It is
+separate from the existing `offer_verifications` document-submission table.
+One row represents one logical evaluation attempt for one immutable submission
+revision.
 
 Proposed fields:
 
@@ -415,14 +518,21 @@ Proposed fields:
 |---|---|
 | `id` | Immutable attempt identifier |
 | `offer_id` | Restricted foreign key to the offer |
-| `submitted_record_version` | The offer's stored `updated_at` value at verification start |
+| `submission_revision` | Monotonic offer submission generation; changes only on a new owner submission |
+| `attempt_sequence` | Monotonic sequence within a submission revision |
+| `idempotency_key` | Stable platform-generated key for command deduplication |
+| `submitted_record_version` | The offer's stored record version at verification start |
 | `input_snapshot` | Internal JSON snapshot containing only evaluated commercial fields |
 | `input_fingerprint` | SHA-256 of canonicalized snapshot data |
-| `run_state` | `in_progress` or `completed` |
+| `process_state` | `queued`, `running`, or `completed` |
 | `decision` | Nullable while running; otherwise one terminal decision |
 | `reason_codes` | Ordered machine-readable code array |
 | `engine_version` | Immutable engine implementation identifier |
 | `policy_version` | Immutable policy/ruleset identifier or content hash |
+| `snapshot_schema_version` | Version of canonical snapshot serialization |
+| `claim_token_hash` | Hash of the current worker lease token; never exposed |
+| `claim_expires_at` | Expiry used only for retry-safe worker recovery |
+| `queued_at` | Time the durable attempt was created |
 | `started_at` | Time evaluation started |
 | `completed_at` | Time terminal decision was persisted |
 | `created_at` | Database record creation time |
@@ -431,97 +541,267 @@ All timestamps should be timezone-aware. The snapshot stores original evaluated
 values; it does not store user, authentication, KYB, organization, payment, or
 document data.
 
-### 12.2 Constraints
+### 13.2 Constraints
 
 The schema must enforce:
 
-- `run_state` is only `in_progress` or `completed`;
+- `process_state` is only `queued`, `running`, or `completed`;
 - `decision` is only `approved`, `revision_required`, or `manual_review`;
-- an in-progress row has no decision and no completion timestamp;
+- queued/running rows have no decision and no completion timestamp;
 - a completed row has exactly one decision and a completion timestamp;
 - approved rows have no reason codes;
 - revision/manual-review rows have one or more cataloged reason codes;
-- at most one in-progress attempt exists per offer;
-- the same submitted record version, engine version, and policy version cannot
-  create duplicate attempts;
+- `(offer_id, submission_revision, attempt_sequence)` is unique;
+- `idempotency_key` is globally unique;
+- at most one non-completed attempt exists per offer submission revision;
+- ordinary automatic submission creates only attempt sequence `1`;
 - deletion of an offer with verification history is restricted, not cascaded;
 - a completed result cannot be modified through the application repository.
 
-### 12.3 Why a snapshot is required
+### 13.3 Immutability model
+
+An attempt is immutable in two stages:
+
+1. From creation, its identity, offer ID, submission revision, attempt
+   sequence, idempotency key, input snapshot/fingerprint, snapshot schema
+   version, engine version, and policy version never change.
+2. Process/lease fields may advance while work is queued or running. The
+   terminal decision, reasons, completion timestamp, and lifecycle transition
+   are written exactly once. After completion, no field may change.
+
+A retry after claim expiry reuses the same attempt and immutable snapshot. It
+does not create another history row. A correction and resubmission creates a
+new submission revision and a new attempt.
+
+### 13.4 Why a snapshot is required
 
 `REVISION_REQUIRED` returns the offer to an editable draft. Without an immutable
 snapshot, later edits would erase the exact input that produced the historical
 decision. The snapshot is therefore business-decision evidence, not a
 publication DTO.
 
-### 12.4 Existing table isolation
+### 13.5 Current versus historical attempt
+
+Chronological “latest” is not sufficient because retries, future explicit
+re-evaluations, and old revisions may coexist.
+
+The current applicable attempt is derived as:
+
+1. match `offer_id`;
+2. match the offer's current `submission_revision`;
+3. choose the greatest `attempt_sequence`;
+4. require the stored input fingerprint to match that submission revision.
+
+All attempts for lower submission revisions are historical. They remain
+queryable for authorized audit and owner-safe history but cannot control the
+current offer.
+
+No historical row receives an `is_latest` or `is_current` mutation. A
+repository projection or read model calculates current applicability from
+immutable keys.
+
+### 13.6 Append-only process history
+
+An append-only `offer_verification_events` history is recommended so lease
+recovery and process transitions are auditable without changing the decision
+model.
+
+Each event contains:
+
+- event ID;
+- attempt ID;
+- event type;
+- occurrence timestamp;
+- system actor type;
+- correlation ID;
+- safe structured metadata defined by the event type.
+
+Initial event types:
+
+```text
+verification_queued
+verification_claimed
+verification_claim_expired
+verification_completed
+```
+
+Events never contain raw submitted values, snapshots, exception messages,
+credentials, personal data, or human-authored notes. The attempt row is the
+authoritative current process/result projection; the event stream is the
+immutable transition history.
+
+### 13.7 Existing table isolation
 
 `offer_verifications` remains untouched. No migration should:
 
 - rename it;
 - copy its pending rows into engine results;
-- reinterpret `pending` as `in_progress`;
+- reinterpret `pending` as `queued` or `running`;
 - treat document existence as proof;
 - infer a decision from its notes or submitter.
 
 If an evidence workflow is recovered later, it may reference an engine attempt
 through a separately approved model.
 
-## 13. Transaction, concurrency, and idempotency
+## 14. Transaction, concurrency, and idempotency
 
-### 13.1 Start
+```mermaid
+sequenceDiagram
+    participant Owner
+    participant Submission as Submission Service
+    participant DB as Persistence
+    participant Worker
+    participant Engine
+    Owner->>Submission: Submit owned draft
+    Submission->>DB: Atomic submitted revision + queued attempt + durable command
+    DB-->>Submission: Committed private submission
+    Submission-->>Owner: Submitted acknowledgement
+    Worker->>DB: Claim queued attempt with lease
+    DB-->>Worker: Immutable snapshot and recorded versions
+    Worker->>Engine: Evaluate snapshot, policy, clock
+    Engine-->>Worker: One decision + structured reason codes
+    Worker->>DB: Conditional atomic completion + lifecycle transition
+    DB-->>Worker: Completed or idempotent existing result
+```
 
-The orchestrator:
+### 14.1 Queue
 
-1. begins a transaction;
-2. locks the offer row;
-3. requires exact status `submitted`;
-4. loads the referenced commodity;
-5. creates the canonical snapshot and fingerprint;
-6. returns an existing attempt for the same submitted record and versions, or
-   creates one `in_progress` attempt;
-7. commits.
+The future submission transaction:
 
-No owner or client payload contributes verification authority.
+1. locks the owner-controlled draft;
+2. validates the exact `draft → submitted` transition;
+3. increments the offer's submission revision;
+4. creates the immutable verification snapshot and fingerprint;
+5. creates attempt sequence `1` in `queued`;
+6. creates a durable dispatch/outbox record using the attempt idempotency key;
+7. commits the offer, attempt, and durable command atomically.
 
-### 13.2 Evaluate
+If the same submission command is retried, the unique idempotency key returns
+the existing submission/attempt. No owner or client payload contributes
+verification authority.
 
-The pure engine evaluates the immutable snapshot using the recorded policy
-version and an injected evaluation timestamp.
+### 14.2 Claim and evaluate
 
-### 13.3 Complete
+A worker claims queued work using a short transaction and database-supported
+skip-locked semantics. The claim:
+
+- changes `queued → running`;
+- assigns a random lease token and expiry;
+- appends `verification_claimed`;
+- never changes the immutable snapshot or versions.
+
+The worker then evaluates outside the claim transaction. The pure engine uses
+only the immutable snapshot, recorded policy version, recorded engine version,
+and an injected evaluation timestamp.
+
+Multiple physical workers may receive the same durable command. Only one can
+hold the valid claim. Even if duplicate evaluation occurs after a network
+timeout, completion is protected by the claim token and compare-and-set
+conditions.
+
+### 14.3 Complete
 
 The orchestrator:
 
 1. begins a new transaction;
 2. locks both the attempt and offer;
-3. confirms the attempt is still `in_progress`;
-4. confirms the offer is still the same submitted record version;
-5. writes the terminal decision, sorted reason codes, and completion time;
-6. applies the matching private lifecycle transition;
-7. commits both changes atomically.
+3. confirms the attempt is still `running` under the same unexpired claim;
+4. confirms the offer is still `submitted` at the same submission revision and
+   record version;
+5. conditionally changes the process to `completed`;
+6. writes the terminal decision, sorted reason codes, and completion time once;
+7. applies the matching private lifecycle transition;
+8. appends `verification_completed`;
+9. marks the durable command delivered;
+10. commits all completion effects atomically.
 
 If the state/version check fails, the orchestrator does not approve or move the
-offer. It completes only through a separately defined fail-closed conflict
-path; raw concurrency errors are not exposed.
+offer. It returns the attempt to a fail-closed recovery path using
+`OFFER_STATE_CONFLICT`; raw concurrency errors are not exposed.
 
-### 13.4 Interrupted attempts
+### 14.4 Interrupted attempts
 
-An interrupted attempt remains `in_progress`; it is never interpreted as
-approved. Recovery of stale attempts must be an internal, idempotent operation
-that either retries the exact stored snapshot and versions or completes
-`MANUAL_REVIEW` with a cataloged reason. The timeout and retry policy must be
-approved with implementation; no background worker is introduced by this
-specification.
+An interrupted attempt remains `running` until its claim expires; it is never
+interpreted as approved. The recovery worker atomically appends
+`verification_claim_expired` and changes the same attempt back to `queued`.
 
-## 14. Trigger and API boundary
+Retry evaluates the exact stored snapshot under the exact stored engine and
+policy versions. If those versions cannot be loaded or retry safety cannot be
+proven, the attempt completes `MANUAL_REVIEW` with a cataloged reason instead of
+approving.
 
-The engine is invoked through an internal application command accepting an
-offer ID only. Its domain architecture is transport-neutral: the command can
-later be called after successful submission or by a worker without changing
-the rule engine.
+Retry count, lease duration, and dead-letter thresholds belong to worker
+configuration. Exhaustion produces `MANUAL_REVIEW`; it does not create a fourth
+decision or a process-level `failed` state.
 
-Phase 6A does not authorize either transport.
+### 14.5 When a second logical attempt is allowed
+
+During the initial recovery design, a second logical attempt is allowed only
+after:
+
+```text
+revision_required
+→ draft correction
+→ owner resubmission
+→ new submission_revision
+→ new attempt_sequence = 1
+```
+
+Transport retries are not new attempts.
+
+A future explicit re-evaluation of an unchanged submission could use
+`attempt_sequence + 1`, but only through a separately approved policy defining
+who may request it, why it is required, and how an already `verified` lifecycle
+is handled. Administrators and workers do not receive implicit re-evaluation
+authority from this architecture.
+
+## 15. Trigger and API boundary
+
+### 15.1 Authoritative trigger
+
+Successful owner submission is the sole initial business trigger.
+
+The submission application service, not the browser, creates a durable
+verification command atomically with the new private submission revision. A
+worker begins evaluation as soon as it can claim the command. “Immediately
+after submission” therefore means durable asynchronous dispatch, not executing
+the engine inside the HTTP request.
+
+This choice provides:
+
+- no lost verification between submission and process crash;
+- a fast, deterministic submission response;
+- isolated retry behavior;
+- no client-selected decision authority;
+- a transport-neutral engine.
+
+### 15.2 Non-authoritative actors
+
+- An administrator does not start ordinary automatic verification.
+- A scheduled job may scan queued/expired work, but it does not create an
+  attempt or decide an outcome.
+- A worker transports and executes a recorded command; it does not originate
+  business authority.
+- A future workflow engine may replace the submission outbox dispatcher by
+  invoking the same internal `VerificationTrigger` port with the same
+  submission revision and idempotency key.
+
+### 15.3 Internal command
+
+The durable command contains only:
+
+- attempt ID;
+- offer ID;
+- submission revision;
+- idempotency key;
+- correlation ID.
+
+The command does not carry commercial values, decision values, reason codes,
+user identity data, policy content, secrets, or credentials. The worker reloads
+the immutable snapshot by attempt ID.
+
+Phase 6A authorizes none of this runtime transport; it defines the later
+implementation boundary only.
 
 Any later HTTP integration must satisfy all of the following:
 
@@ -539,7 +819,7 @@ Any later HTTP integration must satisfy all of the following:
 The existing document-submission route remains blocked during controlled
 recovery and requires its own future authorization review.
 
-## 15. Configuration boundary
+## 16. Configuration boundary
 
 Commercial rules are supplied through an explicit immutable
 `OfferVerificationPolicy` contract. Its first version should define:
@@ -573,21 +853,45 @@ separate product capability. When introduced, it can provide preserved original
 values and canonical comparison values to the policy without changing decision
 or persistence semantics.
 
-## 16. Marketplace relationship
+## 17. Marketplace relationship
 
 The verification engine and public marketplace remain separate.
 
 ```mermaid
 flowchart TD
-    A["Offer verification result<br/>approved"] --> C["Future publication eligibility aggregator"]
-    B["Seller-organization verification<br/>out of scope"] --> C
-    C --> D["Future moderation/publication decision<br/>out of scope"]
-    D --> E["Public marketplace"]
+    A["Verification eligibility read model<br/>current revision approved"] --> D["Future publication eligibility service"]
+    B["Organization/KYB proof port<br/>out of scope"] --> D
+    C["Moderation/policy proof port<br/>out of scope"] --> D
+    D --> E["Publication decision<br/>out of scope"]
+    E --> F["Public marketplace projection"]
 ```
 
 An `APPROVED` result may become one authoritative input to the existing
 two-proof marketplace policy in a future approved phase. It is never sufficient
 on its own.
+
+The publication service consumes a stable read model or domain event, not the
+verification database table and not the offer lifecycle value:
+
+```text
+offer_id
+submission_revision
+verification_eligibility = eligible | not_eligible | pending
+decision
+completed_at
+engine_version
+policy_version
+input_fingerprint
+```
+
+Only a completed `approved` decision for the current submission revision maps
+to `eligible`. Missing, stale, queued, running, revision-required, and
+manual-review states map fail-closed to `pending` or `not_eligible` according to
+the publication service's separately approved contract.
+
+This anti-corruption/read-model boundary allows publication rules, KYB, and
+moderation to evolve without importing the engine repository or changing the
+engine.
 
 Phase 6 must not:
 
@@ -602,7 +906,68 @@ The expected public marketplace result remains HTTP 200 with zero published
 offers until both authoritative proofs and a separately approved publication
 workflow exist.
 
-## 17. Security and privacy
+## 18. Manual-review architecture
+
+`MANUAL_REVIEW` is a completed automated-engine decision. It is not a running
+engine state and is not a rejection.
+
+```mermaid
+flowchart LR
+    A["Verification process completed"] --> B["Decision: manual_review"]
+    B --> C["Offer remains private submitted"]
+    B --> D["Future manual-review case"]
+    D --> E["Authorized reviewer supplies<br/>structured resolution evidence"]
+    E --> F["Future workflow coordinator"]
+    F --> G["Separately authorized<br/>new engine attempt"]
+    G --> H["Engine produces a new decision"]
+    H --> I["Lifecycle transition follows<br/>only the new engine decision"]
+```
+
+The future manual-review capability is a separate bounded service:
+
+- It consumes the immutable current attempt ID and safe reason codes.
+- It creates its own case state, assignment, evidence access, and resolution
+  history.
+- It has separate RBAC; generic administrator status is not sufficient by
+  itself.
+- A reviewer cannot edit, replace, or delete the engine's `MANUAL_REVIEW`
+  decision.
+- A human resolution is stored as a separate authoritative record referencing
+  the attempt and submission revision.
+- The offer remains `submitted` and private while a case is open.
+- A reviewer never moves the offer and never chooses an engine decision.
+- A future workflow coordinator validates that resolution evidence applies to
+  the current submission revision and may request a separately authorized new
+  engine attempt.
+- Only the new engine decision may perform the existing
+  `submitted → verified`, `submitted → draft`, or no-op transition.
+- Stale resolutions for an older submission revision have no effect.
+- Reviewer notes, identity, evidence, and moderation data are never copied into
+  the verification result or public/owner-safe DTO.
+
+Suggested future manual-review process states are:
+
+```text
+open
+claimed
+resolved
+cancelled_as_stale
+```
+
+Suggested resolution categories are:
+
+```text
+reference_data_resolved
+additional_owner_information_needed
+unable_to_resolve
+```
+
+These resolution categories supply future workflow evidence only. They are not
+verification-engine decisions, cannot transition an offer, and are not
+authorized for implementation in Phase 6A. Their separation prevents future
+human review from forcing a redesign of the deterministic engine.
+
+## 19. Security and privacy
 
 - Only server-side stored data is evaluated.
 - Decision inputs are allowlisted; unknown fields are rejected at boundaries.
@@ -624,43 +989,102 @@ workflow exist.
 - Engine approval is not authorization to view, trade, contract, pay, or
   publish.
 
-## 18. Observability and local auditability
+## 20. Observability and local auditability
 
 The persistence record is the authoritative local audit history. Minimum
 observable events are:
 
-- verification started;
+- verification queued;
+- worker claim acquired;
+- expired claim recovered, when applicable;
 - verification completed;
 - terminal decision;
 - reason codes;
+- submission revision and attempt sequence;
 - engine version;
 - policy version;
-- start and completion timestamps.
+- queue, start, and completion timestamps.
 
 Metrics may later count attempts and decision outcomes without offer content or
 personal identifiers. External monitoring, blockchain anchoring, third-party
 audit services, notifications, and AI telemetry are excluded.
 
-## 19. Future extension points
+## 21. Future extension points
 
-The architecture permits future features without inserting them into the core
-decision:
+The following ports are required so later features do not force a redesign:
 
-| Future capability | Extension boundary |
+| Extension point | Stable responsibility |
 |---|---|
-| Human review | Separate review service consumes `MANUAL_REVIEW`; it records its own authority and never edits the engine's completed result |
-| KYB/compliance | Separate downstream eligibility source; never a technical/commercial engine rule |
-| Seller-organization trust | Separate authoritative organization-verification source |
-| Risk scoring | Advisory or separately governed downstream input |
-| AI analysis | Optional advisory finding provider only after explicit approval; never silently authoritative |
-| Marketplace rules | Publication eligibility aggregator requiring offer and organization proof |
-| Flexible currencies/units | Versioned measurement/currency service behind the commercial policy adapter |
-| Workflow automation | Internal command transport or worker using the same idempotent orchestrator |
-| External audit/blockchain | Optional downstream export of completed immutable records after explicit approval |
+| `VerificationTrigger` | Accept one platform-owned submission revision and idempotency key |
+| `VerificationCommandQueue` | Durable delivery, lease, retry, and acknowledgement |
+| `VerificationAttemptRepository` | Attempt identity, immutable snapshot, process state, and write-once decision |
+| `VerificationHistoryRepository` | Append-only process events and authorized history projection |
+| `OfferSnapshotProvider` | Load and canonicalize only authoritative submitted-offer fields |
+| `SnapshotSerializerRegistry` | Read historical snapshot schema versions without rewriting them |
+| `VerificationPolicyProvider` | Resolve immutable policy by recorded version |
+| `VerificationRuleRegistry` | Add versioned technical/commercial rules without modifying orchestration |
+| `ReferenceDataProvider` | Supply governed commodity and commercial reference data |
+| `Clock` | Make validity decisions deterministic and testable |
+| `ReasonCodeCatalog` | Stable code metadata and disposition without human copy |
+| `ReasonLocalizationCatalog` | Map codes to user-facing localized copy outside the engine |
+| `ManualReviewPort` | Create a separate case from a completed manual-review decision |
+| `AdvisoryAnalysisPort` | Attach non-authoritative AI/risk recommendations without changing decisions |
+| `VerificationEligibilityReadModel` | Expose current-revision eligibility to downstream workflow consumers |
+| `WorkflowCoordinatorPort` | React to results and later human resolutions without embedding downstream workflows in the engine |
+| `OperationalMetricsPort` | Emit privacy-safe counts and timings |
+| `AuditExportPort` | Optional future external audit/blockchain export of immutable completed records |
+| `CommercialMeasurementPort` | Supply original and normalized values under a future versioned currency/unit model |
+
+### 21.1 Future KYB integration
+
+KYB and organization verification remain separate domains.
+
+The verification engine neither requests nor reads KYB. A future workflow or
+publication eligibility service composes independent facts:
+
+```text
+current offer verification eligible
+AND
+current seller-organization proof eligible
+AND
+any separately approved moderation/publication proof
+```
+
+Each fact has its own authority, version, timestamps, expiration, and history.
+If KYB is unavailable or stale, the downstream coordinator fails closed; the
+offer engine result remains unchanged.
+
+### 21.2 Future AI recommendation integration
+
+AI integrates through `AdvisoryAnalysisPort` after or alongside deterministic
+verification:
+
+- AI output is stored separately from the attempt decision.
+- It references the same attempt and input fingerprint.
+- It cannot emit `approved`, modify reason codes, or transition an offer.
+- It may recommend human review or provide reviewer assistance.
+- Failure or absence of AI never blocks deterministic approval unless a future
+  explicitly versioned policy chooses to convert a governed advisory condition
+  into a standard `requires_platform_review` finding.
+- Any future authoritative use requires separate business, security, model,
+  explainability, and data-handling approval; the decision engine interface
+  remains unchanged because the policy adapter emits the existing finding
+  contract.
+
+### 21.3 Future workflow and publication integration
+
+A future workflow engine subscribes to a completed-attempt event or reads
+`VerificationEligibilityReadModel`. It does not call validation rules or query
+attempt tables. Replacing the initial worker/outbox with a workflow platform
+therefore changes only trigger and coordination adapters.
+
+A publication service consumes the same read model together with independent
+organization/KYB and moderation proofs. It owns publication decisions and
+public DTOs; the verification engine remains private.
 
 These are extension seams, not Phase 6A or Phase 6 implementation work.
 
-## 20. Proposed implementation sequence after approval
+## 22. Proposed implementation sequence after approval
 
 Approval of this specification would allow a separately bounded Phase 6B plan,
 not automatic implementation.
@@ -671,27 +1095,35 @@ The minimum safe sequence would be:
 2. add pure technical/commercial rules and deterministic decision tests;
 3. design and rehearse an additive migration for:
    - the private `verified` lifecycle enum value;
-   - `offer_verification_runs`;
+   - explicit submission revision identity;
+   - `offer_verification_attempts`;
+   - append-only `offer_verification_events`;
+   - durable command/outbox persistence;
    - required constraints and indexes;
-4. add the persistence adapter and transaction/concurrency tests;
-5. add the internal orchestrator with fail-closed error handling;
-6. add owner-safe characterization without a public marketplace integration;
-7. run controlled runtime verification using one recovery-owned temporary
+4. add the attempt/history persistence adapters and transaction/concurrency
+   tests;
+5. add automatic submission trigger, durable worker, lease recovery, and
+   idempotency tests;
+6. add the internal orchestrator with fail-closed error handling;
+7. add owner-safe characterization without a public marketplace integration;
+8. run controlled runtime verification using one recovery-owned temporary
    offer;
-8. remove the exact temporary record and confirm protected-data invariance;
-9. run the full recovery regression suite, `npm run check`, and
+9. remove the exact temporary record and confirm protected-data invariance;
+10. run the full recovery regression suite, `npm run check`, and
    `npm run build`;
-10. stop before manual review, KYB, moderation, or marketplace publication.
+11. stop before manual review, KYB, moderation, or marketplace publication.
 
 The schema migration and lifecycle behavior require explicit approval before
 Phase 6B writes or implementation begin.
 
-## 21. Acceptance criteria for a later implementation
+## 23. Acceptance criteria for a later implementation
 
 A Phase 6 implementation is complete only when tests prove:
 
 - only a stored `submitted` offer can enter the engine;
 - the client cannot influence any decision authority;
+- successful submission durably queues exactly one logical attempt;
+- process states and decision states remain independent;
 - every completed attempt has exactly one terminal decision;
 - technical and commercial rules are deterministic and versioned;
 - unknown/error conditions cannot approve;
@@ -700,7 +1132,10 @@ A Phase 6 implementation is complete only when tests prove:
 - `MANUAL_REVIEW` remains private `submitted`;
 - result persistence and lifecycle transition are atomic;
 - completed history remains immutable across revisions and resubmissions;
-- duplicate/concurrent execution cannot create contradictory decisions;
+- current applicability is derived from submission revision and attempt
+  sequence, not mutable history flags;
+- duplicate delivery, lease expiry, retry, and concurrent execution cannot
+  create contradictory decisions;
 - no KYB, organization, moderation, payment, contract, blockchain, AI, email,
   or notification side effect occurs;
 - no public marketplace response changes;
@@ -709,14 +1144,16 @@ A Phase 6 implementation is complete only when tests prove:
 - protected fingerprints, sessions, and migration journal remain controlled;
 - repository checks and production build pass.
 
-## 22. Approval boundary
+## 24. Approval boundary
 
 This document intentionally stops before implementation.
 
 Approval is required before:
 
 - adding `verified` to the database offer-status enum;
-- creating `offer_verification_runs`;
+- adding submission revision identity;
+- creating `offer_verification_attempts`, `offer_verification_events`, or
+  durable command/outbox persistence;
 - changing the private offer lifecycle;
 - adding a trigger or route for verification;
 - executing any runtime verification;
