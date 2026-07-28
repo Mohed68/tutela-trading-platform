@@ -7,7 +7,9 @@ import type {
 import { VERIFICATION_RULE_CATALOG } from "./catalog.js";
 import {
   VERIFICATION_ENGINE_VERSION,
-  type VerificationPolicies,
+  type CommercialVerificationPolicy,
+  type TechnicalVerificationPolicy,
+  type VerificationReferenceData,
 } from "./policy.js";
 
 function finding(
@@ -41,11 +43,12 @@ function validPositiveDecimal(value: string, pattern: RegExp): boolean {
 
 export function runTechnicalValidation(
   snapshot: SubmittedOfferVerificationSnapshot,
-  policies: VerificationPolicies,
+  policy: TechnicalVerificationPolicy,
+  references: VerificationReferenceData,
   evaluatedAt: Date,
 ): VerificationRuleFinding[] {
   const findings: VerificationRuleFinding[] = [];
-  const version = policies.technical.version;
+  const version = policy.version;
   let order = 0;
   const emit = (ruleId: VerificationRuleId) => {
     findings.push(finding(ruleId, "technical", version, ++order));
@@ -69,7 +72,7 @@ export function runTechnicalValidation(
     emit("TECHNICAL-001");
   }
 
-  if (!policies.technical.allowedOfferTypes.includes(snapshot.offerType)) {
+  if (!policy.allowedOfferTypes.includes(snapshot.offerType)) {
     emit("TECHNICAL-002");
   }
 
@@ -84,20 +87,20 @@ export function runTechnicalValidation(
   if (
     !validPositiveDecimal(
       snapshot.quantity,
-      policies.technical.decimalPattern,
+      policy.decimalPattern,
     )
   ) {
     emit("TECHNICAL-004");
   }
 
-  if (!policies.technical.recognizedUnits.includes(snapshot.unit)) {
+  if (!references.recognizedUnits.includes(snapshot.unit)) {
     emit("TECHNICAL-005");
   }
 
   if (
     !validPositiveDecimal(
       snapshot.amountPerUnit,
-      policies.technical.decimalPattern,
+      policy.decimalPattern,
     )
   ) {
     emit("TECHNICAL-006");
@@ -105,7 +108,7 @@ export function runTechnicalValidation(
 
   if (
     snapshot.currency === null ||
-    !policies.technical.currencyIdentifierPattern.test(snapshot.currency)
+    !references.currencyIdentifierPattern.test(snapshot.currency)
   ) {
     emit("TECHNICAL-007");
   }
@@ -113,7 +116,7 @@ export function runTechnicalValidation(
   if (
     isBlank(snapshot.location) ||
     snapshot.location.trim().length >
-      policies.technical.maximumLocationLength
+      policy.maximumLocationLength
   ) {
     emit("TECHNICAL-008");
   }
@@ -129,7 +132,7 @@ export function runTechnicalValidation(
 
   if (
     snapshot.snapshotSchemaVersion !==
-    policies.technical.snapshotSchemaVersion
+    policy.snapshotSchemaVersion
   ) {
     emit("TECHNICAL-011");
   }
@@ -152,29 +155,28 @@ export function runTechnicalValidation(
 
 export function runCommercialValidation(
   snapshot: SubmittedOfferVerificationSnapshot,
-  policies: VerificationPolicies,
+  policy: CommercialVerificationPolicy,
+  references: VerificationReferenceData,
   startingOrder: number,
 ): VerificationRuleFinding[] {
   const findings: VerificationRuleFinding[] = [];
-  const version = policies.commercial.version;
+  const version = policy.version;
   let order = startingOrder;
   const emit = (ruleId: VerificationRuleId) => {
     findings.push(finding(ruleId, "commercial", version, ++order));
   };
 
-  const acceptedUnits = policies.commercial.unitsForCommodity(
-    snapshot.commodity.name,
-  );
+  const acceptedUnits = policy.unitsForCommodity(snapshot.commodity.name);
   if (acceptedUnits.length === 0) {
     emit("COMMERCIAL-001");
   }
 
-  if (!policies.commercial.allowedOfferTypes.includes(snapshot.offerType)) {
+  if (!policy.allowedOfferTypes.includes(snapshot.offerType)) {
     emit("COMMERCIAL-002");
   }
 
   if (
-    policies.technical.recognizedUnits.includes(snapshot.unit) &&
+    references.recognizedUnits.includes(snapshot.unit) &&
     acceptedUnits.length > 0 &&
     !acceptedUnits.includes(snapshot.unit)
   ) {
@@ -183,8 +185,8 @@ export function runCommercialValidation(
 
   if (
     snapshot.currency !== null &&
-    policies.technical.currencyIdentifierPattern.test(snapshot.currency) &&
-    !policies.commercial.allowedCurrencies.includes(snapshot.currency)
+    references.currencyIdentifierPattern.test(snapshot.currency) &&
+    !policy.allowedCurrencies.includes(snapshot.currency)
   ) {
     emit("COMMERCIAL-015");
   }

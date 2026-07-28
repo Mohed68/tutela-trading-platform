@@ -1,6 +1,30 @@
 import crypto from "node:crypto";
 import type { SubmittedOfferVerificationSnapshot } from "../../shared/verification.js";
 
+export function immutableVerificationSnapshot(
+  snapshot: SubmittedOfferVerificationSnapshot,
+): SubmittedOfferVerificationSnapshot {
+  return Object.freeze({
+    snapshotSchemaVersion: snapshot.snapshotSchemaVersion,
+    offerId: snapshot.offerId,
+    submissionRevision: snapshot.submissionRevision,
+    submittedRecordVersion: snapshot.submittedRecordVersion,
+    offerType: snapshot.offerType,
+    commodity: Object.freeze({
+      id: snapshot.commodity.id,
+      name: snapshot.commodity.name,
+      category: snapshot.commodity.category,
+    }),
+    quantity: snapshot.quantity,
+    unit: snapshot.unit,
+    amountPerUnit: snapshot.amountPerUnit,
+    currency: snapshot.currency,
+    location: snapshot.location,
+    validUntil: snapshot.validUntil,
+    lifecycleStatus: snapshot.lifecycleStatus,
+  });
+}
+
 export function canonicalVerificationSnapshot(
   snapshot: SubmittedOfferVerificationSnapshot,
 ): string {

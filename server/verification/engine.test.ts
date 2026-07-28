@@ -7,17 +7,23 @@ import type {
 import {
   confidenceForDecision,
   decideVerification,
+  evaluateClaimedVerification,
   evaluateVerification,
   policyUnavailableVerificationResult,
+  readVerificationEngineCompletion,
 } from "./engine.js";
 import {
   PHASE_6_COMMERCIAL_POLICY,
   PHASE_6_TECHNICAL_POLICY,
+  commercialPolicyProvider,
+  resolveVerificationPolicies,
+  technicalPolicyProvider,
   VERIFICATION_SNAPSHOT_SCHEMA_VERSION,
 } from "./policy.js";
 import {
   canonicalVerificationSnapshot,
   fingerprintVerificationSnapshot,
+  immutableVerificationSnapshot,
 } from "./snapshot.js";
 
 function validSnapshot(
@@ -171,7 +177,9 @@ test("manual-review disposition has deterministic precedence", () => {
 });
 
 test("snapshot serialization and fingerprint are stable", () => {
-  const snapshot = validSnapshot();
+  const snapshot = immutableVerificationSnapshot(validSnapshot());
+  assert.equal(Object.isFrozen(snapshot), true);
+  assert.equal(Object.isFrozen(snapshot.commodity), true);
   assert.equal(
     canonicalVerificationSnapshot(snapshot),
     canonicalVerificationSnapshot({ ...snapshot }),
@@ -180,6 +188,41 @@ test("snapshot serialization and fingerprint are stable", () => {
   assert.equal(
     fingerprintVerificationSnapshot(snapshot),
     fingerprintVerificationSnapshot({ ...snapshot }),
+  );
+});
+
+test("recorded technical and commercial policy versions resolve independently", () => {
+  assert.equal(
+    technicalPolicyProvider.resolve(PHASE_6_TECHNICAL_POLICY.version),
+    PHASE_6_TECHNICAL_POLICY,
+  );
+  assert.equal(
+    commercialPolicyProvider.resolve(PHASE_6_COMMERCIAL_POLICY.version),
+    PHASE_6_COMMERCIAL_POLICY,
+  );
+  assert.deepEqual(
+    resolveVerificationPolicies({
+      technicalPolicyVersion: PHASE_6_TECHNICAL_POLICY.version,
+      commercialPolicyVersion: PHASE_6_COMMERCIAL_POLICY.version,
+    }),
+    {
+      technical: PHASE_6_TECHNICAL_POLICY,
+      commercial: PHASE_6_COMMERCIAL_POLICY,
+    },
+  );
+  assert.equal(
+    resolveVerificationPolicies({
+      technicalPolicyVersion: "missing-technical",
+      commercialPolicyVersion: PHASE_6_COMMERCIAL_POLICY.version,
+    }),
+    undefined,
+  );
+  assert.equal(
+    resolveVerificationPolicies({
+      technicalPolicyVersion: PHASE_6_TECHNICAL_POLICY.version,
+      commercialPolicyVersion: "missing-commercial",
+    }),
+    undefined,
   );
 });
 
@@ -193,4 +236,26 @@ test("unavailable recorded policy versions fail closed", () => {
   assert.equal(result.confidence, "LOW");
   assert.equal(result.findings[0].ruleId, "SYSTEM-001");
   assert.equal(result.findings[0].policyVersion, "unavailable-engine");
+});
+
+test("sealed claimed evaluation fails closed for unresolved recorded versions", () => {
+  const completion = evaluateClaimedVerification({
+    attemptId: "attempt-with-historical-policy",
+    snapshot: immutableVerificationSnapshot(validSnapshot()),
+    recordedVersions: {
+      engineVersion: "unavailable-engine",
+      technicalPolicyVersion: "unavailable-technical",
+      commercialPolicyVersion: "unavailable-commercial",
+    },
+    policies: undefined,
+    systemConditions: ["policy_configuration_unavailable"],
+    evaluatedAt,
+  });
+  const payload = readVerificationEngineCompletion(completion);
+  assert.equal(payload.result.decision, "manual_review");
+  assert.equal(payload.result.confidence, "LOW");
+  assert.equal(
+    payload.result.findings[0].reasonCode,
+    "POLICY_CONFIGURATION_UNAVAILABLE",
+  );
 });

@@ -102,49 +102,58 @@ export const VERIFICATION_RULE_IDS = [
 export type VerificationRuleId = (typeof VERIFICATION_RULE_IDS)[number];
 
 export interface VerificationRuleFinding {
-  ruleId: VerificationRuleId;
-  reasonCode: VerificationReasonCode;
-  severity: VerificationSeverity;
-  disposition: VerificationDisposition;
-  policyFamily: VerificationPolicyFamily;
-  policyVersion: string;
-  evaluationOrder: number;
+  readonly ruleId: VerificationRuleId;
+  readonly reasonCode: VerificationReasonCode;
+  readonly severity: VerificationSeverity;
+  readonly disposition: VerificationDisposition;
+  readonly policyFamily: VerificationPolicyFamily;
+  readonly policyVersion: string;
+  readonly evaluationOrder: number;
 }
 
 export interface SubmittedOfferVerificationSnapshot {
-  snapshotSchemaVersion: string;
-  offerId: string;
-  submissionRevision: number;
-  submittedRecordVersion: string;
-  offerType: string;
-  commodity: {
-    id: string;
-    name: string;
-    category: string;
+  readonly snapshotSchemaVersion: string;
+  readonly offerId: string;
+  readonly submissionRevision: number;
+  readonly submittedRecordVersion: string;
+  readonly offerType: string;
+  readonly commodity: {
+    readonly id: string;
+    readonly name: string;
+    readonly category: string;
   };
-  quantity: string;
-  unit: string;
-  amountPerUnit: string;
-  currency: string | null;
-  location: string;
-  validUntil: string | null;
-  lifecycleStatus: string;
+  readonly quantity: string;
+  readonly unit: string;
+  readonly amountPerUnit: string;
+  readonly currency: string | null;
+  readonly location: string;
+  readonly validUntil: string | null;
+  readonly lifecycleStatus: string;
 }
 
 export interface VerificationPolicyVersions {
-  technicalPolicyVersion: string;
-  commercialPolicyVersion: string;
+  readonly technicalPolicyVersion: string;
+  readonly commercialPolicyVersion: string;
 }
 
 export interface VerificationEngineResult
   extends VerificationPolicyVersions {
-  decision: VerificationDecision;
-  confidence: VerificationConfidence;
-  confidenceModelVersion: string;
-  engineVersion: string;
-  snapshotSchemaVersion: string;
-  findings: VerificationRuleFinding[];
+  readonly decision: VerificationDecision;
+  readonly confidence: VerificationConfidence;
+  readonly confidenceModelVersion: string;
+  readonly engineVersion: string;
+  readonly snapshotSchemaVersion: string;
+  readonly findings: readonly VerificationRuleFinding[];
 }
+
+export const VERIFICATION_SYSTEM_CONDITIONS = [
+  "offer_state_conflict",
+  "snapshot_integrity_mismatch",
+  "policy_configuration_unavailable",
+] as const;
+
+export type VerificationSystemCondition =
+  (typeof VERIFICATION_SYSTEM_CONDITIONS)[number];
 
 export interface VerificationEligibilityProjection {
   offerId: string;

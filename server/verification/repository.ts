@@ -3,16 +3,22 @@ import type { PoolClient, QueryResultRow } from "pg";
 import type {
   SubmittedOfferVerificationSnapshot,
   VerificationDecision,
-  VerificationEngineResult,
+  VerificationSystemCondition,
 } from "../../shared/verification.js";
 import { pool } from "../db.js";
-import { VERIFICATION_RULE_CATALOG } from "./catalog.js";
+import {
+  type VerificationEngineCompletion,
+  readVerificationEngineCompletion,
+} from "./engine.js";
 import {
   currentVerificationPolicies,
   VERIFICATION_CONFIDENCE_MODEL_VERSION,
   VERIFICATION_ENGINE_VERSION,
 } from "./policy.js";
-import { fingerprintVerificationSnapshot } from "./snapshot.js";
+import {
+  fingerprintVerificationSnapshot,
+  immutableVerificationSnapshot,
+} from "./snapshot.js";
 
 const CLAIM_DURATION_MS = 30_000;
 
@@ -22,9 +28,13 @@ function sha256(value: string): string {
 
 function asSnapshot(value: unknown): SubmittedOfferVerificationSnapshot {
   if (typeof value === "string") {
-    return JSON.parse(value) as SubmittedOfferVerificationSnapshot;
+    return immutableVerificationSnapshot(
+      JSON.parse(value) as SubmittedOfferVerificationSnapshot,
+    );
   }
-  return value as SubmittedOfferVerificationSnapshot;
+  return immutableVerificationSnapshot(
+    value as SubmittedOfferVerificationSnapshot,
+  );
 }
 
 export interface QueuedVerification {
@@ -162,6 +172,7 @@ interface ClaimedRow extends QueryResultRow {
   technical_policy_version: string;
   commercial_policy_version: string;
   engine_version: string;
+  input_fingerprint: string;
 }
 
 export interface ClaimedVerification {
@@ -170,7 +181,7 @@ export interface ClaimedVerification {
   correlationId: string;
   claimToken: string;
   snapshot: SubmittedOfferVerificationSnapshot;
-  recordedVersionsAvailable: boolean;
+  inputFingerprint: string;
   recordedVersions: {
     engineVersion: string;
     technicalPolicyVersion: string;
@@ -256,6 +267,7 @@ export async function claimNextVerification(): Promise<
         command.attempt_id,
         command.correlation_id,
         attempt.input_snapshot,
+        attempt.input_fingerprint,
         attempt.technical_policy_version,
         attempt.commercial_policy_version,
         attempt.engine_version
@@ -274,14 +286,6 @@ export async function claimNextVerification(): Promise<
       await client.query("COMMIT");
       return undefined;
     }
-
-    const policies = currentVerificationPolicies();
-    const recordedVersionsAvailable =
-      row.engine_version !== VERIFICATION_ENGINE_VERSION ||
-      row.technical_policy_version !== policies.technical.version ||
-      row.commercial_policy_version !== policies.commercial.version
-        ? false
-        : true;
 
     const claimToken = crypto.randomUUID();
     const claimHash = sha256(claimToken);
@@ -334,7 +338,7 @@ export async function claimNextVerification(): Promise<
       correlationId: row.correlation_id,
       claimToken,
       snapshot: asSnapshot(row.input_snapshot),
-      recordedVersionsAvailable,
+      inputFingerprint: row.input_fingerprint,
       recordedVersions: {
         engineVersion: row.engine_version,
         technicalPolicyVersion: row.technical_policy_version,
@@ -349,34 +353,34 @@ export async function claimNextVerification(): Promise<
   }
 }
 
-function stateConflictResult(
-  result: VerificationEngineResult,
-): VerificationEngineResult {
-  const definition = VERIFICATION_RULE_CATALOG["SYSTEM-003"];
-  const findings = [
-    ...result.findings,
-    {
-      ruleId: definition.id,
-      reasonCode: definition.reasonCode,
-      severity: definition.severity,
-      disposition: definition.disposition,
-      policyFamily: definition.policyFamily,
-      policyVersion: result.engineVersion,
-      evaluationOrder: result.findings.length + 1,
-    },
-  ];
-  return {
-    ...result,
-    decision: "manual_review",
-    confidence: "LOW",
-    findings,
-  };
+function sameConditions(
+  left: readonly VerificationSystemCondition[],
+  right: readonly VerificationSystemCondition[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((condition, index) => condition === right[index])
+  );
 }
 
-export async function completeClaimedVerification(
+export type PersistEngineCompletionResult =
+  | {
+      readonly status: "completed";
+      readonly decision: VerificationDecision;
+    }
+  | {
+      readonly status: "reevaluation_required";
+      readonly systemConditions: readonly VerificationSystemCondition[];
+    };
+
+export async function persistEngineCompletion(
   claim: ClaimedVerification,
-  engineResult: VerificationEngineResult,
-): Promise<VerificationDecision | undefined> {
+  completion: VerificationEngineCompletion,
+): Promise<PersistEngineCompletionResult | undefined> {
+  const completionPayload = readVerificationEngineCompletion(completion);
+  if (completionPayload.attemptId !== claim.attemptId) {
+    throw new Error("VERIFICATION_COMPLETION_ATTEMPT_MISMATCH");
+  }
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -387,6 +391,11 @@ export async function completeClaimedVerification(
         process_state: string;
         claim_token_hash: string | null;
         claim_expires_at: Date | string | null;
+        input_snapshot: unknown;
+        input_fingerprint: string;
+        engine_version: string;
+        technical_policy_version: string;
+        commercial_policy_version: string;
       }>(
         `
           SELECT
@@ -394,7 +403,12 @@ export async function completeClaimedVerification(
             submission_revision,
             process_state,
             claim_token_hash,
-            claim_expires_at
+            claim_expires_at,
+            input_snapshot,
+            input_fingerprint,
+            engine_version,
+            technical_policy_version,
+            commercial_policy_version
           FROM public.offer_verification_attempts
           WHERE id = $1
           FOR UPDATE
@@ -430,11 +444,48 @@ export async function completeClaimedVerification(
         [attempt.offer_id],
       )
     ).rows[0];
-    const result =
-      current?.status === "submitted" &&
-      current.revision === attempt.submission_revision
-        ? engineResult
-        : stateConflictResult(engineResult);
+    const storedSnapshot = asSnapshot(attempt.input_snapshot);
+    const actualFingerprint =
+      fingerprintVerificationSnapshot(storedSnapshot);
+    const systemConditions: VerificationSystemCondition[] = [];
+    if (
+      actualFingerprint !== attempt.input_fingerprint ||
+      actualFingerprint !== claim.inputFingerprint ||
+      actualFingerprint !== completionPayload.inputFingerprint
+    ) {
+      systemConditions.push("snapshot_integrity_mismatch");
+    }
+    if (
+      current?.status !== "submitted" ||
+      current.revision !== attempt.submission_revision
+    ) {
+      systemConditions.push("offer_state_conflict");
+    }
+    const sortedConditions = systemConditions.sort();
+    const completionDatabaseConditions =
+      completionPayload.systemConditions
+        .filter(
+          (condition) =>
+            condition !== "policy_configuration_unavailable",
+        )
+        .sort();
+    if (!sameConditions(sortedConditions, completionDatabaseConditions)) {
+      await client.query("ROLLBACK");
+      return {
+        status: "reevaluation_required",
+        systemConditions: Object.freeze(sortedConditions),
+      };
+    }
+    const result = completionPayload.result;
+    if (
+      result.engineVersion !== attempt.engine_version ||
+      result.technicalPolicyVersion !==
+        attempt.technical_policy_version ||
+      result.commercialPolicyVersion !==
+        attempt.commercial_policy_version
+    ) {
+      throw new Error("VERIFICATION_COMPLETION_VERSION_MISMATCH");
+    }
 
     for (const finding of result.findings) {
       await client.query(
@@ -540,7 +591,7 @@ export async function completeClaimedVerification(
       ],
     );
     await client.query("COMMIT");
-    return result.decision;
+    return { status: "completed", decision: result.decision };
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;

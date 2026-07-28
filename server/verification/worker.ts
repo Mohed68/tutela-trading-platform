@@ -1,17 +1,12 @@
 import { safeErrorMessage } from "../safeErrors.js";
+import type { VerificationDecision } from "../../shared/verification.js";
 import { coordinateVerificationDecision } from "./coordinator.js";
-import {
-  evaluateVerification,
-  policyUnavailableVerificationResult,
-} from "./engine.js";
-import {
-  claimNextVerification,
-  completeClaimedVerification,
-} from "./repository.js";
+import { evaluateAndCompleteClaimedVerification } from "./orchestrator.js";
+import { claimNextVerification } from "./repository.js";
 
 export interface VerificationWorkResult {
   attemptId: string;
-  decision: "approved" | "revision_required" | "manual_review";
+  decision: VerificationDecision;
   workflowResult: "applied" | "already_applied" | "stale";
 }
 
@@ -20,20 +15,10 @@ export async function processNextVerificationCommand(): Promise<
 > {
   const claim = await claimNextVerification();
   if (!claim) return undefined;
-  const result = claim.recordedVersionsAvailable
-    ? evaluateVerification(claim.snapshot)
-    : policyUnavailableVerificationResult(
-        claim.snapshot,
-        claim.recordedVersions,
-      );
-  const persistedDecision = await completeClaimedVerification(claim, result);
-  if (!persistedDecision) return undefined;
+  const decision = await evaluateAndCompleteClaimedVerification(claim);
+  if (!decision) return undefined;
   const workflowResult = await coordinateVerificationDecision(claim.attemptId);
-  return {
-    attemptId: claim.attemptId,
-    decision: persistedDecision,
-    workflowResult,
-  };
+  return { attemptId: claim.attemptId, decision, workflowResult };
 }
 
 export async function drainVerificationCommands(
