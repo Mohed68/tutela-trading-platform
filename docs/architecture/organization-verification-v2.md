@@ -4,30 +4,48 @@
 
 Date: 2026-07-28
 
-Status: **Candidate for Formal Architecture Approval**
+Status: **FORMALLY APPROVED**
 
-Authority: candidate authoritative architecture for the Tutela Organization
-Verification capability
+Authority: authoritative architecture for the Tutela Organization Verification
+capability
 
 Scope: domain architecture and documentation only
 
-Implementation status: not authorized
+Implementation status: Not yet authorized except through explicitly approved
+Phase 7B implementation slices.
+
+### Approval Record
+
+| Field | Approved value |
+|---|---|
+| Approval Status | **FORMALLY APPROVED** |
+| Approval Date | 2026-07-28 |
+| Approved Architecture Commit | `d2400dcc5fa8824057b4e13921464d96c2da6bf3` |
+| Approving Authority | Tutela Repository Owner |
+| Implementation Status | Not yet authorized except through explicitly approved Phase 7B implementation slices |
+| Architecture Change Control | Any change to capability boundaries, authority ownership, decision semantics, Trust Status semantics, bounded contexts, integration contracts, evidence ownership, or history strategy requires a new formal architecture review |
+
+### Architecture Freeze Notice
+
+The boundaries, authorities, vocabularies, contracts, and history strategy
+identified in the approval record are architecture-frozen. Implementation may
+realize them only through an explicitly approved Phase 7B slice. A slice may
+not reinterpret, broaden, merge, or bypass them.
 
 ## 1. Document Status and Authority
 
-This document supersedes Version 1 as the candidate architecture presented for
-formal approval. It does not modify, delete, or retroactively approve Version
-1.
+This document supersedes Version 1 as the formally approved authoritative
+architecture. It does not modify, delete, or retroactively approve Version 1.
 
 Version 2 incorporates every required revision from:
 
 `docs/recovery/phase-7a/phase-7a-architecture-review.md`
 
-The architecture becomes authoritative for implementation only after explicit
-formal approval. Until then, it authorizes no code, schema, migration, API,
-route, frontend, database, or runtime change.
+Formal architecture approval does not itself authorize implementation. Code,
+schema, migration, API, route, frontend, database, and runtime changes require
+explicit authorization for the applicable Phase 7B implementation slice.
 
-The authoritative naming decisions in this candidate are:
+The authoritative naming decisions in this approved architecture are:
 
 - **Organization Verification** is the capability and bounded-context name.
 - **Organization Trust Status** is a current-effective derived output.
@@ -1709,11 +1727,11 @@ Blocking classification:
 - **Production rollout:** every policy-catalog item plus privacy disclosure,
   evidence retention/deletion, legal review, and operational review controls.
 
-Architecture implementation may begin only after formal approval of Version 2.
-Any implementation slice that requires one of these business rules must stop
-at that rule boundary and obtain explicit approval. Production rollout remains
-blocked until jurisdiction, evidence, validity, privacy, retention, and
-operational review policies are approved.
+Architecture implementation may begin only through an explicitly approved
+Phase 7B implementation slice. Any slice that requires one of these business
+rules must stop at that rule boundary and obtain explicit approval. Production
+rollout remains blocked until jurisdiction, evidence, validity, privacy,
+retention, and operational review policies are approved.
 
 ## 39. Explicit Out-of-Scope Boundaries
 
@@ -1805,8 +1823,9 @@ The architecture guarantees:
 - the Tutela Trust Domain unifies governance without centralizing capability
   authority.
 
-Status remains:
+Approval status:
 
-**Candidate for Formal Architecture Approval**
+**FORMALLY APPROVED**
 
-No implementation is authorized by this document.
+No implementation is authorized by this document except through an explicitly
+approved Phase 7B implementation slice.
