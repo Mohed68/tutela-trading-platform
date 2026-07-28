@@ -24,6 +24,7 @@
     "offer:draft-migration": "node --env-file=.env --import tsx scripts/offers/draft-migration.ts",
     "offer:submission-migration": "node --env-file=.env --import tsx scripts/offers/submission-migration.ts",
     "offer:verification-migration": "node --env-file=.env --import tsx scripts/offers/verification-migration.ts",
+    "offer:verification-immutability-migration": "node --env-file=.env --import tsx scripts/offers/verification-immutability-migration.ts",
     "test:draft-validation": "tsx --test shared/draftValidation.test.ts server/drafts/policy.test.ts",
     "test:draft-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-5b.runtime.test.ts",
     "test:submission-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-5c.runtime.test.ts",

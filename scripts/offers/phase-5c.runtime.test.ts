@@ -86,39 +86,50 @@ async function cleanupPhase6SubmissionData(
   offerId: string,
 ): Promise<void> {
   await client.query(
-    "DELETE FROM public.offer_workflow_transitions WHERE offer_id = $1",
-    [offerId],
+    "SELECT set_config('tutela.verification_maintenance', 'on', false)",
   );
-  await client.query(
-    `
-      DELETE FROM public.offer_verification_events
-      WHERE attempt_id IN (
-        SELECT id FROM public.offer_verification_attempts WHERE offer_id = $1
+  try {
+    await client.query(
+      "DELETE FROM public.offer_workflow_transitions WHERE offer_id = $1",
+      [offerId],
+    );
+    await client.query(
+      `
+        DELETE FROM public.offer_verification_events
+        WHERE attempt_id IN (
+          SELECT id FROM public.offer_verification_attempts WHERE offer_id = $1
+        )
+      `,
+      [offerId],
+    );
+    await client.query(
+      `
+        DELETE FROM public.offer_verification_findings
+        WHERE attempt_id IN (
+          SELECT id FROM public.offer_verification_attempts WHERE offer_id = $1
+        )
+      `,
+      [offerId],
+    );
+    await client.query(
+      "DELETE FROM public.offer_verification_commands WHERE offer_id = $1",
+      [offerId],
+    );
+    await client.query(
+      "DELETE FROM public.offer_verification_attempts WHERE offer_id = $1",
+      [offerId],
+    );
+    await client.query(
+      "DELETE FROM public.offer_submission_revisions WHERE offer_id = $1",
+      [offerId],
+    );
+  } finally {
+    await client
+      .query(
+        "SELECT set_config('tutela.verification_maintenance', 'off', false)",
       )
-    `,
-    [offerId],
-  );
-  await client.query(
-    `
-      DELETE FROM public.offer_verification_findings
-      WHERE attempt_id IN (
-        SELECT id FROM public.offer_verification_attempts WHERE offer_id = $1
-      )
-    `,
-    [offerId],
-  );
-  await client.query(
-    "DELETE FROM public.offer_verification_commands WHERE offer_id = $1",
-    [offerId],
-  );
-  await client.query(
-    "DELETE FROM public.offer_verification_attempts WHERE offer_id = $1",
-    [offerId],
-  );
-  await client.query(
-    "DELETE FROM public.offer_submission_revisions WHERE offer_id = $1",
-    [offerId],
-  );
+      .catch(() => undefined);
+  }
 }
 
 function assertNoSensitiveKeys(value: unknown): void {

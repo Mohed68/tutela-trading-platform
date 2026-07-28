@@ -10,10 +10,9 @@ import {
 } from "../../server/drafts/storage.js";
 import { getPublishedMarketplaceOfferRecords } from "../../server/marketplace/publicMarketplace.js";
 import { coordinateVerificationDecision } from "../../server/verification/coordinator.js";
-import { evaluateVerification } from "../../server/verification/engine.js";
+import { evaluateAndCompleteClaimedVerification } from "../../server/verification/orchestrator.js";
 import {
   claimNextVerification,
-  completeClaimedVerification,
 } from "../../server/verification/repository.js";
 import { processNextVerificationCommand } from "../../server/verification/worker.js";
 import {
@@ -73,6 +72,9 @@ async function count(client: Client, table: string): Promise<number> {
 async function cleanupOffer(client: Client, offerId: string): Promise<void> {
   await client.query("BEGIN");
   try {
+    await client.query(
+      "SELECT set_config('tutela.verification_maintenance', 'on', true)",
+    );
     await client.query(
       "DELETE FROM public.offer_workflow_transitions WHERE offer_id = $1",
       [offerId],
@@ -265,6 +267,24 @@ test(
         command_state: "delivered",
         transition_result: "applied",
       });
+      await assert.rejects(
+        () =>
+          client.query(
+            `
+              UPDATE public.offer_verification_attempts
+              SET decision = 'manual_review'
+              WHERE id = $1
+            `,
+            [approvedWork.attemptId],
+          ),
+        (error: unknown) => {
+          assert.equal(
+            (error as { code?: string }).code,
+            "55000",
+          );
+          return true;
+        },
+      );
       assert.equal(await processNextVerificationCommand(), undefined);
       assert.equal(
         await coordinateVerificationDecision(approvedWork.attemptId),
@@ -366,10 +386,8 @@ test(
         `,
         [conflictDraft.id],
       );
-      const conflictDecision = await completeClaimedVerification(
-        conflictClaim,
-        evaluateVerification(conflictClaim.snapshot),
-      );
+      const conflictDecision =
+        await evaluateAndCompleteClaimedVerification(conflictClaim);
       assert.equal(conflictDecision, "manual_review");
       assert.equal(
         await coordinateVerificationDecision(conflictClaim.attemptId),
@@ -412,6 +430,68 @@ test(
         rule_id: "SYSTEM-003",
         confidence: "LOW",
         transition_result: "stale",
+      });
+
+      const integrityDraft = await createOwnedDraftOffer(owner.id, {
+        offerType: "sell",
+        commodityId: commodity.id,
+        quantity: "100.00",
+        unit: "bbl",
+        amountPerUnit: "75.50",
+        currency: "USD",
+        location: "Phase 6D Integrity Test",
+      });
+      cleanupIds.push(integrityDraft.id);
+      await submitOwnedDraftOffer(owner.id, integrityDraft.id);
+      await client.query(
+        "SELECT set_config('tutela.verification_maintenance', 'on', false)",
+      );
+      try {
+        await client.query(
+          `
+            UPDATE public.offer_verification_attempts
+            SET input_snapshot =
+              jsonb_set(input_snapshot, '{quantity}', '"101.00"'::jsonb)
+            WHERE offer_id = $1
+          `,
+          [integrityDraft.id],
+        );
+      } finally {
+        await client.query(
+          "SELECT set_config('tutela.verification_maintenance', 'off', false)",
+        );
+      }
+      const integrityWork = await processNextVerificationCommand();
+      assert.equal(integrityWork?.decision, "manual_review");
+      assert.equal(integrityWork?.workflowResult, "applied");
+      const integrityState = (
+        await client.query<{
+          status: string;
+          decision: string;
+          reason_code: string;
+          rule_id: string;
+        }>(
+          `
+            SELECT
+              offer.status::text AS status,
+              attempt.decision,
+              finding.reason_code,
+              finding.rule_id
+            FROM public.offers AS offer
+            INNER JOIN public.offer_verification_attempts AS attempt
+              ON attempt.offer_id = offer.id
+            INNER JOIN public.offer_verification_findings AS finding
+              ON finding.attempt_id = attempt.id
+            WHERE offer.id = $1
+          `,
+          [integrityDraft.id],
+        )
+      ).rows[0];
+      assert.deepEqual(integrityState, {
+        status: "submitted",
+        decision: "manual_review",
+        reason_code: "SCHEMA_INCONSISTENCY",
+        rule_id: "TECHNICAL-011",
       });
 
       assert.deepEqual(await getPublishedMarketplaceOfferRecords(), []);
