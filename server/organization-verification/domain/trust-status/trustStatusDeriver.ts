@@ -17,6 +17,7 @@ import {
 import {
   type OrganizationVerificationTrustStatusData,
   type OrganizationVerificationTrustStatusValue,
+  type OrganizationVerificationTrustStatusValueLiteral,
 } from "./trustStatus.js";
 
 const trustStatusSeal: unique symbol = Symbol(
@@ -36,11 +37,17 @@ export interface TrustStatusDerivationContext {
   readonly existingProjection?: OrganizationVerificationTrustStatus;
 }
 
+function trustStatusValue(
+  value: OrganizationVerificationTrustStatusValueLiteral,
+): OrganizationVerificationTrustStatusValue {
+  return value as OrganizationVerificationTrustStatusValue;
+}
+
 const STATUS_BY_DECISION = Object.freeze({
-  approved: "trusted",
-  revision_required: "not_trusted",
-  manual_review: "unestablished",
-  rejected: "not_trusted",
+  approved: trustStatusValue("trusted"),
+  revision_required: trustStatusValue("not_trusted"),
+  manual_review: trustStatusValue("unestablished"),
+  rejected: trustStatusValue("not_trusted"),
 } satisfies Record<
   OrganizationVerificationDecisionOutcome,
   OrganizationVerificationTrustStatusValue
@@ -139,20 +146,20 @@ export function deriveOrganizationVerificationTrustStatus(
     if (applicability) {
       return trustStatusFailure("trust_source_facts_incomplete");
     }
-    status = "unestablished";
+    status = trustStatusValue("unestablished");
   } else {
     if (!applicability) {
       return trustStatusFailure("invalid_decision_applicability");
     }
     if (sourceFacts.invalidationFact) {
-      status = "invalidated";
+      status = trustStatusValue("invalidated");
       effectiveFrom = sourceFacts.invalidationFact.invalidatedAt;
     } else if (
       sourceFacts.expiryFact &&
       Date.parse(sourceFacts.derivationAsOf) >=
         Date.parse(sourceFacts.expiryFact.validUntil)
     ) {
-      status = "expired";
+      status = trustStatusValue("expired");
       effectiveFrom = sourceFacts.expiryFact.validUntil;
     } else if (applicability.state === "superseded") {
       return trustStatusFailure("superseding_decision_missing");

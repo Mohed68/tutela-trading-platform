@@ -20,8 +20,13 @@ export const DECISION_APPLICABILITY_STATES = [
   "invalidated",
 ] as const;
 
-export type DecisionApplicabilityState =
+declare const decisionApplicabilityStateBrand: unique symbol;
+type DecisionApplicabilityStateLiteral =
   (typeof DECISION_APPLICABILITY_STATES)[number];
+export type DecisionApplicabilityState =
+  DecisionApplicabilityStateLiteral & {
+    readonly [decisionApplicabilityStateBrand]: "DecisionApplicabilityState";
+  };
 
 export interface RawDecisionApplicabilityInput {
   readonly applicabilityId: DecisionApplicabilityId;
@@ -81,15 +86,18 @@ export function createDecisionApplicability(
   if (signals.some((signal) => typeof signal !== "boolean")) {
     return trustStatusFailure("invalid_decision_applicability");
   }
-  const selected = [
+  const selected: Array<DecisionApplicabilityStateLiteral | undefined> = [
     input.applicable ? "applicable" : undefined,
     input.superseded ? "superseded" : undefined,
     input.expired ? "expired" : undefined,
     input.invalidated ? "invalidated" : undefined,
-  ].filter((value): value is DecisionApplicabilityState => value !== undefined);
-  if (selected.length !== 1) {
+  ];
+  const selectedStates = selected.filter(
+    (value): value is DecisionApplicabilityStateLiteral => value !== undefined,
+  );
+  if (selectedStates.length !== 1) {
     return trustStatusFailure(
-      selected.length === 0
+      selectedStates.length === 0
         ? "invalid_decision_applicability"
         : "contradictory_decision_applicability",
     );
@@ -105,7 +113,7 @@ export function createDecisionApplicability(
   ) {
     return trustStatusFailure("invalid_decision_applicability");
   }
-  const state = selected[0];
+  const state = selectedStates[0] as DecisionApplicabilityState;
   if (
     state === "superseded" &&
     (!isNonEmpty(input.supersedingDecisionId) ||

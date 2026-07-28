@@ -32,7 +32,9 @@ type ArchitectureViolationCode =
   | "TRUST_STATUS_DOMAIN_FORBIDDEN_AUTHORITY"
   | "UNAUTHORIZED_TRUST_STATUS_CONSTRUCTION"
   | "TRUST_STATUS_DERIVER_DECISION_AUTHORITY"
-  | "TRUST_STATUS_DERIVER_RUNTIME_WIRING";
+  | "TRUST_STATUS_DERIVER_RUNTIME_WIRING"
+  | "DOMAIN_PUBLIC_EXPORT_LEAK"
+  | "UNAUTHORIZED_AUTHENTICITY_READ";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -162,6 +164,15 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
     !isTrustStatusDomain;
+  const isDomainPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/index.ts",
+  );
+  const isDecisionPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/decision/index.ts",
+  );
+  const isTrustStatusPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/trust-status/index.ts",
+  );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
     lowerFile.endsWith("/index.ts");
@@ -176,6 +187,78 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       file,
       "generic runtime trust capability root",
     );
+  }
+
+  if (
+    ((isDomainPublicIndex || isDecisionPublicIndex || isTrustStatusPublicIndex) &&
+      /\b(?:copyDeclaredInputs|freezeEvidenceReferenceSet|appendRevisionReference|appendAttemptReference|domainSuccess|domainFailure|readSealedEvaluationCompletion|readDecisionApplicability|readOrganizationVerificationExpiryFact|readOrganizationVerificationInvalidationFact|readOrganizationVerificationTrustStatusSourceFacts|createDecisionInternal|createTrustStatusInternal)\b/.test(
+      input.source,
+      )) ||
+    (isDomainPublicIndex &&
+      /export\s+\*\s+from\s+["']\.\/(?:attempt|draft|errors|evidenceReferences|ids|process|record|revision|submission)\.js["']/.test(
+        input.source,
+      ))
+  ) {
+    addViolation(
+      violations,
+      "DOMAIN_PUBLIC_EXPORT_LEAK",
+      file,
+      "Public domain barrel exposes an internal helper or uncurated core module",
+    );
+  }
+
+  const authenticityReadAuthorities: ReadonlyArray<{
+    readonly symbol: string;
+    readonly allowedSuffixes: readonly string[];
+  }> = [
+    {
+      symbol: "readSealedEvaluationCompletion",
+      allowedSuffixes: [
+        "/domain/decision/sealedevaluationcompletion.ts",
+        "/domain/decision/decisionengine.ts",
+      ],
+    },
+    {
+      symbol: "readDecisionApplicability",
+      allowedSuffixes: [
+        "/domain/trust-status/applicability.ts",
+        "/domain/trust-status/sourcefacts.ts",
+      ],
+    },
+    {
+      symbol: "readOrganizationVerificationExpiryFact",
+      allowedSuffixes: [
+        "/domain/trust-status/expiryfact.ts",
+        "/domain/trust-status/sourcefacts.ts",
+      ],
+    },
+    {
+      symbol: "readOrganizationVerificationInvalidationFact",
+      allowedSuffixes: [
+        "/domain/trust-status/invalidationfact.ts",
+        "/domain/trust-status/sourcefacts.ts",
+      ],
+    },
+    {
+      symbol: "readOrganizationVerificationTrustStatusSourceFacts",
+      allowedSuffixes: [
+        "/domain/trust-status/sourcefacts.ts",
+        "/domain/trust-status/truststatusderiver.ts",
+      ],
+    },
+  ];
+  for (const authority of authenticityReadAuthorities) {
+    if (
+      new RegExp(`\\b${authority.symbol}\\b`).test(input.source) &&
+      !authority.allowedSuffixes.some((suffix) => lowerFile.endsWith(suffix))
+    ) {
+      addViolation(
+        violations,
+        "UNAUTHORIZED_AUTHENTICITY_READ",
+        file,
+        authority.symbol,
+      );
+    }
   }
 
   if (isOrganizationVerification) {
@@ -871,5 +954,37 @@ test("intentional fixture rejects Trust Status Deriver runtime wiring", () => {
     file: "server/organization-verification/worker.ts",
     source:
       'import { deriveOrganizationVerificationTrustStatus } from "./domain/trust-status/trustStatusDeriver.js";',
+  });
+});
+
+test("intentional fixture rejects uncurated core-domain public exports", () => {
+  expectFixtureViolation("DOMAIN_PUBLIC_EXPORT_LEAK", {
+    file: "server/organization-verification/domain/index.ts",
+    source: 'export * from "./record.js";',
+  });
+});
+
+test("intentional fixture rejects Trust Status importing Decision Engine implementation", () => {
+  expectFixtureViolation("TRUST_STATUS_DOMAIN_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/trust-status/sourceFacts.ts",
+    source:
+      'import { isOrganizationVerificationDecision } from "../decision/decisionEngine.js";',
+  });
+});
+
+test("intentional fixture rejects internal authenticity readers on public surfaces", () => {
+  expectFixtureViolation("DOMAIN_PUBLIC_EXPORT_LEAK", {
+    file: "server/organization-verification/domain/trust-status/index.ts",
+    source:
+      'export { readDecisionApplicability } from "./applicability.js";',
+  });
+});
+
+test("intentional fixture rejects unauthorized authenticity-reader access", () => {
+  expectFixtureViolation("UNAUTHORIZED_AUTHENTICITY_READ", {
+    file: "server/organization-verification/domain/reviewer.ts",
+    source:
+      'import { readSealedEvaluationCompletion } from "./decision/sealedEvaluationCompletion.js";',
   });
 });

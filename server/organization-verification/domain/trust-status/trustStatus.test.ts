@@ -65,9 +65,25 @@ import {
   type OrganizationVerificationExpiryFact,
   type OrganizationVerificationInvalidationFact,
   type OrganizationVerificationTrustStatus,
+  type OrganizationVerificationTrustStatusValue,
   type OrganizationVerificationTrustStatusSourceFactsInput,
   type TrustStatusDomainResult,
 } from "./index.js";
+
+type IsAssignable<From, To> = From extends To ? true : false;
+type AssertFalse<Value extends false> = Value;
+type ApplicabilityCannotBecomeTrustStatus = AssertFalse<
+  IsAssignable<
+    DecisionApplicabilityState,
+    OrganizationVerificationTrustStatusValue
+  >
+>;
+type TrustStatusCannotBecomeApplicability = AssertFalse<
+  IsAssignable<
+    OrganizationVerificationTrustStatusValue,
+    DecisionApplicabilityState
+  >
+>;
 
 function coreValue<T>(result: CoreDomainResult<T>): T {
   assert.equal(result.ok, true);
@@ -308,7 +324,11 @@ function createDecisionFixture(
 
 function applicability(
   decision: OrganizationVerificationDecision,
-  state: DecisionApplicabilityState = "applicable",
+  state:
+    | "applicable"
+    | "superseded"
+    | "expired"
+    | "invalidated" = "applicable",
   suffix = "1",
   supersedingDecisionId?: OrganizationVerificationDecision["decisionId"],
 ): OrganizationVerificationDecisionApplicability {

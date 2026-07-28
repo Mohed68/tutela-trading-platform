@@ -29,8 +29,13 @@ export const ORGANIZATION_VERIFICATION_TRUST_STATUS_VALUES = [
   "invalidated",
 ] as const;
 
-export type OrganizationVerificationTrustStatusValue =
+declare const trustStatusValueBrand: unique symbol;
+export type OrganizationVerificationTrustStatusValueLiteral =
   (typeof ORGANIZATION_VERIFICATION_TRUST_STATUS_VALUES)[number];
+export type OrganizationVerificationTrustStatusValue =
+  OrganizationVerificationTrustStatusValueLiteral & {
+    readonly [trustStatusValueBrand]: "OrganizationVerificationTrustStatusValue";
+  };
 
 export interface OrganizationVerificationTrustStatusData {
   readonly projectionId: TrustStatusProjectionId;
