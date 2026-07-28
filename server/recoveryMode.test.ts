@@ -91,6 +91,24 @@ test("recovery mode permits the auth loop and safe dashboard overview", () => {
   assert.equal(isSafeRecoveryRequest("PATCH", "/api/auth/preferences"), false);
 });
 
+test("recovery mode permits only the isolated draft workflow methods", () => {
+  assert.equal(isSafeRecoveryRequest("GET", "/api/drafts"), true);
+  assert.equal(isSafeRecoveryRequest("POST", "/api/drafts"), true);
+  assert.equal(isSafeRecoveryRequest("PATCH", "/api/drafts"), false);
+  assert.equal(isSafeRecoveryRequest("DELETE", "/api/drafts"), false);
+  assert.equal(isSafeRecoveryRequest("GET", "/api/drafts/options"), true);
+  assert.equal(isSafeRecoveryRequest("POST", "/api/drafts/options"), false);
+
+  assert.equal(isSafeRecoveryRequest("GET", "/api/drafts/example"), true);
+  assert.equal(isSafeRecoveryRequest("PATCH", "/api/drafts/example"), true);
+  assert.equal(isSafeRecoveryRequest("DELETE", "/api/drafts/example"), true);
+  assert.equal(isSafeRecoveryRequest("POST", "/api/drafts/example"), false);
+  assert.equal(
+    isSafeRecoveryRequest("GET", "/api/drafts/example/dependency"),
+    false,
+  );
+});
+
 test("safe errors redact configured secrets and URL credentials", () => {
   const databaseUrl =
     "postgresql://private-user:private-password@example.invalid/database";

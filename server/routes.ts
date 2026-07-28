@@ -41,6 +41,7 @@ import {
   normalizePublishedOffer,
 } from "./marketplace/publicMarketplace";
 import { buildDashboardOverview } from "./dashboard";
+import { registerDraftRoutes } from "./drafts/routes";
 
 // Initialize Stripe
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -60,6 +61,7 @@ const PRICE_MAP: Record<string, string> = {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+  registerDraftRoutes(app);
 
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString(), environment: process.env.NODE_ENV ?? "development" });
