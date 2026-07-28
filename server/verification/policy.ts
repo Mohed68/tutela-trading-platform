@@ -42,20 +42,22 @@ export interface CommercialPolicyProvider {
   resolve(version: string): CommercialVerificationPolicy | undefined;
 }
 
-export const PHASE_6_TECHNICAL_POLICY: TechnicalVerificationPolicy = {
+export const PHASE_6_TECHNICAL_POLICY: TechnicalVerificationPolicy =
+  Object.freeze({
   version: "technical-recovery-v1",
   snapshotSchemaVersion: VERIFICATION_SNAPSHOT_SCHEMA_VERSION,
-  allowedOfferTypes: ["buy", "sell"],
+  allowedOfferTypes: Object.freeze(["buy", "sell"]),
   decimalPattern: /^(?:0|[1-9]\d{0,12})(?:\.\d{1,2})?$/,
   maximumLocationLength: 255,
-};
+  });
 
-export const PHASE_6_COMMERCIAL_POLICY: CommercialVerificationPolicy = {
-  version: "commercial-phase5b-recovery-v1",
-  allowedOfferTypes: ["buy", "sell"],
-  allowedCurrencies: [PHASE_5B_DRAFT_CURRENCY],
-  unitsForCommodity: phase5bDraftUnitsForCommodity,
-};
+export const PHASE_6_COMMERCIAL_POLICY: CommercialVerificationPolicy =
+  Object.freeze({
+    version: "commercial-phase5b-recovery-v1",
+    allowedOfferTypes: Object.freeze(["buy", "sell"]),
+    allowedCurrencies: Object.freeze([PHASE_5B_DRAFT_CURRENCY]),
+    unitsForCommodity: phase5bDraftUnitsForCommodity,
+  });
 
 export const PHASE_6_REFERENCE_DATA: VerificationReferenceData =
   Object.freeze({

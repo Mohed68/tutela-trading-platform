@@ -192,6 +192,13 @@ test("snapshot serialization and fingerprint are stable", () => {
 });
 
 test("recorded technical and commercial policy versions resolve independently", () => {
+  assert.equal(Object.isFrozen(PHASE_6_TECHNICAL_POLICY), true);
+  assert.equal(Object.isFrozen(PHASE_6_TECHNICAL_POLICY.allowedOfferTypes), true);
+  assert.equal(Object.isFrozen(PHASE_6_COMMERCIAL_POLICY), true);
+  assert.equal(
+    Object.isFrozen(PHASE_6_COMMERCIAL_POLICY.allowedCurrencies),
+    true,
+  );
   assert.equal(
     technicalPolicyProvider.resolve(PHASE_6_TECHNICAL_POLICY.version),
     PHASE_6_TECHNICAL_POLICY,
