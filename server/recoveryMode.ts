@@ -10,7 +10,6 @@ const SAFE_RECOVERY_API_ROUTES = new Set([
   "/api/offers/search",
   "/api/offers/summary",
   "/api/auth/user",
-  "/api/dashboard/metrics",
 ]);
 
 const SAFE_RECOVERY_AUTH_WRITES = new Map([

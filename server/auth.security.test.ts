@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
+import express from "express";
 import type { AuthenticationIdentity } from "@shared/auth";
 import {
   getSessionCookieSettings,
   isLocallyAuthenticatable,
+  setupAuth,
   toCurrentUserDto,
 } from "./auth.js";
 
@@ -98,3 +102,33 @@ test("session cookie defaults stay secure by environment", () => {
   });
 });
 
+test("public registration remains disabled outside the recovery guard", async () => {
+  const app = express();
+  app.use(express.json());
+  await setupAuth(app);
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  try {
+    const address = server.address() as AddressInfo;
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/auth/register`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "disabled@recovery.tutela.invalid",
+          password: "not-a-real-password",
+        }),
+      },
+    );
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), {
+      message: "Registration is unavailable.",
+    });
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});

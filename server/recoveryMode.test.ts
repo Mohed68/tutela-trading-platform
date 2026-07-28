@@ -65,7 +65,7 @@ test("recovery mode allows only approved read-only marketplace routes", () => {
   assert.equal(isSafeRecoveryRequest("GET", "/admin"), false);
 });
 
-test("recovery mode permits only the approved authentication loop and dashboard read", () => {
+test("recovery mode permits the auth loop and blocks business dashboard reads", () => {
   assert.equal(isSafeRecoveryRequest("GET", "/api/auth/user"), true);
   assert.equal(isSafeRecoveryRequest("HEAD", "/api/auth/user"), true);
   assert.equal(isSafeRecoveryRequest("POST", "/api/auth/login"), true);
@@ -73,7 +73,7 @@ test("recovery mode permits only the approved authentication loop and dashboard 
   assert.equal(isSafeRecoveryRequest("GET", "/api/logout"), false);
   assert.equal(
     isSafeRecoveryRequest("GET", "/api/dashboard/metrics"),
-    true,
+    false,
   );
   assert.equal(isSafeRecoveryRequest("POST", "/api/auth/register"), false);
   assert.equal(isSafeRecoveryRequest("PATCH", "/api/auth/preferences"), false);
