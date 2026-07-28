@@ -5,6 +5,7 @@ export {
 } from "./decision.js";
 export {
   decideOrganizationVerification,
+  isOrganizationVerificationDecision,
   type DecisionConstructionContext,
   type OrganizationVerificationDecision,
 } from "./decisionEngine.js";

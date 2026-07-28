@@ -27,7 +27,12 @@ type ArchitectureViolationCode =
   | "DECISION_DOMAIN_LATER_SLICE_ARTIFACT"
   | "UNAUTHORIZED_DECISION_CONSTRUCTION"
   | "DECISION_ENGINE_LIFECYCLE_AUTHORITY"
-  | "DECISION_ENGINE_RUNTIME_WIRING";
+  | "DECISION_ENGINE_RUNTIME_WIRING"
+  | "TRUST_STATUS_DOMAIN_FORBIDDEN_DEPENDENCY"
+  | "TRUST_STATUS_DOMAIN_FORBIDDEN_AUTHORITY"
+  | "UNAUTHORIZED_TRUST_STATUS_CONSTRUCTION"
+  | "TRUST_STATUS_DERIVER_DECISION_AUTHORITY"
+  | "TRUST_STATUS_DERIVER_RUNTIME_WIRING";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -150,9 +155,13 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isDecisionDomain = lowerFile.startsWith(
     "server/organization-verification/domain/decision/",
   );
+  const isTrustStatusDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/trust-status/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
-    !isDecisionDomain;
+    !isDecisionDomain &&
+    !isTrustStatusDomain;
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
     lowerFile.endsWith("/index.ts");
@@ -475,6 +484,101 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     );
   }
 
+  if (isTrustStatusDomain) {
+    for (const specifier of specifiers) {
+      if (
+        !/^\.\/[A-Za-z0-9]+\.js$/.test(specifier) &&
+        specifier !== "../decision/index.js" &&
+        specifier !== "../ids.js" &&
+        specifier !== "../../../organization-registry/index.js"
+      ) {
+        addViolation(
+          violations,
+          "TRUST_STATUS_DOMAIN_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+      if (
+        /(?:^|\/)(?:db|database|storage|repository|routes?|workers?|providers?|services?|schema|frontend|client|startup)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /(?:^|\/)(?:verification|marketplace|kyb|compliance|payments?|orders?|contracts?|notifications?|blockchain|ai)(?:\/|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:drizzle-orm|pg|@neondatabase\/)/i.test(specifier)
+      ) {
+        addViolation(
+          violations,
+          "TRUST_STATUS_DOMAIN_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+
+    if (
+      /(?:^|\/)(?:eligibility|policy|finding|reason-code|rule|reviewer-status-override)(?:\/|\.|$)/i.test(
+        lowerFile,
+      ) ||
+      /\b(?:ParticipationEligibility|PublicationEligibility|MarketplaceAccess|TransactionAuthorization|VerificationFinding|ReasonCode|RuleId|Severity|PolicyRegistry|ReviewerStatusOverride)\b/.test(
+        input.source,
+      ) ||
+      /["'](?:allowed_to_trade|allowed_to_publish|allowed_to_transact|marketplace_access|seller_access|buyer_access)["']/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "TRUST_STATUS_DOMAIN_FORBIDDEN_AUTHORITY",
+        file,
+        "Eligibility, policy, finding, or reviewer authority is outside this slice",
+      );
+    }
+
+    if (
+      /\b(?:createDecisionInternal|decideOrganizationVerification)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "TRUST_STATUS_DERIVER_DECISION_AUTHORITY",
+        file,
+        "Trust Status domain must not construct or invoke Decisions",
+      );
+    }
+  }
+
+  if (
+    !lowerFile.endsWith(
+      "/organization-verification/domain/trust-status/truststatusderiver.ts",
+    ) &&
+    /\bcreateTrustStatusInternal\b/.test(input.source)
+  ) {
+    addViolation(
+      violations,
+      "UNAUTHORIZED_TRUST_STATUS_CONSTRUCTION",
+      file,
+      "Only Trust Status Deriver may construct Trust Status",
+    );
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isTrustStatusDomain &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)trust-status\/trustStatusDeriver(?:\.js)?$/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "TRUST_STATUS_DERIVER_RUNTIME_WIRING",
+      file,
+      "Trust Status Deriver must remain unwired in this slice",
+    );
+  }
+
   if (
     isOfferVerification &&
     specifiers.some((specifier) =>
@@ -728,5 +832,44 @@ test("intentional fixture rejects Decision Engine runtime wiring", () => {
     file: "server/organization-verification/worker.ts",
     source:
       'import { decideOrganizationVerification } from "./domain/decision/decisionEngine.js";',
+  });
+});
+
+test("intentional fixture rejects runtime dependencies in Trust Status Domain", () => {
+  expectFixtureViolation("TRUST_STATUS_DOMAIN_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/trust-status/projector.ts",
+    source: 'import { db } from "../../../db.js";',
+  });
+});
+
+test("intentional fixture rejects eligibility authority in Trust Status Domain", () => {
+  expectFixtureViolation("TRUST_STATUS_DOMAIN_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/trust-status/eligibility.ts",
+    source: "export interface ParticipationEligibility {}",
+  });
+});
+
+test("intentional fixture rejects Trust Status construction outside Deriver", () => {
+  expectFixtureViolation("UNAUTHORIZED_TRUST_STATUS_CONSTRUCTION", {
+    file: "server/organization-verification/reviewer.ts",
+    source: "export function createTrustStatusInternal() { return {}; }",
+  });
+});
+
+test("intentional fixture rejects Decision authority in Trust Status Domain", () => {
+  expectFixtureViolation("TRUST_STATUS_DERIVER_DECISION_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/trust-status/trustStatusDeriver.ts",
+    source: "decideOrganizationVerification(completion, context);",
+  });
+});
+
+test("intentional fixture rejects Trust Status Deriver runtime wiring", () => {
+  expectFixtureViolation("TRUST_STATUS_DERIVER_RUNTIME_WIRING", {
+    file: "server/organization-verification/worker.ts",
+    source:
+      'import { deriveOrganizationVerificationTrustStatus } from "./domain/trust-status/trustStatusDeriver.js";',
   });
 });

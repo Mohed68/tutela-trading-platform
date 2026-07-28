@@ -29,6 +29,18 @@ export interface OrganizationVerificationDecision
   readonly [decisionSeal]: true;
 }
 
+export function isOrganizationVerificationDecision(
+  input: unknown,
+): input is OrganizationVerificationDecision {
+  if (typeof input !== "object" || input === null) return false;
+  const candidate = input as OrganizationVerificationDecision;
+  return (
+    candidate[decisionSeal] === true &&
+    Object.isFrozen(candidate) &&
+    Object.isFrozen(candidate.policyProvenance)
+  );
+}
+
 export interface DecisionConstructionContext {
   readonly decisionId: OrganizationVerificationDecisionId;
   readonly decisionEngineVersion: DecisionEngineVersion;
@@ -61,11 +73,7 @@ function createDecisionInternal(
 function readDecisionInternal(
   input: OrganizationVerificationDecision,
 ): OrganizationVerificationDecision {
-  if (
-    input[decisionSeal] !== true ||
-    !Object.isFrozen(input) ||
-    !Object.isFrozen(input.policyProvenance)
-  ) {
+  if (!isOrganizationVerificationDecision(input)) {
     throw new TypeError("SEALED_ORGANIZATION_VERIFICATION_DECISION_REQUIRED");
   }
   return input;
