@@ -26,6 +26,7 @@
     "test:draft-validation": "tsx --test shared/draftValidation.test.ts server/drafts/policy.test.ts",
     "test:draft-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-5b.runtime.test.ts",
     "test:submission-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-5c.runtime.test.ts",
+    "test:verification-engine": "tsx --test server/verification/engine.test.ts",
     "test:migrations": "tsx --test scripts/migrations/rehearsal-lib.test.ts",
     "test:recovery": "tsx --test server/recoveryMode.test.ts server/services/openaiClient.test.ts",
     "migration:rehearsal": "node --env-file=.env --import tsx scripts/migration-rehearsal.ts",
