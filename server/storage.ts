@@ -122,6 +122,7 @@ export interface IStorage {
     verificationQueue: number;
     totalVolume: string;
   }>;
+  getDashboardOwnedOfferCount(userId: string): Promise<number>;
   
   // Performance Insights operations
   getLatestInsightsReport(userId: string): Promise<PerformanceInsightsReport | undefined>;
@@ -614,6 +615,15 @@ export class DatabaseStorage implements IStorage {
       verificationQueue: verificationQueueResult?.count || 0,
       totalVolume: totalVolumeResult?.total || "0",
     };
+  }
+
+  async getDashboardOwnedOfferCount(userId: string): Promise<number> {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(offers)
+      .where(eq(offers.userId, userId));
+
+    return result?.count ?? 0;
   }
 
   async getLatestInsightsReport(userId: string): Promise<PerformanceInsightsReport | undefined> {

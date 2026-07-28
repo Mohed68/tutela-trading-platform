@@ -2,7 +2,12 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./auth";
+import {
+  isAuthenticated,
+  isLocallyAuthenticatable,
+  setupAuth,
+  toCurrentUserDto,
+} from "./auth";
 import { BusinessEvents } from "./monitoring";
 import Stripe from "stripe";
 import { requireAdminAuth, requirePermission, adminRateLimit } from "./adminAuth";
@@ -35,6 +40,7 @@ import {
   getPublishedMarketplaceOfferRecords,
   normalizePublishedOffer,
 } from "./marketplace/publicMarketplace";
+import { buildDashboardOverview } from "./dashboard";
 
 // Initialize Stripe
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -213,6 +219,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard routes
+  app.get('/api/dashboard/overview', isAuthenticated, async (req: any, res) => {
+    const userId = req.user?.claims?.sub;
+    const identity = userId
+      ? await storage.getAuthenticationUser(userId)
+      : undefined;
+
+    if (!isLocallyAuthenticatable(identity)) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const [ownedOfferCount, publishedOfferCount] = await Promise.allSettled([
+      storage.getDashboardOwnedOfferCount(identity.id),
+      getPublishedMarketplaceOfferRecords().then((records) => records.length),
+    ]);
+
+    return res.json(
+      buildDashboardOverview(
+        toCurrentUserDto(identity),
+        ownedOfferCount,
+        publishedOfferCount,
+      ),
+    );
+  });
+
   app.get('/api/dashboard/metrics', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
