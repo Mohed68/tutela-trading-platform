@@ -15,7 +15,7 @@ import {
 } from "./recovery-user-lib.js";
 
 const EXPECTED_FINGERPRINT =
-  "0a899670e067b22692abc0a8f3d9d05c590f84d709d214984e2cf1e1749d1def";
+  "d309afaee7935df8b4e91e42f9f6f6c6e9c646b810640e1683e0512e6777bdbe";
 const PORT = "5058";
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 const GENERIC_FAILURE = { message: "Invalid email or password." };

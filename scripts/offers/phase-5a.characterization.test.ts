@@ -13,7 +13,7 @@ import { verifyRecoveryUserState } from "../auth/recovery-user-lib.js";
 import { isSafeRecoveryRequest } from "../../server/recoveryMode.js";
 
 const EXPECTED_FINGERPRINT =
-  "0a899670e067b22692abc0a8f3d9d05c590f84d709d214984e2cf1e1749d1def";
+  "d309afaee7935df8b4e91e42f9f6f6c6e9c646b810640e1683e0512e6777bdbe";
 const EXPECTED_LEGACY_USER_HASH =
   "3369cf18c0fb7ffa5881cdd4a6c25c2da11ef489c46e7b9e52f5d28f41288bbc";
 const EXPECTED_LEGACY_OFFER_HASH =
@@ -120,6 +120,7 @@ test(
         "closed",
         "cancelled",
         "draft",
+        "submitted",
       ]);
       assert.equal(databaseStatuses.includes("draft"), true);
 
@@ -194,6 +195,7 @@ test("shared schema represents the additive database-backed draft state", () => 
     "closed",
     "cancelled",
     "draft",
+    "submitted",
     "hidden",
     "archived",
   ]);

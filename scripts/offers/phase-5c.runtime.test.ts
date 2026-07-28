@@ -5,8 +5,9 @@ import { request as nodeHttpRequest, type IncomingHttpHeaders } from "node:http"
 import test from "node:test";
 import { Client, type QueryResultRow } from "pg";
 import type {
-  DraftOfferDetailDto,
   DraftOfferOptionsDto,
+  OwnerPrivateOfferDetailDto,
+  SubmittedOfferDetailDto,
 } from "../../shared/drafts.js";
 import {
   applicationSchemaFingerprint,
@@ -24,7 +25,7 @@ const EXPECTED_LEGACY_USER_HASH =
   "3369cf18c0fb7ffa5881cdd4a6c25c2da11ef489c46e7b9e52f5d28f41288bbc";
 const EXPECTED_LEGACY_OFFER_HASH =
   "b9492303d4d3bb157941fd3ed609438761eb85396e83861af4cfb5f77664c2fc";
-const PORT = "5061";
+const PORT = "5062";
 const SENSITIVE_KEYS = new Set([
   "user",
   "userId",
@@ -34,21 +35,14 @@ const SENSITIVE_KEYS = new Set([
   "passwordHash",
   "verification",
   "verified",
-  "sellerOrgVerified",
+  "published",
   "moderation",
-  "financialRating",
-  "creditRating",
-  "riskScore",
   "session",
   "token",
 ]);
 const serverDiagnostics = new WeakMap<
   ReturnType<typeof spawn>,
-  {
-    databaseVerified: boolean;
-    listening: boolean;
-    startupFailure: boolean;
-  }
+  { listening: boolean; startupFailure: boolean }
 >();
 
 function snapshotHash(rows: QueryResultRow[]): string {
@@ -72,6 +66,19 @@ async function tableSnapshot(
     )
   ).rows;
   return snapshotHash(rows);
+}
+
+async function count(
+  client: Client,
+  table: string,
+  where = "",
+): Promise<number> {
+  const safeTable = `"${table.replaceAll('"', '""')}"`;
+  return (
+    await client.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM public.${safeTable} ${where}`,
+    )
+  ).rows[0].count;
 }
 
 function assertNoSensitiveKeys(value: unknown): void {
@@ -107,20 +114,11 @@ function startServer(): ReturnType<typeof spawn> {
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  const diagnostics = {
-    databaseVerified: false,
-    listening: false,
-    startupFailure: false,
-  };
+  const diagnostics = { listening: false, startupFailure: false };
   serverDiagnostics.set(child, diagnostics);
   const inspectOutput = (chunk: Buffer | string) => {
     const output = chunk.toString();
-    if (output.includes("database connectivity and required schema verified")) {
-      diagnostics.databaseVerified = true;
-    }
-    if (output.includes("serving on port")) {
-      diagnostics.listening = true;
-    }
+    if (output.includes("serving on port")) diagnostics.listening = true;
     if (output.includes("TUTELA failed to start")) {
       diagnostics.startupFailure = true;
     }
@@ -144,12 +142,9 @@ async function waitForServer(
   }
   const diagnostics = serverDiagnostics.get(child);
   throw new Error(
-    [
-      "SERVER_DID_NOT_START",
-      diagnostics?.databaseVerified ? "DATABASE_VERIFIED" : "DATABASE_PENDING",
-      diagnostics?.listening ? "LISTENING" : "NOT_LISTENING",
-      diagnostics?.startupFailure ? "STARTUP_FAILURE" : "NO_FAILURE_SIGNAL",
-    ].join("_"),
+    diagnostics?.startupFailure
+      ? "SERVER_STARTUP_FAILURE"
+      : "SERVER_DID_NOT_START",
   );
 }
 
@@ -218,21 +213,8 @@ function cookieFrom(response: { headers: IncomingHttpHeaders }): string {
   return value.split(";", 1)[0];
 }
 
-async function count(
-  client: Client,
-  table: string,
-  where = "",
-): Promise<number> {
-  const safeTable = `"${table.replaceAll('"', '""')}"`;
-  return (
-    await client.query<{ count: number }>(
-      `SELECT count(*)::int AS count FROM public.${safeTable} ${where}`,
-    )
-  ).rows[0].count;
-}
-
 test(
-  "Phase 5B draft is private, owner-only, side-effect-free, and exactly cleaned up",
+  "Phase 5C freezes one owner draft as a private submitted offer and cleans it up",
   { timeout: 600_000 },
   async () => {
     const credential = readRecoveryCredentialInput(process.env);
@@ -240,9 +222,9 @@ test(
       connectionString: requireRawDatabaseUrl(process.env.DATABASE_URL),
     });
     let child: ReturnType<typeof spawn> | null = null;
-    let draftId: string | null = null;
+    let offerId: string | null = null;
     let recoveryOwnerId: string | null = null;
-    let draftStorage:
+    let privateStorage:
       | typeof import("../../server/drafts/storage.js")
       | undefined;
     let step = "initialize";
@@ -269,8 +251,8 @@ test(
         await tableSnapshot(client, "offers"),
         EXPECTED_LEGACY_OFFER_HASH,
       );
-      assert.equal(await count(client, "sessions"), 0);
       assert.equal(await count(client, "offers"), 9);
+      assert.equal(await count(client, "sessions"), 0);
       assert.equal(await count(client, "offer_verifications"), 0);
       assert.equal(await count(client, "activity_logs"), 0);
       const journal = (
@@ -280,7 +262,7 @@ test(
         }>(`
           SELECT execution_status, sql_executed
           FROM public.tutela_migration_journal
-          WHERE migration_identifier = '0007_add_draft_offer_status'
+          WHERE migration_identifier = '0008_add_submitted_offer_status'
         `)
       ).rows[0];
       assert.deepEqual(journal, {
@@ -314,25 +296,16 @@ test(
       child = startServer();
       await waitForServer(child);
 
-      step = "anonymous";
-      for (const [label, method, path, body] of [
-        ["LIST", "GET", "/api/drafts", undefined],
-        ["OPTIONS", "GET", "/api/drafts/options", undefined],
-        ["CREATE", "POST", "/api/drafts", {}],
-        ["DETAIL", "GET", `/api/drafts/${crypto.randomUUID()}`, undefined],
-        [
-          "UPDATE",
-          "PATCH",
-          `/api/drafts/${crypto.randomUUID()}`,
-          { location: "x" },
-        ],
-        ["DELETE", "DELETE", `/api/drafts/${crypto.randomUUID()}`, undefined],
-      ] as const) {
-        const response = await request(method, path, undefined, body);
-        if (response.status !== 401) {
-          throw new Error(`ANONYMOUS_${label}_STATUS_${response.status}`);
-        }
-      }
+      step = "anonymous_submit";
+      assert.equal(
+        (
+          await request(
+            "POST",
+            `/api/drafts/${crypto.randomUUID()}/submit`,
+          )
+        ).status,
+        401,
+      );
 
       step = "login";
       const login = await request("POST", "/api/auth/login", undefined, {
@@ -343,218 +316,185 @@ test(
       const cookie = cookieFrom(login);
       assert.equal(await count(client, "sessions"), 1);
 
-      step = "options";
+      step = "create";
       const optionsResponse = await request(
         "GET",
         "/api/drafts/options",
         cookie,
       );
-      if (optionsResponse.status !== 200) {
-        throw new Error(`OPTIONS_STATUS_${optionsResponse.status}`);
-      }
+      assert.equal(optionsResponse.status, 200);
       const options = (await optionsResponse.json()) as DraftOfferOptionsDto;
-      if (options.currency !== "USD") {
-        throw new Error("OPTIONS_CURRENCY_INVALID");
-      }
       const commodity = options.commodities.find(
         (item) => item.name === "West Texas Intermediate (WTI) Crude Oil",
       );
-      if (!commodity) throw new Error("OPTIONS_COMMODITY_MISSING");
-      if (JSON.stringify(commodity.units) !== JSON.stringify(["bbl", "MT"])) {
-        throw new Error("OPTIONS_UNITS_INVALID");
-      }
-
-      const validCreate = {
+      assert.ok(commodity);
+      const createResponse = await request("POST", "/api/drafts", cookie, {
         offerType: "sell",
         commodityId: commodity.id,
-        quantity: "12.50",
+        quantity: "20.00",
         unit: "bbl",
-        amountPerUnit: "81.25",
+        amountPerUnit: "82.00",
         currency: "USD",
-        location: "Phase 5B synthetic recovery draft",
+        location: "Phase 5C synthetic submission",
         validUntil: "2099-01-01T00:00:00.000Z",
-      };
-
-      step = "forbidden_create";
-      for (const override of [
-        { userId: legacyUserId },
-        { ownerId: legacyUserId },
-        { status: "active" },
-        { verified: true },
-        { sellerOrgVerified: true },
-        { moderationStatus: "active" },
-        { currency: "EUR" },
-        { unit: "GAL" },
-        { offerType: "trade" },
-        { quantity: "0" },
-        { amountPerUnit: "-1" },
-        { commodityId: "99999999-9999-4999-8999-999999999999" },
-      ]) {
-        const response = await request("POST", "/api/drafts", cookie, {
-          ...validCreate,
-          ...override,
-        });
-        assert.equal(response.status, 400);
-      }
-      assert.equal(await count(client, "offers"), 9);
-
-      step = "create";
-      const createdResponse = await request(
-        "POST",
-        "/api/drafts",
-        cookie,
-        validCreate,
-      );
-      assert.equal(createdResponse.status, 201);
-      const created = (await createdResponse.json()) as DraftOfferDetailDto;
-      draftId = created.id;
-      assert.equal(created.status, "draft");
-      assert.deepEqual(created.visibility, { state: "private" });
-      assert.equal(created.quantity.value, "12.50");
-      assert.equal(created.quantity.unit, "bbl");
-      assert.equal(created.pricing.amountPerUnit, "81.25");
-      assert.equal(created.pricing.currency, "USD");
-      assertNoSensitiveKeys(created);
-
-      const stored = (
-        await client.query<{
-          user_id: string;
-          status: string;
-          quantity: string;
-          unit: string;
-          price_per_unit: string;
-          currency: string;
-        }>(
-          `
-            SELECT
-              user_id,
-              status::text,
-              quantity::text,
-              unit,
-              price_per_unit::text,
-              currency
-            FROM public.offers
-            WHERE id = $1
-          `,
-          [draftId],
-        )
-      ).rows[0];
-      assert.deepEqual(stored, {
-        user_id: recoveryOwnerId,
-        status: "draft",
-        quantity: "12.50",
-        unit: "bbl",
-        price_per_unit: "81.25",
-        currency: "USD",
       });
-      assert.equal(await count(client, "offer_verifications"), 0);
-      assert.equal(await count(client, "activity_logs"), 0);
+      assert.equal(createResponse.status, 201);
+      const created =
+        (await createResponse.json()) as OwnerPrivateOfferDetailDto;
+      assert.equal(created.status, "draft");
+      offerId = created.id;
 
-      step = "owner_reads";
-      const listResponse = await request("GET", "/api/drafts", cookie);
-      assert.equal(listResponse.status, 200);
-      const list = (await listResponse.json()) as DraftOfferDetailDto[];
-      assert.equal(list.length, 1);
-      assert.equal(list[0].id, draftId);
-      assertNoSensitiveKeys(list);
-
-      const detailResponse = await request(
-        "GET",
-        `/api/drafts/${draftId}`,
+      step = "edit";
+      const editResponse = await request(
+        "PATCH",
+        `/api/drafts/${offerId}`,
         cookie,
+        { location: "Phase 5C completed synthetic draft" },
       );
-      assert.equal(detailResponse.status, 200);
-      assert.deepEqual(await detailResponse.json(), created);
+      assert.equal(editResponse.status, 200);
+      assert.equal(
+        ((await editResponse.json()) as OwnerPrivateOfferDetailDto).location,
+        "Phase 5C completed synthetic draft",
+      );
 
-      step = "isolation";
-      draftStorage = await import("../../server/drafts/storage.js");
+      step = "authorization";
+      privateStorage = await import("../../server/drafts/storage.js");
       assert.equal(
-        await draftStorage.getOwnedDraftOffer(legacyUserId, draftId),
+        await privateStorage.submitOwnedDraftOffer(legacyUserId, offerId),
         undefined,
-      );
-      assert.equal(
-        await draftStorage.updateOwnedDraftOffer(legacyUserId, draftId, {
-          location: "Cross-owner attempt",
-        }),
-        undefined,
-      );
-      assert.equal(
-        await draftStorage.deleteOwnedDraftOffer(legacyUserId, draftId),
-        undefined,
-      );
-      assert.equal(
-        (await request("GET", `/api/drafts/${legacyOfferId}`, cookie)).status,
-        404,
       );
       assert.equal(
         (
-          await request("PATCH", `/api/drafts/${legacyOfferId}`, cookie, {
-            location: "Legacy mutation attempt",
+          await request(
+            "POST",
+            `/api/drafts/${legacyOfferId}/submit`,
+            cookie,
+          )
+        ).status,
+        404,
+      );
+
+      step = "spoofing";
+      for (const body of [
+        { status: "submitted" },
+        { status: "active" },
+        { verified: true },
+        { published: true },
+        { moderationStatus: "approved" },
+      ]) {
+        assert.equal(
+          (
+            await request(
+              "POST",
+              `/api/drafts/${offerId}/submit`,
+              cookie,
+              body,
+            )
+          ).status,
+          400,
+        );
+      }
+
+      const beforeSubmit = (
+        await client.query<{ record: Record<string, unknown> }>(
+          "SELECT to_jsonb(offer) AS record FROM public.offers AS offer WHERE id = $1",
+          [offerId],
+        )
+      ).rows[0].record;
+
+      step = "submit";
+      const submitResponse = await request(
+        "POST",
+        `/api/drafts/${offerId}/submit`,
+        cookie,
+      );
+      assert.equal(submitResponse.status, 200);
+      const submitted =
+        (await submitResponse.json()) as SubmittedOfferDetailDto;
+      assert.equal(submitted.status, "submitted");
+      assert.deepEqual(submitted.visibility, { state: "private" });
+      assertNoSensitiveKeys(submitted);
+
+      const afterSubmit = (
+        await client.query<{ record: Record<string, unknown> }>(
+          "SELECT to_jsonb(offer) AS record FROM public.offers AS offer WHERE id = $1",
+          [offerId],
+        )
+      ).rows[0].record;
+      const changedFields = Object.keys(afterSubmit).filter(
+        (key) =>
+          JSON.stringify(afterSubmit[key]) !==
+          JSON.stringify(beforeSubmit[key]),
+      );
+      assert.deepEqual(changedFields.sort(), ["status", "updated_at"]);
+
+      step = "idempotence";
+      const repeated = await request(
+        "POST",
+        `/api/drafts/${offerId}/submit`,
+        cookie,
+      );
+      assert.equal(repeated.status, 200);
+      const repeatedDto =
+        (await repeated.json()) as SubmittedOfferDetailDto;
+      assert.deepEqual(repeatedDto, submitted);
+
+      step = "submitted_reads";
+      const list = await request("GET", "/api/drafts", cookie);
+      assert.equal(list.status, 200);
+      const listed = (await list.json()) as OwnerPrivateOfferDetailDto[];
+      assert.equal(listed.length, 1);
+      assert.equal(listed[0].id, offerId);
+      assert.equal(listed[0].status, "submitted");
+      assertNoSensitiveKeys(listed);
+      const detail = await request("GET", `/api/drafts/${offerId}`, cookie);
+      assert.equal(detail.status, 200);
+      assert.deepEqual(await detail.json(), submitted);
+
+      step = "submitted_frozen";
+      assert.equal(
+        (
+          await request("PATCH", `/api/drafts/${offerId}`, cookie, {
+            location: "Forbidden submitted edit",
           })
         ).status,
         404,
       );
       assert.equal(
-        (await request("DELETE", `/api/drafts/${legacyOfferId}`, cookie)).status,
+        (await request("DELETE", `/api/drafts/${offerId}`, cookie)).status,
         404,
       );
-
-      step = "forbidden_update";
-      for (const body of [
-        {},
-        { userId: legacyUserId },
-        { status: "active" },
-        { verified: true },
-        { moderationStatus: "active" },
-        { currency: "EUR" },
-        { unit: "kg" },
-      ]) {
-        assert.equal(
-          (await request("PATCH", `/api/drafts/${draftId}`, cookie, body))
-            .status,
-          400,
-        );
-      }
-
-      step = "update";
-      const beforeUpdate = (
-        await client.query<{ record: Record<string, unknown> }>(
-          "SELECT to_jsonb(offer) AS record FROM public.offers AS offer WHERE id = $1",
-          [draftId],
-        )
-      ).rows[0].record;
-      const updateResponse = await request(
-        "PATCH",
-        `/api/drafts/${draftId}`,
-        cookie,
-        { location: "Phase 5B updated synthetic location" },
+      assert.equal(
+        (
+          await request("PATCH", `/api/drafts/${offerId}`, cookie, {
+            status: "active",
+          })
+        ).status,
+        400,
       );
-      assert.equal(updateResponse.status, 200);
-      const updated = (await updateResponse.json()) as DraftOfferDetailDto;
-      assert.equal(updated.location, "Phase 5B updated synthetic location");
-      const afterUpdate = (
-        await client.query<{ record: Record<string, unknown> }>(
-          "SELECT to_jsonb(offer) AS record FROM public.offers AS offer WHERE id = $1",
-          [draftId],
-        )
-      ).rows[0].record;
-      const changedFields = Object.keys(afterUpdate).filter(
-        (key) =>
-          JSON.stringify(afterUpdate[key]) !== JSON.stringify(beforeUpdate[key]),
+      assert.equal(
+        (
+          await request(
+            "POST",
+            `/api/drafts/${offerId}/publish`,
+            cookie,
+          )
+        ).status,
+        503,
       );
-      assert.deepEqual(changedFields.sort(), ["location", "updated_at"]);
 
-      step = "publication_and_dashboard";
+      step = "private_invariance";
       const marketplace = await request("GET", "/api/offers", cookie);
       assert.equal(marketplace.status, 200);
       const marketplaceBody = (await marketplace.json()) as {
         offers: unknown[];
         totalCount: number;
       };
-      assert.equal(marketplaceBody.totalCount, 0);
       assert.deepEqual(marketplaceBody.offers, []);
-      assert.equal(JSON.stringify(marketplaceBody).includes(draftId), false);
-
+      assert.equal(marketplaceBody.totalCount, 0);
+      assert.equal(JSON.stringify(marketplaceBody).includes(offerId), false);
+      assert.equal(await count(client, "offer_verifications"), 0);
+      assert.equal(await count(client, "activity_logs"), 0);
       const dashboard = await request(
         "GET",
         "/api/dashboard/overview",
@@ -573,22 +513,23 @@ test(
         0,
       );
 
-      step = "delete";
-      const deleteResponse = await request(
-        "DELETE",
-        `/api/drafts/${draftId}`,
-        cookie,
+      step = "cleanup";
+      const cleanup = await client.query<{ id: string }>(
+        `
+          DELETE FROM public.offers
+          WHERE id = $1
+            AND user_id = $2
+            AND status::text = 'submitted'
+          RETURNING id
+        `,
+        [offerId, recoveryOwnerId],
       );
-      assert.equal(deleteResponse.status, 200);
-      assert.deepEqual(await deleteResponse.json(), {
-        id: draftId,
-        deleted: true,
-      });
-      assert.equal(
-        (await request("GET", `/api/drafts/${draftId}`, cookie)).status,
-        404,
-      );
-      draftId = null;
+      assert.equal(cleanup.rowCount, 1);
+      assert.equal(cleanup.rows[0].id, offerId);
+      offerId = null;
+      const emptyList = await request("GET", "/api/drafts", cookie);
+      assert.equal(emptyList.status, 200);
+      assert.deepEqual(await emptyList.json(), []);
 
       step = "logout";
       const logout = await request("POST", "/api/auth/logout", cookie);
@@ -629,27 +570,25 @@ test(
           : error && typeof error === "object" && "code" in error
             ? `DATABASE_${String(error.code).replace(/[^A-Z0-9_-]/gi, "")}`
             : "ASSERTION_FAILURE";
-      throw new Error(`PHASE5B_RUNTIME_${step.toUpperCase()}_${code}`);
+      throw new Error(`PHASE5C_RUNTIME_${step.toUpperCase()}_${code}`);
     } finally {
       await stopServer(child);
-      if (draftId && recoveryOwnerId) {
+      if (offerId && recoveryOwnerId) {
         await client
           .query(
             `
               DELETE FROM public.offers
               WHERE id = $1
                 AND user_id = $2
-                AND status::text = 'draft'
+                AND status::text IN ('draft', 'submitted')
             `,
-            [draftId, recoveryOwnerId],
+            [offerId, recoveryOwnerId],
           )
           .catch(() => undefined);
       }
-      await client
-        .query("DELETE FROM public.sessions")
-        .catch(() => undefined);
+      await client.query("DELETE FROM public.sessions").catch(() => undefined);
       await client.end().catch(() => undefined);
-      if (draftStorage) {
+      if (privateStorage) {
         const { pool } = await import("../../server/db.js");
         await pool.end().catch(() => undefined);
       }
