@@ -116,6 +116,16 @@ export function sealNormalizedEvaluationCompletion(
   ) {
     return decisionFailure("decision_context_invalid");
   }
+  if (
+    (input.policyEvaluationProvenanceReference !== undefined &&
+      (typeof input.policyEvaluationProvenanceReference !== "string" ||
+        input.policyEvaluationProvenanceReference.trim().length === 0)) ||
+    (input.policyEvaluationIntegrityReference !== undefined &&
+      (typeof input.policyEvaluationIntegrityReference !== "string" ||
+        input.policyEvaluationIntegrityReference.trim().length === 0))
+  ) {
+    return decisionFailure("decision_context_invalid");
+  }
   return decisionSuccess(
     Object.freeze({
       recordId: input.recordId,
@@ -131,6 +141,18 @@ export function sealNormalizedEvaluationCompletion(
       classification: selected[0],
       categorySummaries: Object.freeze([...(input.categorySummaries ?? [])]),
       correlationId: input.correlationId,
+      ...(input.policyEvaluationProvenanceReference
+        ? {
+            policyEvaluationProvenanceReference:
+              input.policyEvaluationProvenanceReference,
+          }
+        : {}),
+      ...(input.policyEvaluationIntegrityReference
+        ? {
+            policyEvaluationIntegrityReference:
+              input.policyEvaluationIntegrityReference,
+          }
+        : {}),
       [evaluationSeal]: true as const,
     }),
   );

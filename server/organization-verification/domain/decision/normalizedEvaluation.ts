@@ -42,4 +42,6 @@ export interface RawNormalizedOrganizationVerificationEvaluation {
   readonly rejectionRequired: boolean;
   readonly categorySummaries?: readonly string[];
   readonly correlationId: CorrelationId;
+  readonly policyEvaluationProvenanceReference?: string;
+  readonly policyEvaluationIntegrityReference?: string;
 }

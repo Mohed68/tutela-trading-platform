@@ -1,3 +1,5 @@
+import * as organizationVerificationPolicy from "./policy/index.js";
+
 export {
   createAttemptForRevision,
   transitionAttemptProcess,
@@ -78,3 +80,4 @@ export {
   type OrganizationVerificationSubmission,
   type SubmissionResult,
 } from "./submission.js";
+export { organizationVerificationPolicy };

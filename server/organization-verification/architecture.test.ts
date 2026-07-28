@@ -34,7 +34,13 @@ type ArchitectureViolationCode =
   | "TRUST_STATUS_DERIVER_DECISION_AUTHORITY"
   | "TRUST_STATUS_DERIVER_RUNTIME_WIRING"
   | "DOMAIN_PUBLIC_EXPORT_LEAK"
-  | "UNAUTHORIZED_AUTHENTICITY_READ";
+  | "UNAUTHORIZED_AUTHENTICITY_READ"
+  | "POLICY_DOMAIN_FORBIDDEN_DEPENDENCY"
+  | "POLICY_DOMAIN_FORBIDDEN_AUTHORITY"
+  | "POLICY_DOMAIN_PUBLIC_EXPORT_LEAK"
+  | "UNAUTHORIZED_POLICY_CONSTRUCTION"
+  | "POLICY_DOMAIN_RUNTIME_WIRING"
+  | "FROZEN_DOMAIN_IMPORTS_POLICY";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -160,10 +166,14 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isTrustStatusDomain = lowerFile.startsWith(
     "server/organization-verification/domain/trust-status/",
   );
+  const isPolicyDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/policy/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
-    !isTrustStatusDomain;
+    !isTrustStatusDomain &&
+    !isPolicyDomain;
   const isDomainPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/index.ts",
   );
@@ -172,6 +182,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isTrustStatusPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/trust-status/index.ts",
+  );
+  const isPolicyPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/policy/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -190,7 +203,10 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   }
 
   if (
-    ((isDomainPublicIndex || isDecisionPublicIndex || isTrustStatusPublicIndex) &&
+    ((isDomainPublicIndex ||
+      isDecisionPublicIndex ||
+      isTrustStatusPublicIndex ||
+      isPolicyPublicIndex) &&
       /\b(?:copyDeclaredInputs|freezeEvidenceReferenceSet|appendRevisionReference|appendAttemptReference|domainSuccess|domainFailure|readSealedEvaluationCompletion|readDecisionApplicability|readOrganizationVerificationExpiryFact|readOrganizationVerificationInvalidationFact|readOrganizationVerificationTrustStatusSourceFacts|createDecisionInternal|createTrustStatusInternal)\b/.test(
       input.source,
       )) ||
@@ -204,6 +220,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "DOMAIN_PUBLIC_EXPORT_LEAK",
       file,
       "Public domain barrel exposes an internal helper or uncurated core module",
+    );
+  }
+
+  if (
+    isPolicyPublicIndex &&
+    (/\b(?:policySuccess|policyFailure|readOrganizationVerificationFinding|readOrganizationVerificationRuleEvaluationResult|readOrganizationVerificationPolicyEvaluationCompletion|createOrganizationVerificationPolicyEvaluationCompletionInternal|policyEvaluationClassification)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "POLICY_DOMAIN_PUBLIC_EXPORT_LEAK",
+      file,
+      "Policy public surface exposes internal authenticity or construction authority",
     );
   }
 
@@ -244,6 +275,28 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       allowedSuffixes: [
         "/domain/trust-status/sourcefacts.ts",
         "/domain/trust-status/truststatusderiver.ts",
+      ],
+    },
+    {
+      symbol: "readOrganizationVerificationFinding",
+      allowedSuffixes: [
+        "/domain/policy/finding.ts",
+        "/domain/policy/ruleevaluationresult.ts",
+      ],
+    },
+    {
+      symbol: "readOrganizationVerificationRuleEvaluationResult",
+      allowedSuffixes: [
+        "/domain/policy/ruleevaluationresult.ts",
+        "/domain/policy/findingaggregator.ts",
+      ],
+    },
+    {
+      symbol: "readOrganizationVerificationPolicyEvaluationCompletion",
+      allowedSuffixes: [
+        "/domain/policy/policyevaluationcompletion.ts",
+        "/domain/policy/findingaggregator.ts",
+        "/domain/policy/normalizedevaluationadapter.ts",
       ],
     },
   ];
@@ -538,6 +591,98 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
 
   }
 
+  if (isPolicyDomain) {
+    for (const specifier of specifiers) {
+      const isLocalPolicyModule = /^\.\/[A-Za-z0-9]+\.js$/.test(specifier);
+      const isApprovedCoreIdentity = specifier === "../index.js";
+      const isApprovedRegistrySurface =
+        specifier === "../../../organization-registry/index.js";
+      const isApprovedNormalizedBoundary =
+        lowerFile.endsWith("/normalizedevaluationadapter.ts") &&
+        specifier === "../decision/index.js";
+      if (
+        !isLocalPolicyModule &&
+        !isApprovedCoreIdentity &&
+        !isApprovedRegistrySurface &&
+        !isApprovedNormalizedBoundary
+      ) {
+        addViolation(
+          violations,
+          "POLICY_DOMAIN_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+      if (
+        /(?:^|\/)(?:db|database|schema|storage|repository|routes?|workers?|startup|frontend|client|providers?|services?|sessions?)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /(?:^|\/)(?:verification|marketplace|kyb|aml|sanctions|compliance|payments?|orders?|contracts?|notifications?|blockchain|ai|openai|stripe|sentry)(?:\/|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:drizzle-orm|pg|@neondatabase\/|openai|stripe|@sentry\/)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "POLICY_DOMAIN_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+
+    if (
+      /\b(?:decideOrganizationVerification|createDecisionInternal|OrganizationVerificationDecision|deriveOrganizationVerificationTrustStatus|createTrustStatusInternal|transitionAttemptProcess)\b/.test(
+        input.source,
+      ) ||
+      /["'](?:approved|rejected|trusted|not_trusted|expired|invalidated|allowed_to_trade|allowed_to_publish|marketplace_access)["']/.test(
+        input.source,
+      ) ||
+      /\b(?:ParticipationEligibility|RegistryLifecycle|ReviewerSelectedStatus)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "POLICY_DOMAIN_FORBIDDEN_AUTHORITY",
+        file,
+        "Policy Framework attempted to own Decision, Trust, lifecycle, workflow, or eligibility authority",
+      );
+    }
+  }
+
+  if (
+    /\bcreateOrganizationVerificationPolicyEvaluationCompletionInternal\b/.test(
+      input.source,
+    ) &&
+    !lowerFile.endsWith("/domain/policy/policyevaluationcompletion.ts") &&
+    !lowerFile.endsWith("/domain/policy/findingaggregator.ts")
+  ) {
+    addViolation(
+      violations,
+      "UNAUTHORIZED_POLICY_CONSTRUCTION",
+      file,
+      "Only the Finding Aggregator may invoke Policy Evaluation Completion construction",
+    );
+  }
+
+  if (
+    (isDecisionDomain ||
+      isTrustStatusDomain ||
+      (isOrganizationVerificationCoreDomain && !isDomainPublicIndex) ||
+      isOrganizationRegistry) &&
+    specifiers.some((specifier) => /(?:^|\/)policy(?:\/|$)/i.test(specifier))
+  ) {
+    addViolation(
+      violations,
+      "FROZEN_DOMAIN_IMPORTS_POLICY",
+      file,
+      "Architecture-frozen domains must not depend on Policy Framework internals",
+    );
+  }
+
   if (
     !lowerFile.endsWith(
       "/organization-verification/domain/decision/decisionengine.ts",
@@ -564,6 +709,23 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "DECISION_ENGINE_RUNTIME_WIRING",
       file,
       "Decision Engine must remain unwired in this slice",
+    );
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isPolicyDomain &&
+    !isDomainPublicIndex &&
+    !lowerFile.endsWith("/organization-verification/index.ts") &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)domain\/policy(?:\/|$)|(?:^|\/)policy(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "POLICY_DOMAIN_RUNTIME_WIRING",
+      file,
+      "Policy Framework must remain inert outside its curated public surface",
     );
   }
 
@@ -986,5 +1148,63 @@ test("intentional fixture rejects unauthorized authenticity-reader access", () =
     file: "server/organization-verification/domain/reviewer.ts",
     source:
       'import { readSealedEvaluationCompletion } from "./decision/sealedEvaluationCompletion.js";',
+  });
+});
+
+test("intentional fixture rejects Policy Framework Decision construction", () => {
+  expectFixtureViolation("POLICY_DOMAIN_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/policy/decisionPolicy.ts",
+    source: "decideOrganizationVerification(completion, context);",
+  });
+});
+
+test("intentional fixture rejects Policy Framework Trust Status construction", () => {
+  expectFixtureViolation("POLICY_DOMAIN_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/policy/trustPolicy.ts",
+    source: "deriveOrganizationVerificationTrustStatus(facts, context);",
+  });
+});
+
+test("intentional fixture rejects Policy Framework runtime imports", () => {
+  expectFixtureViolation("POLICY_DOMAIN_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy/policyEvaluator.ts",
+    source: 'import { db } from "../../../db.js";',
+  });
+});
+
+test("intentional fixture rejects Policy Framework provider imports", () => {
+  expectFixtureViolation("POLICY_DOMAIN_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy/policyEvaluator.ts",
+    source: 'import { screen } from "../../../providers/sanctions.js";',
+  });
+});
+
+test("intentional fixture rejects direct policy-to-Decision Engine coupling", () => {
+  expectFixtureViolation("POLICY_DOMAIN_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy/evaluator.ts",
+    source: 'import { decide } from "../decision/decisionEngine.js";',
+  });
+});
+
+test("intentional fixture rejects direct policy-to-Trust Status coupling", () => {
+  expectFixtureViolation("POLICY_DOMAIN_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy/evaluator.ts",
+    source:
+      'import { derive } from "../trust-status/trustStatusDeriver.js";',
+  });
+});
+
+test("intentional fixture rejects unrestricted Policy internal exports", () => {
+  expectFixtureViolation("POLICY_DOMAIN_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/domain/policy/index.ts",
+    source:
+      'export { readOrganizationVerificationPolicyEvaluationCompletion } from "./policyEvaluationCompletion.js";',
   });
 });
