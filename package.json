@@ -22,6 +22,7 @@
     "test:marketplace-runtime": "node --env-file=.env --import tsx --test scripts/marketplace/phase-3c.runtime.test.ts",
     "test:offer-characterization": "node --env-file=.env --import tsx --test scripts/offers/phase-5a.characterization.test.ts",
     "offer:draft-migration": "node --env-file=.env --import tsx scripts/offers/draft-migration.ts",
+    "test:draft-validation": "tsx --test shared/draftValidation.test.ts server/drafts/policy.test.ts",
     "test:migrations": "tsx --test scripts/migrations/rehearsal-lib.test.ts",
     "test:recovery": "tsx --test server/recoveryMode.test.ts server/services/openaiClient.test.ts",
     "migration:rehearsal": "node --env-file=.env --import tsx scripts/migration-rehearsal.ts",
