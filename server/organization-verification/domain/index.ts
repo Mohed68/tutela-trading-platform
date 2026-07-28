@@ -1,5 +1,6 @@
 export * from "./attempt.js";
 export * from "./draft.js";
+export * from "./decision/index.js";
 export * from "./errors.js";
 export * from "./evidenceReferences.js";
 export * from "./ids.js";

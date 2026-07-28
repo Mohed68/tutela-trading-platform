@@ -22,7 +22,12 @@ type ArchitectureViolationCode =
   | "REGISTRY_EXPORTS_FORBIDDEN_AUTHORITY"
   | "REGISTRY_ACL_IMPORTS_RUNTIME"
   | "CORE_DOMAIN_LATER_SLICE_ARTIFACT"
-  | "UNRESTRICTED_REVISION_CONSTRUCTOR";
+  | "UNRESTRICTED_REVISION_CONSTRUCTOR"
+  | "DECISION_DOMAIN_FORBIDDEN_DEPENDENCY"
+  | "DECISION_DOMAIN_LATER_SLICE_ARTIFACT"
+  | "UNAUTHORIZED_DECISION_CONSTRUCTION"
+  | "DECISION_ENGINE_LIFECYCLE_AUTHORITY"
+  | "DECISION_ENGINE_RUNTIME_WIRING";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -142,9 +147,12 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isRegistryAcl = lowerFile.endsWith(
     "server/organization-verification/integration/organizationregistryacl.ts",
   );
-  const isOrganizationVerificationCoreDomain = lowerFile.startsWith(
-    "server/organization-verification/domain/",
+  const isDecisionDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/decision/",
   );
+  const isOrganizationVerificationCoreDomain =
+    lowerFile.startsWith("server/organization-verification/domain/") &&
+    !isDecisionDomain;
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
     lowerFile.endsWith("/index.ts");
@@ -374,6 +382,99 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     }
   }
 
+  if (isDecisionDomain) {
+    for (const specifier of specifiers) {
+      if (
+        !/^\.\/[A-Za-z0-9]+\.js$/.test(specifier) &&
+        !/^\.\.\/(?:attempt|ids|record|revision)\.js$/.test(specifier) &&
+        specifier !== "../../../organization-registry/index.js"
+      ) {
+        addViolation(
+          violations,
+          "DECISION_DOMAIN_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+      if (
+        /(?:^|\/)(?:db|database|storage|repository|routes?|workers?|providers?|services?)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /(?:^|\/)(?:verification|marketplace|kyb|compliance|payments?|orders?|contracts?|notifications?|blockchain|ai)(?:\/|$)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "DECISION_DOMAIN_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+
+    if (
+      /(?:^|\/)(?:trust-status|finding|policy|reason-code|rule)(?:\/|\.|$)/i.test(
+        lowerFile,
+      ) ||
+      /["'](?:unestablished|trusted|not_trusted|expired|invalidated)["']/.test(
+        input.source,
+      ) ||
+      /\b(?:TrustStatus|TrustStatusDeriver|VerificationFinding|ReasonCode|RuleId|Severity|Disposition|PolicyRegistry)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "DECISION_DOMAIN_LATER_SLICE_ARTIFACT",
+        file,
+        "Trust, finding, rule, reason-code, severity, or policy authority belongs to a later slice",
+      );
+    }
+
+    if (
+      lowerFile.endsWith("/decisionengine.ts") &&
+      /\btransitionAttemptProcess\b/.test(input.source)
+    ) {
+      addViolation(
+        violations,
+        "DECISION_ENGINE_LIFECYCLE_AUTHORITY",
+        file,
+        "Decision Engine must not own attempt or lifecycle transitions",
+      );
+    }
+
+  }
+
+  if (
+    !lowerFile.endsWith(
+      "/organization-verification/domain/decision/decisionengine.ts",
+    ) &&
+    /\bcreateDecisionInternal\b/.test(input.source)
+  ) {
+    addViolation(
+      violations,
+      "UNAUTHORIZED_DECISION_CONSTRUCTION",
+      file,
+      "Only Decision Engine may invoke the internal Decision constructor",
+    );
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isDecisionDomain &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)decision\/decisionEngine(?:\.js)?$/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "DECISION_ENGINE_RUNTIME_WIRING",
+      file,
+      "Decision Engine must remain unwired in this slice",
+    );
+  }
+
   if (
     isOfferVerification &&
     specifiers.some((specifier) =>
@@ -468,7 +569,7 @@ test("capability ownership markers reserve the approved inert boundaries", () =>
   );
 });
 
-test("production source satisfies every Phase 7B-1 architecture rule", () => {
+test("production source satisfies every approved Organization Verification architecture rule", () => {
   assert.deepEqual(scanRepository(), []);
 });
 
@@ -591,5 +692,41 @@ test("intentional fixture rejects unrestricted Revision construction", () => {
     file: "server/organization-verification/domain/revision.ts",
     source:
       "export function createOrganizationVerificationRevision() { return {}; }",
+  });
+});
+
+test("intentional fixture rejects runtime dependencies in Decision Domain", () => {
+  expectFixtureViolation("DECISION_DOMAIN_FORBIDDEN_DEPENDENCY", {
+    file: "server/organization-verification/domain/decision/evaluator.ts",
+    source: 'import { db } from "../../../db.js";',
+  });
+});
+
+test("intentional fixture rejects later-slice authority in Decision Domain", () => {
+  expectFixtureViolation("DECISION_DOMAIN_LATER_SLICE_ARTIFACT", {
+    file: "server/organization-verification/domain/decision/trust-status.ts",
+    source: 'export type TrustStatus = "trusted";',
+  });
+});
+
+test("intentional fixture rejects Decision construction outside Decision Engine", () => {
+  expectFixtureViolation("UNAUTHORIZED_DECISION_CONSTRUCTION", {
+    file: "server/organization-verification/domain/decision/reviewer.ts",
+    source: "export function createDecisionInternal() { return {}; }",
+  });
+});
+
+test("intentional fixture rejects lifecycle authority in Decision Engine", () => {
+  expectFixtureViolation("DECISION_ENGINE_LIFECYCLE_AUTHORITY", {
+    file: "server/organization-verification/domain/decision/decisionEngine.ts",
+    source: "transitionAttemptProcess(attempt, 'completed');",
+  });
+});
+
+test("intentional fixture rejects Decision Engine runtime wiring", () => {
+  expectFixtureViolation("DECISION_ENGINE_RUNTIME_WIRING", {
+    file: "server/organization-verification/worker.ts",
+    source:
+      'import { decideOrganizationVerification } from "./domain/decision/decisionEngine.js";',
   });
 });
