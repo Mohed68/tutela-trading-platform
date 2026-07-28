@@ -20,6 +20,7 @@
     "test:marketplace-policy": "node --env-file=.env --import tsx --test server/marketplace/publicMarketplace.test.ts",
     "test:marketplace-presentation": "tsx --test client/src/features/offers/marketplacePresentation.test.ts",
     "test:marketplace-runtime": "node --env-file=.env --import tsx --test scripts/marketplace/phase-3c.runtime.test.ts",
+    "test:offer-characterization": "node --env-file=.env --import tsx --test scripts/offers/phase-5a.characterization.test.ts",
     "test:migrations": "tsx --test scripts/migrations/rehearsal-lib.test.ts",
     "test:recovery": "tsx --test server/recoveryMode.test.ts server/services/openaiClient.test.ts",
     "migration:rehearsal": "node --env-file=.env --import tsx scripts/migration-rehearsal.ts",
