@@ -66,6 +66,12 @@ export function isSafeRecoveryRequest(method: string, path: string): boolean {
     return true;
   }
   if (
+    /^\/api\/drafts\/[^/]+\/submit$/.test(path) &&
+    method === "POST"
+  ) {
+    return true;
+  }
+  if (
     /^\/api\/drafts\/[^/]+$/.test(path) &&
     SAFE_RECOVERY_DRAFT_DETAIL_METHODS.has(method)
   ) {

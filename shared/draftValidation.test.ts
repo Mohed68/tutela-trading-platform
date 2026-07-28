@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createDraftOfferRequestSchema,
+  submitDraftRequestSchema,
   updateDraftOfferRequestSchema,
 } from "./draftValidation.js";
 
@@ -104,4 +105,17 @@ test("draft update is strict, allow-listed, and non-empty", () => {
     updateDraftOfferRequestSchema.safeParse({ status: "active" }).success,
     false,
   );
+});
+
+test("draft submission accepts no client-supplied lifecycle or trust state", () => {
+  assert.equal(submitDraftRequestSchema.safeParse({}).success, true);
+  for (const body of [
+    { status: "submitted" },
+    { status: "active" },
+    { verified: true },
+    { published: true },
+    { moderationStatus: "approved" },
+  ]) {
+    assert.equal(submitDraftRequestSchema.safeParse(body).success, false);
+  }
 });

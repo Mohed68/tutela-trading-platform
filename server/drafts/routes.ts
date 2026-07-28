@@ -3,6 +3,7 @@ import { isAuthenticated, isLocallyAuthenticatable } from "../auth.js";
 import { storage } from "../storage.js";
 import {
   createDraftOfferRequestSchema,
+  submitDraftRequestSchema,
   updateDraftOfferRequestSchema,
 } from "../../shared/draftValidation.js";
 import {
@@ -15,7 +16,9 @@ import {
   getDraftCommodity,
   getDraftOfferOptions,
   getOwnedDraftOffer,
-  listOwnedDraftOffers,
+  getOwnedPrivateOffer,
+  listOwnedPrivateOffers,
+  submitOwnedDraftOffer,
   updateOwnedDraftOffer,
 } from "./storage.js";
 
@@ -58,7 +61,7 @@ export function registerDraftRoutes(app: Express): void {
     try {
       const ownerId = await authenticatedDraftActor(request, response);
       if (!ownerId) return;
-      response.json(await listOwnedDraftOffers(ownerId));
+      response.json(await listOwnedPrivateOffers(ownerId));
     } catch {
       routeFailure(response);
     }
@@ -87,11 +90,11 @@ export function registerDraftRoutes(app: Express): void {
     try {
       const ownerId = await authenticatedDraftActor(request, response);
       if (!ownerId) return;
-      const draft = await getOwnedDraftOffer(ownerId, request.params.id);
-      if (!draft) {
-        return response.status(404).json({ message: "Draft not found." });
+      const offer = await getOwnedPrivateOffer(ownerId, request.params.id);
+      if (!offer) {
+        return response.status(404).json({ message: "Offer not found." });
       }
-      response.json(draft);
+      response.json(offer);
     } catch {
       routeFailure(response);
     }
@@ -131,6 +134,30 @@ export function registerDraftRoutes(app: Express): void {
       routeFailure(response);
     }
   });
+
+  app.post(
+    "/api/drafts/:id/submit",
+    isAuthenticated,
+    async (request, response) => {
+      try {
+        const ownerId = await authenticatedDraftActor(request, response);
+        if (!ownerId) return;
+        if (!submitDraftRequestSchema.safeParse(request.body ?? {}).success) {
+          return invalidRequest(response);
+        }
+        const submitted = await submitOwnedDraftOffer(
+          ownerId,
+          request.params.id,
+        );
+        if (!submitted) {
+          return response.status(404).json({ message: "Offer not found." });
+        }
+        response.json(submitted);
+      } catch {
+        routeFailure(response);
+      }
+    },
+  );
 
   app.delete("/api/drafts/:id", isAuthenticated, async (request, response) => {
     try {

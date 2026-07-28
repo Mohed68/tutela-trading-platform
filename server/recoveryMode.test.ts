@@ -104,6 +104,18 @@ test("recovery mode permits only the isolated draft workflow methods", () => {
   assert.equal(isSafeRecoveryRequest("DELETE", "/api/drafts/example"), true);
   assert.equal(isSafeRecoveryRequest("POST", "/api/drafts/example"), false);
   assert.equal(
+    isSafeRecoveryRequest("POST", "/api/drafts/example/submit"),
+    true,
+  );
+  assert.equal(
+    isSafeRecoveryRequest("GET", "/api/drafts/example/submit"),
+    false,
+  );
+  assert.equal(
+    isSafeRecoveryRequest("PATCH", "/api/drafts/example/submit"),
+    false,
+  );
+  assert.equal(
     isSafeRecoveryRequest("GET", "/api/drafts/example/dependency"),
     false,
   );

@@ -51,3 +51,5 @@ export const updateDraftOfferRequestSchema = z
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one editable field is required.",
   });
+
+export const submitDraftRequestSchema = z.object({}).strict();

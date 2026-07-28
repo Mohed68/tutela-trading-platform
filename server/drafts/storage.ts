@@ -9,6 +9,9 @@ import type {
   DraftOfferDetailDto,
   DraftOfferOptionsDto,
   DraftOfferSummaryDto,
+  OwnerPrivateOfferDetailDto,
+  OwnerPrivateOfferSummaryDto,
+  SubmittedOfferDetailDto,
   UpdateDraftOfferRequest,
 } from "../../shared/drafts.js";
 import {
@@ -55,8 +58,11 @@ function isoTimestamp(value: Date | string | null): string | null {
   return date.toISOString();
 }
 
-function toDraftDto(row: DraftRow): DraftOfferDetailDto {
-  if (row.status !== "draft" || row.currency !== PHASE_5B_DRAFT_CURRENCY) {
+function toPrivateOfferDto(row: DraftRow): OwnerPrivateOfferDetailDto {
+  if (
+    (row.status !== "draft" && row.status !== "submitted") ||
+    row.currency !== PHASE_5B_DRAFT_CURRENCY
+  ) {
     throw new Error("INVALID_STORED_DRAFT_AUTHORITY");
   }
 
@@ -77,7 +83,7 @@ function toDraftDto(row: DraftRow): DraftOfferDetailDto {
       currency: PHASE_5B_DRAFT_CURRENCY,
     },
     location: row.location,
-    status: "draft",
+    status: row.status,
     visibility: {
       state: "private",
     },
@@ -85,6 +91,22 @@ function toDraftDto(row: DraftRow): DraftOfferDetailDto {
     createdAt: isoTimestamp(row.created_at),
     updatedAt: isoTimestamp(row.updated_at),
   };
+}
+
+function toDraftDto(row: DraftRow): DraftOfferDetailDto {
+  const offer = toPrivateOfferDto(row);
+  if (offer.status !== "draft") {
+    throw new Error("EXPECTED_DRAFT_OFFER");
+  }
+  return offer;
+}
+
+function toSubmittedDto(row: DraftRow): SubmittedOfferDetailDto {
+  const offer = toPrivateOfferDto(row);
+  if (offer.status !== "submitted") {
+    throw new Error("EXPECTED_SUBMITTED_OFFER");
+  }
+  return offer;
 }
 
 const DRAFT_PROJECTION = `
@@ -160,6 +182,24 @@ export async function listOwnedDraftOffers(
   return result.rows.map(toDraftDto);
 }
 
+export async function listOwnedPrivateOffers(
+  ownerId: string,
+): Promise<OwnerPrivateOfferSummaryDto[]> {
+  const result = await pool.query<DraftRow>(
+    `
+      SELECT ${DRAFT_PROJECTION}
+      FROM public.offers AS offer
+      INNER JOIN public.commodities AS commodity
+        ON commodity.id = offer.commodity_id
+      WHERE offer.user_id = $1
+        AND offer.status::text IN ('draft', 'submitted')
+      ORDER BY offer.created_at DESC, offer.id
+    `,
+    [ownerId],
+  );
+  return result.rows.map(toPrivateOfferDto);
+}
+
 export async function getOwnedDraftOffer(
   ownerId: string,
   draftId: string,
@@ -177,6 +217,25 @@ export async function getOwnedDraftOffer(
     [draftId, ownerId],
   );
   return result.rows[0] ? toDraftDto(result.rows[0]) : undefined;
+}
+
+export async function getOwnedPrivateOffer(
+  ownerId: string,
+  offerId: string,
+): Promise<OwnerPrivateOfferDetailDto | undefined> {
+  const result = await pool.query<DraftRow>(
+    `
+      SELECT ${DRAFT_PROJECTION}
+      FROM public.offers AS offer
+      INNER JOIN public.commodities AS commodity
+        ON commodity.id = offer.commodity_id
+      WHERE offer.id = $1
+        AND offer.user_id = $2
+        AND offer.status::text IN ('draft', 'submitted')
+    `,
+    [offerId, ownerId],
+  );
+  return result.rows[0] ? toPrivateOfferDto(result.rows[0]) : undefined;
 }
 
 export async function createOwnedDraftOffer(
@@ -328,6 +387,49 @@ export async function updateOwnedDraftOffer(
     values,
   );
   return result.rows[0] ? toDraftDto(result.rows[0]) : undefined;
+}
+
+export async function submitOwnedDraftOffer(
+  ownerId: string,
+  draftId: string,
+): Promise<SubmittedOfferDetailDto | undefined> {
+  const result = await pool.query<DraftRow>(
+    `
+      WITH submitted AS (
+        UPDATE public.offers
+        SET
+          status = 'submitted'::public.offer_status,
+          updated_at = now()
+        WHERE id = $1
+          AND user_id = $2
+          AND status::text = 'draft'
+        RETURNING *
+      )
+      SELECT
+        submitted.id,
+        submitted.type::text AS offer_type,
+        commodity.id AS commodity_id,
+        commodity.name AS commodity_name,
+        commodity.type::text AS commodity_category,
+        submitted.quantity::text,
+        submitted.unit,
+        submitted.price_per_unit::text,
+        submitted.currency,
+        submitted.location,
+        submitted.status::text,
+        submitted.valid_until,
+        submitted.created_at,
+        submitted.updated_at
+      FROM submitted
+      INNER JOIN public.commodities AS commodity
+        ON commodity.id = submitted.commodity_id
+    `,
+    [draftId, ownerId],
+  );
+  if (result.rows[0]) return toSubmittedDto(result.rows[0]);
+
+  const existing = await getOwnedPrivateOffer(ownerId, draftId);
+  return existing?.status === "submitted" ? existing : undefined;
 }
 
 async function dependentRowCount(

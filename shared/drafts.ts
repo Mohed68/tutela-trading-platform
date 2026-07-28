@@ -33,7 +33,7 @@ export interface UpdateDraftOfferRequest {
   validUntil?: string | null;
 }
 
-export interface DraftOfferSummaryDto {
+interface OwnerPrivateOfferDto {
   id: string;
   offerType: "buy" | "sell";
   commodity: {
@@ -50,7 +50,7 @@ export interface DraftOfferSummaryDto {
     currency: "USD";
   };
   location: string;
-  status: "draft";
+  status: "draft" | "submitted";
   visibility: {
     state: "private";
   };
@@ -59,7 +59,27 @@ export interface DraftOfferSummaryDto {
   updatedAt: string | null;
 }
 
+export interface DraftOfferSummaryDto
+  extends Omit<OwnerPrivateOfferDto, "status"> {
+  status: "draft";
+}
+
 export type DraftOfferDetailDto = DraftOfferSummaryDto;
+
+export interface SubmittedOfferSummaryDto
+  extends Omit<OwnerPrivateOfferDto, "status"> {
+  status: "submitted";
+}
+
+export type SubmittedOfferDetailDto = SubmittedOfferSummaryDto;
+
+export type OwnerPrivateOfferSummaryDto =
+  | DraftOfferSummaryDto
+  | SubmittedOfferSummaryDto;
+
+export type OwnerPrivateOfferDetailDto =
+  | DraftOfferDetailDto
+  | SubmittedOfferDetailDto;
 
 export interface DeleteDraftOfferResponse {
   id: string;
