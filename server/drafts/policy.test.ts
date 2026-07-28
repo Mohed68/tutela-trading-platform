@@ -11,10 +11,12 @@ test("Phase 5B currency policy is isolated to the approved recovery value", () =
 });
 
 test("Phase 5B unit policy delegates to existing commodity conversion profiles", () => {
-  assert.deepEqual(phase5bDraftUnitsForCommodity("WTI Crude Oil"), [
-    "bbl",
-    "MT",
-  ]);
+  assert.deepEqual(
+    phase5bDraftUnitsForCommodity(
+      "West Texas Intermediate (WTI) Crude Oil",
+    ),
+    ["bbl", "MT"],
+  );
   assert.deepEqual(phase5bDraftUnitsForCommodity("Natural Gas (Henry Hub)"), [
     "MMBtu",
   ]);

@@ -13,7 +13,7 @@ import { verifyRecoveryUserState } from "../auth/recovery-user-lib.js";
 import { isSafeRecoveryRequest } from "../../server/recoveryMode.js";
 
 const EXPECTED_FINGERPRINT =
-  "e79139302ae53b2dafb58a2eaf54ab47873df4a15dd3c0026ea0024d424da659";
+  "0a899670e067b22692abc0a8f3d9d05c590f84d709d214984e2cf1e1749d1def";
 const EXPECTED_LEGACY_USER_HASH =
   "3369cf18c0fb7ffa5881cdd4a6c25c2da11ef489c46e7b9e52f5d28f41288bbc";
 const EXPECTED_LEGACY_OFFER_HASH =
@@ -43,7 +43,7 @@ async function tableSnapshot(
 }
 
 test(
-  "approved database has no authoritative draft state and remains unchanged",
+  "approved database has an additive empty draft state and unchanged legacy rows",
   { skip: !process.env.DATABASE_URL, timeout: 30_000 },
   async () => {
     const client = new Client({
@@ -119,8 +119,9 @@ test(
         "pending",
         "closed",
         "cancelled",
+        "draft",
       ]);
-      assert.equal(databaseStatuses.includes("draft"), false);
+      assert.equal(databaseStatuses.includes("draft"), true);
 
       const stateCounts = (
         await client.query<{
@@ -185,17 +186,18 @@ test(
   },
 );
 
-test("current shared schema cannot represent a database-backed draft", () => {
+test("shared schema represents the additive database-backed draft state", () => {
   const columns = getTableColumns(offers);
   assert.deepEqual(columns.status.enumValues, [
     "active",
     "pending",
     "closed",
     "cancelled",
+    "draft",
     "hidden",
     "archived",
   ]);
-  assert.equal(columns.status.enumValues.includes("draft"), false);
+  assert.equal(columns.status.enumValues.includes("draft"), true);
   assert.ok("verified" in columns);
   assert.ok("sellerOrgVerified" in columns);
   assert.ok("moderationStatus" in columns);
@@ -230,7 +232,7 @@ test("generic create validation accepts prohibited authority and invalid commerc
     ...unsafe.data,
     status: "draft",
   });
-  assert.equal(draft.success, false);
+  assert.equal(draft.success, true);
 });
 
 test("recovery guard blocks every current offer write and raw private detail", () => {
@@ -252,5 +254,7 @@ test("recovery guard blocks every current offer write and raw private detail", (
     isSafeRecoveryRequest("POST", "/api/offers/example/verify"),
     false,
   );
+  assert.equal(isSafeRecoveryRequest("POST", "/api/drafts"), true);
+  assert.equal(isSafeRecoveryRequest("PATCH", "/api/drafts/example"), true);
+  assert.equal(isSafeRecoveryRequest("DELETE", "/api/drafts/example"), true);
 });
-

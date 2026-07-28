@@ -6,7 +6,8 @@ import type { DraftOfferUnit } from "../../shared/drafts.js";
 const PHASE_5B_PROFILE_BY_COMMODITY_NAME: Readonly<
   Record<string, string>
 > = {
-  "wti crude oil": "west_texas_intermediate_(wti)_crude_oil",
+  "west texas intermediate (wti) crude oil":
+    "west_texas_intermediate_(wti)_crude_oil",
   "brent crude oil": "brent_crude_oil",
   "natural gas (henry hub)": "natural_gas_(henry_hub)",
   "gold bullion": "gold_bullion",

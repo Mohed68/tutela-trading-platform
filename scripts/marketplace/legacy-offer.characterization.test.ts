@@ -10,7 +10,7 @@ import {
 } from "../migrations/rehearsal-lib.js";
 
 const APPROVED_POST_MIGRATION_FINGERPRINT =
-  "e79139302ae53b2dafb58a2eaf54ab47873df4a15dd3c0026ea0024d424da659";
+  "0a899670e067b22692abc0a8f3d9d05c590f84d709d214984e2cf1e1749d1def";
 
 type OfferVerificationState =
   | "verified"
