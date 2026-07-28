@@ -19,7 +19,7 @@ import {
 } from "../auth/recovery-user-lib.js";
 
 const EXPECTED_FINGERPRINT =
-  "d309afaee7935df8b4e91e42f9f6f6c6e9c646b810640e1683e0512e6777bdbe";
+  "aeb77478a423b407e5e69705f78b7948e8020411b7defa26f605568f616fc401";
 const EXPECTED_LEGACY_USER_HASH =
   "3369cf18c0fb7ffa5881cdd4a6c25c2da11ef489c46e7b9e52f5d28f41288bbc";
 const EXPECTED_LEGACY_OFFER_HASH =

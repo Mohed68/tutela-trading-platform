@@ -10,6 +10,11 @@ import {
 } from "../../server/drafts/storage.js";
 import { getPublishedMarketplaceOfferRecords } from "../../server/marketplace/publicMarketplace.js";
 import { coordinateVerificationDecision } from "../../server/verification/coordinator.js";
+import { evaluateVerification } from "../../server/verification/engine.js";
+import {
+  claimNextVerification,
+  completeClaimedVerification,
+} from "../../server/verification/repository.js";
 import { processNextVerificationCommand } from "../../server/verification/worker.js";
 import {
   applicationSchemaFingerprint,
@@ -338,6 +343,76 @@ test(
         { submission_revision: 1, decision: "revision_required" },
         { submission_revision: 2, decision: "approved" },
       ]);
+
+      const conflictDraft = await createOwnedDraftOffer(owner.id, {
+        offerType: "sell",
+        commodityId: commodity.id,
+        quantity: "100.00",
+        unit: "bbl",
+        amountPerUnit: "75.50",
+        currency: "USD",
+        location: "Phase 6B Conflict Test",
+      });
+      cleanupIds.push(conflictDraft.id);
+      await submitOwnedDraftOffer(owner.id, conflictDraft.id);
+      const conflictClaim = await claimNextVerification();
+      assert.equal(conflictClaim?.snapshot.offerId, conflictDraft.id);
+      assert.ok(conflictClaim);
+      await client.query(
+        `
+          UPDATE public.offers
+          SET status = 'draft'::public.offer_status, updated_at = now()
+          WHERE id = $1
+        `,
+        [conflictDraft.id],
+      );
+      const conflictDecision = await completeClaimedVerification(
+        conflictClaim,
+        evaluateVerification(conflictClaim.snapshot),
+      );
+      assert.equal(conflictDecision, "manual_review");
+      assert.equal(
+        await coordinateVerificationDecision(conflictClaim.attemptId),
+        "stale",
+      );
+      const conflictState = (
+        await client.query<{
+          status: string;
+          decision: string;
+          reason_code: string;
+          rule_id: string;
+          confidence: string;
+          transition_result: string;
+        }>(
+          `
+            SELECT
+              offer.status::text AS status,
+              attempt.decision,
+              finding.reason_code,
+              finding.rule_id,
+              attempt.confidence,
+              transition.transition_result
+            FROM public.offers AS offer
+            INNER JOIN public.offer_verification_attempts AS attempt
+              ON attempt.offer_id = offer.id
+            INNER JOIN public.offer_verification_findings AS finding
+              ON finding.attempt_id = attempt.id
+            INNER JOIN public.offer_workflow_transitions AS transition
+              ON transition.attempt_id = attempt.id
+            WHERE offer.id = $1
+              AND finding.rule_id = 'SYSTEM-003'
+          `,
+          [conflictDraft.id],
+        )
+      ).rows[0];
+      assert.deepEqual(conflictState, {
+        status: "draft",
+        decision: "manual_review",
+        reason_code: "OFFER_STATE_CONFLICT",
+        rule_id: "SYSTEM-003",
+        confidence: "LOW",
+        transition_result: "stale",
+      });
 
       assert.deepEqual(await getPublishedMarketplaceOfferRecords(), []);
     } finally {

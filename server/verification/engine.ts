@@ -36,9 +36,7 @@ export function confidenceForDecision(
   return decision === "manual_review" ? "LOW" : "HIGH";
 }
 
-function systemFailureFinding(
-  technicalPolicyVersion: string,
-): VerificationRuleFinding {
+function systemFailureFinding(): VerificationRuleFinding {
   const definition = VERIFICATION_RULE_CATALOG["SYSTEM-999"];
   return {
     ruleId: definition.id,
@@ -46,7 +44,7 @@ function systemFailureFinding(
     severity: definition.severity,
     disposition: definition.disposition,
     policyFamily: definition.policyFamily,
-    policyVersion: technicalPolicyVersion,
+    policyVersion: VERIFICATION_ENGINE_VERSION,
     evaluationOrder: 1,
   };
 }
@@ -75,7 +73,7 @@ export function policyUnavailableVerificationResult(
         severity: definition.severity,
         disposition: definition.disposition,
         policyFamily: definition.policyFamily,
-        policyVersion: versions.technicalPolicyVersion,
+        policyVersion: versions.engineVersion,
         evaluationOrder: 1,
       },
     ],
@@ -117,7 +115,7 @@ export function evaluateVerification(
       findings,
     };
   } catch {
-    const findings = [systemFailureFinding(policies.technical.version)];
+    const findings = [systemFailureFinding()];
     return {
       decision: "manual_review",
       confidence: "LOW",

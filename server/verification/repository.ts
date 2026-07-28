@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
   SubmittedOfferVerificationSnapshot,
+  VerificationDecision,
   VerificationEngineResult,
 } from "../../shared/verification.js";
 import { pool } from "../db.js";
@@ -360,7 +361,7 @@ function stateConflictResult(
       severity: definition.severity,
       disposition: definition.disposition,
       policyFamily: definition.policyFamily,
-      policyVersion: result.technicalPolicyVersion,
+      policyVersion: result.engineVersion,
       evaluationOrder: result.findings.length + 1,
     },
   ];
@@ -375,7 +376,7 @@ function stateConflictResult(
 export async function completeClaimedVerification(
   claim: ClaimedVerification,
   engineResult: VerificationEngineResult,
-): Promise<boolean> {
+): Promise<VerificationDecision | undefined> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -385,13 +386,15 @@ export async function completeClaimedVerification(
         submission_revision: number;
         process_state: string;
         claim_token_hash: string | null;
+        claim_expires_at: Date | string | null;
       }>(
         `
           SELECT
             offer_id,
             submission_revision,
             process_state,
-            claim_token_hash
+            claim_token_hash,
+            claim_expires_at
           FROM public.offer_verification_attempts
           WHERE id = $1
           FOR UPDATE
@@ -402,10 +405,12 @@ export async function completeClaimedVerification(
     if (
       !attempt ||
       attempt.process_state !== "running" ||
-      attempt.claim_token_hash !== sha256(claim.claimToken)
+      attempt.claim_token_hash !== sha256(claim.claimToken) ||
+      attempt.claim_expires_at === null ||
+      new Date(attempt.claim_expires_at).getTime() <= Date.now()
     ) {
       await client.query("ROLLBACK");
-      return false;
+      return undefined;
     }
 
     const current = (
@@ -485,7 +490,7 @@ export async function completeClaimedVerification(
     if (completed.rowCount !== 1) {
       throw new Error("VERIFICATION_COMPLETION_CONFLICT");
     }
-    await client.query(
+    const delivered = await client.query(
       `
         UPDATE public.offer_verification_commands
         SET
@@ -499,6 +504,9 @@ export async function completeClaimedVerification(
       `,
       [claim.commandId, sha256(claim.claimToken)],
     );
+    if (delivered.rowCount !== 1) {
+      throw new Error("VERIFICATION_COMMAND_DELIVERY_CONFLICT");
+    }
     await client.query(
       `
         INSERT INTO public.offer_verification_events (
@@ -532,7 +540,7 @@ export async function completeClaimedVerification(
       ],
     );
     await client.query("COMMIT");
-    return true;
+    return result.decision;
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;

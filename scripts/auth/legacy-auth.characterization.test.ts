@@ -8,7 +8,7 @@ import {
 } from "../migrations/rehearsal-lib.js";
 
 const EXPECTED_FINGERPRINT =
-  "d309afaee7935df8b4e91e42f9f6f6c6e9c646b810640e1683e0512e6777bdbe";
+  "aeb77478a423b407e5e69705f78b7948e8020411b7defa26f605568f616fc401";
 const AUTH_COLUMNS = [
   "password_hash",
   "auth_provider",

@@ -97,10 +97,16 @@ app.use((req, res, next) => {
   }
 
   const server = await registerRoutes(app);
-  const stopVerificationWorker = startVerificationWorker({
-    onError: (message) =>
-      console.error(`Verification worker failed safely: ${message}`),
-  });
+  const verificationWorkerDisabled =
+    recoveryMode &&
+    process.env.NODE_ENV !== "production" &&
+    process.env.TUTELA_VERIFICATION_WORKER_DISABLED === "true";
+  const stopVerificationWorker = verificationWorkerDisabled
+    ? () => undefined
+    : startVerificationWorker({
+        onError: (message) =>
+          console.error(`Verification worker failed safely: ${message}`),
+      });
 
   // Setup Sentry error handler after all routes
   setupSentryErrorHandler(app);

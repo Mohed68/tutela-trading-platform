@@ -26,13 +26,12 @@ export async function processNextVerificationCommand(): Promise<
         claim.snapshot,
         claim.recordedVersions,
       );
-  if (!(await completeClaimedVerification(claim, result))) {
-    return undefined;
-  }
+  const persistedDecision = await completeClaimedVerification(claim, result);
+  if (!persistedDecision) return undefined;
   const workflowResult = await coordinateVerificationDecision(claim.attemptId);
   return {
     attemptId: claim.attemptId,
-    decision: result.decision,
+    decision: persistedDecision,
     workflowResult,
   };
 }

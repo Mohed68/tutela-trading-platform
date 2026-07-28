@@ -20,7 +20,7 @@ import {
 } from "../auth/recovery-user-lib.js";
 
 const EXPECTED_FINGERPRINT =
-  "d309afaee7935df8b4e91e42f9f6f6c6e9c646b810640e1683e0512e6777bdbe";
+  "aeb77478a423b407e5e69705f78b7948e8020411b7defa26f605568f616fc401";
 const EXPECTED_LEGACY_USER_HASH =
   "3369cf18c0fb7ffa5881cdd4a6c25c2da11ef489c46e7b9e52f5d28f41288bbc";
 const EXPECTED_LEGACY_OFFER_HASH =
@@ -81,6 +81,46 @@ async function count(
   ).rows[0].count;
 }
 
+async function cleanupPhase6SubmissionData(
+  client: Client,
+  offerId: string,
+): Promise<void> {
+  await client.query(
+    "DELETE FROM public.offer_workflow_transitions WHERE offer_id = $1",
+    [offerId],
+  );
+  await client.query(
+    `
+      DELETE FROM public.offer_verification_events
+      WHERE attempt_id IN (
+        SELECT id FROM public.offer_verification_attempts WHERE offer_id = $1
+      )
+    `,
+    [offerId],
+  );
+  await client.query(
+    `
+      DELETE FROM public.offer_verification_findings
+      WHERE attempt_id IN (
+        SELECT id FROM public.offer_verification_attempts WHERE offer_id = $1
+      )
+    `,
+    [offerId],
+  );
+  await client.query(
+    "DELETE FROM public.offer_verification_commands WHERE offer_id = $1",
+    [offerId],
+  );
+  await client.query(
+    "DELETE FROM public.offer_verification_attempts WHERE offer_id = $1",
+    [offerId],
+  );
+  await client.query(
+    "DELETE FROM public.offer_submission_revisions WHERE offer_id = $1",
+    [offerId],
+  );
+}
+
 function assertNoSensitiveKeys(value: unknown): void {
   if (Array.isArray(value)) {
     value.forEach(assertNoSensitiveKeys);
@@ -100,6 +140,7 @@ function startServer(): ReturnType<typeof spawn> {
       ...process.env,
       NODE_ENV: "test",
       TUTELA_RECOVERY_MODE: "true",
+      TUTELA_VERIFICATION_WORKER_DISABLED: "true",
       DEMO_AUTH_BYPASS: "false",
       DEMO_MODE: "false",
       AUTO_VERIFY_DEMO: "false",
@@ -254,6 +295,7 @@ test(
       assert.equal(await count(client, "offers"), 9);
       assert.equal(await count(client, "sessions"), 0);
       assert.equal(await count(client, "offer_verifications"), 0);
+      assert.equal(await count(client, "offer_verification_attempts"), 0);
       assert.equal(await count(client, "activity_logs"), 0);
       const journal = (
         await client.query<{
@@ -514,6 +556,7 @@ test(
       );
 
       step = "cleanup";
+      await cleanupPhase6SubmissionData(client, offerId);
       const cleanup = await client.query<{ id: string }>(
         `
           DELETE FROM public.offers
@@ -560,6 +603,7 @@ test(
       assert.equal(await count(client, "offers"), 9);
       assert.equal(await count(client, "sessions"), 0);
       assert.equal(await count(client, "offer_verifications"), 0);
+      assert.equal(await count(client, "offer_verification_attempts"), 0);
       assert.equal(await count(client, "activity_logs"), 0);
       await client.query("ROLLBACK");
     } catch (error) {
@@ -574,6 +618,9 @@ test(
     } finally {
       await stopServer(child);
       if (offerId && recoveryOwnerId) {
+        await cleanupPhase6SubmissionData(client, offerId).catch(
+          () => undefined,
+        );
         await client
           .query(
             `

@@ -8,6 +8,7 @@ import {
   confidenceForDecision,
   decideVerification,
   evaluateVerification,
+  policyUnavailableVerificationResult,
 } from "./engine.js";
 import {
   PHASE_6_COMMERCIAL_POLICY,
@@ -180,4 +181,16 @@ test("snapshot serialization and fingerprint are stable", () => {
     fingerprintVerificationSnapshot(snapshot),
     fingerprintVerificationSnapshot({ ...snapshot }),
   );
+});
+
+test("unavailable recorded policy versions fail closed", () => {
+  const result = policyUnavailableVerificationResult(validSnapshot(), {
+    engineVersion: "unavailable-engine",
+    technicalPolicyVersion: "unavailable-technical",
+    commercialPolicyVersion: "unavailable-commercial",
+  });
+  assert.equal(result.decision, "manual_review");
+  assert.equal(result.confidence, "LOW");
+  assert.equal(result.findings[0].ruleId, "SYSTEM-001");
+  assert.equal(result.findings[0].policyVersion, "unavailable-engine");
 });

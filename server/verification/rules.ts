@@ -5,7 +5,10 @@ import type {
   VerificationRuleId,
 } from "../../shared/verification.js";
 import { VERIFICATION_RULE_CATALOG } from "./catalog.js";
-import type { VerificationPolicies } from "./policy.js";
+import {
+  VERIFICATION_ENGINE_VERSION,
+  type VerificationPolicies,
+} from "./policy.js";
 
 function finding(
   ruleId: VerificationRuleId,
@@ -139,7 +142,7 @@ export function runTechnicalValidation(
       severity: definition.severity,
       disposition: definition.disposition,
       policyFamily: "system",
-      policyVersion: policies.technical.version,
+      policyVersion: VERIFICATION_ENGINE_VERSION,
       evaluationOrder: ++order,
     });
   }
