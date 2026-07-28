@@ -21,6 +21,8 @@ import type {
   DraftOfferDetailDto,
   DraftOfferOptionsDto,
   DraftOfferUnit,
+  OwnerPrivateOfferDetailDto,
+  SubmittedOfferDetailDto,
   UpdateDraftOfferRequest,
 } from "@shared/drafts";
 
@@ -219,13 +221,14 @@ function DraftForm({
 export default function MyDrafts() {
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
-  const [selected, setSelected] = useState<DraftOfferDetailDto | null>(null);
+  const [selected, setSelected] =
+    useState<OwnerPrivateOfferDetailDto | null>(null);
   const [editing, setEditing] = useState(false);
 
   const optionsQuery = useQuery<DraftOfferOptionsDto>({
     queryKey: ["/api/drafts/options"],
   });
-  const draftsQuery = useQuery<DraftOfferDetailDto[]>({
+  const draftsQuery = useQuery<OwnerPrivateOfferDetailDto[]>({
     queryKey: ["/api/drafts"],
   });
 
@@ -326,9 +329,34 @@ export default function MyDrafts() {
       }),
   });
 
+  const submitMutation = useMutation({
+    mutationFn: async (draftId: string) => {
+      const response = await apiRequest(
+        "POST",
+        `/api/drafts/${encodeURIComponent(draftId)}/submit`,
+      );
+      return (await response.json()) as SubmittedOfferDetailDto;
+    },
+    onSuccess: async (submitted) => {
+      setSelected(submitted);
+      setEditing(false);
+      await refresh();
+      toast({
+        title: "Draft submitted",
+        description: "The offer is now private and read-only.",
+      });
+    },
+    onError: () =>
+      toast({
+        title: "Unable to submit draft",
+        description: "The draft was not submitted.",
+        variant: "destructive",
+      }),
+  });
+
   const editInitial = useMemo<DraftFormState | null>(
     () =>
-      selected
+      selected?.status === "draft"
         ? {
             offerType: selected.offerType,
             commodityId: selected.commodity.id,
@@ -350,9 +378,12 @@ export default function MyDrafts() {
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-neutral-900">My Drafts</h1>
+          <h1 className="text-3xl font-bold text-neutral-900">
+            Private Offers
+          </h1>
           <p className="mt-2 text-neutral-600">
-            Private offer drafts visible only to your account.
+            Prepare drafts and view submitted offers visible only to your
+            account.
           </p>
         </div>
         <Button
@@ -367,8 +398,9 @@ export default function MyDrafts() {
       <div className="flex gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
         <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0" />
         <p>
-          Drafts are private and unpublished. No submission, verification, or
-          marketplace publication occurs from this page.
+          Drafts and submitted offers remain private and unpublished.
+          Submission only freezes a completed draft for future processing; it
+          does not verify, activate, or publish it.
         </p>
       </div>
 
@@ -398,7 +430,9 @@ export default function MyDrafts() {
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
                 <CardTitle>{draft.commodity.name}</CardTitle>
-                <Badge variant="secondary">Draft</Badge>
+                <Badge variant="secondary">
+                  {draft.status === "draft" ? "Draft" : "Submitted"}
+                </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -468,14 +502,24 @@ export default function MyDrafts() {
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit Draft" : "Draft Detail"}</DialogTitle>
+            <DialogTitle>
+              {editing
+                ? "Edit Draft"
+                : selected?.status === "submitted"
+                  ? "Submitted Offer"
+                  : "Draft Detail"}
+            </DialogTitle>
             <DialogDescription>
-              Private and unpublished. Only your account can access this draft.
+              Private and unpublished. Only your account can access this offer.
             </DialogDescription>
           </DialogHeader>
           {selected && !editing && (
             <div className="space-y-4">
               <dl className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <dt className="text-sm text-neutral-500">State</dt>
+                  <dd className="font-medium capitalize">{selected.status}</dd>
+                </div>
                 <div>
                   <dt className="text-sm text-neutral-500">Commodity</dt>
                   <dd className="font-medium">{selected.commodity.name}</dd>
@@ -510,28 +554,50 @@ export default function MyDrafts() {
                   </dd>
                 </div>
               </dl>
-              <DialogFooter>
-                <Button
-                  variant="destructive"
-                  disabled={deleteMutation.isPending}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "Delete this private draft? This cannot be undone.",
-                      )
-                    ) {
-                      deleteMutation.mutate(selected.id);
-                    }
-                  }}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Draft
-                </Button>
-                <Button onClick={() => setEditing(true)}>
-                  <FilePenLine className="mr-2 h-4 w-4" />
-                  Edit Draft
-                </Button>
-              </DialogFooter>
+              {selected.status === "submitted" ? (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                  Submitted offers are private and read-only while waiting for
+                  future platform processing. They are not verified, active,
+                  or published.
+                </div>
+              ) : (
+                <DialogFooter>
+                  <Button
+                    variant="destructive"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Delete this private draft? This cannot be undone.",
+                        )
+                      ) {
+                        deleteMutation.mutate(selected.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Draft
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditing(true)}>
+                    <FilePenLine className="mr-2 h-4 w-4" />
+                    Edit Draft
+                  </Button>
+                  <Button
+                    disabled={submitMutation.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Submit this draft? It will become private and read-only, and cannot be edited or deleted.",
+                        )
+                      ) {
+                        submitMutation.mutate(selected.id);
+                      }
+                    }}
+                  >
+                    {submitMutation.isPending ? "Submitting…" : "Submit Draft"}
+                  </Button>
+                </DialogFooter>
+              )}
             </div>
           )}
           {selected && editing && optionsQuery.data && editInitial && (
