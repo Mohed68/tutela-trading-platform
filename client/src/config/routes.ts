@@ -18,6 +18,7 @@ export const ROUTES = {
   
   // Trading routes (canonical)
   marketplace: "/marketplace",    // CANONICAL - browse all offers
+  myDrafts: "/my-offers",
   
   // Trading routes (redirects to marketplace)
   offers: "/offers",             // Personal offers management → redirect to marketplace

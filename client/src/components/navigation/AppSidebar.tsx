@@ -62,7 +62,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
     },
     {
       icon: Package,
-      label: "My Offers",
+      label: "My Drafts",
       href: "/my-offers",
       badge: "Personal",
       badgeVariant: "secondary",
@@ -93,7 +93,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
     },
     {
       icon: Package,
-      label: "My Offers", 
+      label: "My Drafts", 
       href: "/my-offers",
     },
     {

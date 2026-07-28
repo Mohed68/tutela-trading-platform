@@ -35,7 +35,7 @@ import Partners from "@/pages/partners";
 import Verification from "@/pages/verification";
 import Insights from "@/pages/insights";
 import Checkout from "@/pages/checkout";
-import MyOffers from "@/pages/MyOffers";
+import MyDrafts from "@/pages/MyDrafts";
 import CheckoutSuccess from "@/pages/checkout-success";
 import AdminDashboard from "@/pages/AdminDashboard";
 import { AnimationShowcase } from "@/components/demo/AnimationShowcase";
@@ -139,10 +139,10 @@ function Router() {
             </AppLayout>
           </Route>
 
-          {/* My Offers - User's own offers */}
+          {/* Private owner-only offer drafts */}
           <Route path="/my-offers">
             <AppLayout>
-              <MyOffers />
+              <MyDrafts />
             </AppLayout>
           </Route>
           
