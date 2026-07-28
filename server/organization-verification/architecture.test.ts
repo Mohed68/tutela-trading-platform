@@ -16,7 +16,11 @@ type ArchitectureViolationCode =
   | "GENERIC_ORG_VERIFICATION_NAMESPACE"
   | "UNAUTHORIZED_DECISION_AUTHORITY"
   | "UNAUTHORIZED_TRUST_STATUS_AUTHORITY"
-  | "ORG_VERIFICATION_STARTUP_WIRING";
+  | "ORG_VERIFICATION_STARTUP_WIRING"
+  | "REGISTRY_IMPORTS_CAPABILITY_INTERNAL"
+  | "REGISTRY_IMPORTS_RUNTIME"
+  | "REGISTRY_EXPORTS_FORBIDDEN_AUTHORITY"
+  | "REGISTRY_ACL_IMPORTS_RUNTIME";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -130,6 +134,12 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     "server/organization-verification/",
   );
   const isOfferVerification = lowerFile.startsWith("server/verification/");
+  const isOrganizationRegistry = lowerFile.startsWith(
+    "server/organization-registry/",
+  );
+  const isRegistryAcl = lowerFile.endsWith(
+    "server/organization-verification/integration/organizationregistryacl.ts",
+  );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
     lowerFile.endsWith("/index.ts");
@@ -157,8 +167,11 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         );
       }
 
+      const importsRegistry = /organization-registry/i.test(specifier);
+      const importsApprovedRegistryPublicSurface =
+        /organization-registry\/index\.js$/i.test(specifier);
       if (
-        /organization-registry/i.test(specifier) ||
+        (importsRegistry && !importsApprovedRegistryPublicSurface) ||
         /(?:^|\/)registry\/(?:repository|database|db|schema|aggregate)/i.test(
           specifier,
         ) ||
@@ -259,6 +272,65 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
           "UNAUTHORIZED_TRUST_STATUS_AUTHORITY",
           file,
           authority,
+        );
+      }
+    }
+  }
+
+  if (isOrganizationRegistry) {
+    for (const specifier of specifiers) {
+      if (
+        /(?:^|\/)organization-verification(?:\/|$)/i.test(specifier) ||
+        /(?:^|\/)verification(?:\/|$)/i.test(specifier)
+      ) {
+        addViolation(
+          violations,
+          "REGISTRY_IMPORTS_CAPABILITY_INTERNAL",
+          file,
+          specifier,
+        );
+      }
+      if (
+        /(?:^|\/)(?:db|database|storage|routes?|worker|index)(?:\.js)?$/i.test(
+          specifier,
+        ) ||
+        /@shared\/schema|drizzle-orm|^pg$|@neondatabase\//i.test(specifier)
+      ) {
+        addViolation(
+          violations,
+          "REGISTRY_IMPORTS_RUNTIME",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /export\s+(?:type|interface|class|const|function)\s+\w*(?:Decision|TrustStatus)\w*/i.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "REGISTRY_EXPORTS_FORBIDDEN_AUTHORITY",
+        file,
+        "Registry contract exports Decision or Trust Status authority",
+      );
+    }
+  }
+
+  if (isRegistryAcl) {
+    for (const specifier of specifiers) {
+      if (
+        /(?:^|\/)(?:db|database|storage|routes?|worker|index)(?:\.js)?$/i.test(
+          specifier,
+        ) &&
+        !/organization-registry\/index\.js$/i.test(specifier)
+      ) {
+        addViolation(
+          violations,
+          "REGISTRY_ACL_IMPORTS_RUNTIME",
+          file,
+          specifier,
         );
       }
     }
@@ -437,5 +509,34 @@ test("intentional fixture rejects startup or route wiring", () => {
     file: "server/index.ts",
     source:
       'import { marker } from "./organization-verification/index.js";',
+  });
+});
+
+test("intentional fixture rejects Registry importing capability internals", () => {
+  expectFixtureViolation("REGISTRY_IMPORTS_CAPABILITY_INTERNAL", {
+    file: "server/organization-registry/contracts.ts",
+    source:
+      'import type { Decision } from "../organization-verification/domain/decision.js";',
+  });
+});
+
+test("intentional fixture rejects Registry runtime or persistence imports", () => {
+  expectFixtureViolation("REGISTRY_IMPORTS_RUNTIME", {
+    file: "server/organization-registry/contracts.ts",
+    source: 'import { db } from "../db.js";',
+  });
+});
+
+test("intentional fixture rejects Registry Decision or Trust Status exports", () => {
+  expectFixtureViolation("REGISTRY_EXPORTS_FORBIDDEN_AUTHORITY", {
+    file: "server/organization-registry/contracts.ts",
+    source: "export interface RegistryTrustStatus {}",
+  });
+});
+
+test("intentional fixture rejects ACL runtime imports", () => {
+  expectFixtureViolation("REGISTRY_ACL_IMPORTS_RUNTIME", {
+    file: "server/organization-verification/integration/organizationRegistryAcl.ts",
+    source: 'import { registerRoutes } from "../../routes.js";',
   });
 });
