@@ -20,7 +20,9 @@ type ArchitectureViolationCode =
   | "REGISTRY_IMPORTS_CAPABILITY_INTERNAL"
   | "REGISTRY_IMPORTS_RUNTIME"
   | "REGISTRY_EXPORTS_FORBIDDEN_AUTHORITY"
-  | "REGISTRY_ACL_IMPORTS_RUNTIME";
+  | "REGISTRY_ACL_IMPORTS_RUNTIME"
+  | "CORE_DOMAIN_LATER_SLICE_ARTIFACT"
+  | "UNRESTRICTED_REVISION_CONSTRUCTOR";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -139,6 +141,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isRegistryAcl = lowerFile.endsWith(
     "server/organization-verification/integration/organizationregistryacl.ts",
+  );
+  const isOrganizationVerificationCoreDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -333,6 +338,39 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
           specifier,
         );
       }
+    }
+  }
+
+  if (isOrganizationVerificationCoreDomain) {
+    if (
+      /(?:^|\/)(?:decision|decision-engine|trust-status|trust-status-deriver|finding|policy)(?:\/|\.|$)/i.test(
+        lowerFile,
+      ) ||
+      /["'](?:approved|revision_required|manual_review|rejected|unestablished|trusted|not_trusted|expired|invalidated)["']/.test(
+        input.source,
+      ) ||
+      /\b(?:DecisionEngine|TrustStatusDeriver|VerificationFinding|ReasonCode|PolicyVersion)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "CORE_DOMAIN_LATER_SLICE_ARTIFACT",
+        file,
+        "Decision, status, finding, or policy belongs to a later slice",
+      );
+    }
+    if (
+      /\bexport\s+(?:class|function|const)\s+(?:create)?OrganizationVerificationRevision\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "UNRESTRICTED_REVISION_CONSTRUCTOR",
+        file,
+        "Revision construction must remain behind Submission",
+      );
     }
   }
 
@@ -538,5 +576,20 @@ test("intentional fixture rejects ACL runtime imports", () => {
   expectFixtureViolation("REGISTRY_ACL_IMPORTS_RUNTIME", {
     file: "server/organization-verification/integration/organizationRegistryAcl.ts",
     source: 'import { registerRoutes } from "../../routes.js";',
+  });
+});
+
+test("intentional fixture rejects later-slice concepts in core domain", () => {
+  expectFixtureViolation("CORE_DOMAIN_LATER_SLICE_ARTIFACT", {
+    file: "server/organization-verification/domain/trust-status.ts",
+    source: 'export const value = "trusted";',
+  });
+});
+
+test("intentional fixture rejects unrestricted Revision construction", () => {
+  expectFixtureViolation("UNRESTRICTED_REVISION_CONSTRUCTOR", {
+    file: "server/organization-verification/domain/revision.ts",
+    source:
+      "export function createOrganizationVerificationRevision() { return {}; }",
   });
 });
