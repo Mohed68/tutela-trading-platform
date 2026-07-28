@@ -51,6 +51,37 @@ function systemFailureFinding(
   };
 }
 
+export function policyUnavailableVerificationResult(
+  snapshot: SubmittedOfferVerificationSnapshot,
+  versions: {
+    engineVersion: string;
+    technicalPolicyVersion: string;
+    commercialPolicyVersion: string;
+  },
+): VerificationEngineResult {
+  const definition = VERIFICATION_RULE_CATALOG["SYSTEM-001"];
+  return {
+    decision: "manual_review",
+    confidence: "LOW",
+    confidenceModelVersion: VERIFICATION_CONFIDENCE_MODEL_VERSION,
+    engineVersion: versions.engineVersion,
+    snapshotSchemaVersion: snapshot.snapshotSchemaVersion,
+    technicalPolicyVersion: versions.technicalPolicyVersion,
+    commercialPolicyVersion: versions.commercialPolicyVersion,
+    findings: [
+      {
+        ruleId: definition.id,
+        reasonCode: definition.reasonCode,
+        severity: definition.severity,
+        disposition: definition.disposition,
+        policyFamily: definition.policyFamily,
+        policyVersion: versions.technicalPolicyVersion,
+        evaluationOrder: 1,
+      },
+    ],
+  };
+}
+
 export function evaluateVerification(
   snapshot: SubmittedOfferVerificationSnapshot,
   options?: {

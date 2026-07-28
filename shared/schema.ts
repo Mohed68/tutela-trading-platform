@@ -92,7 +92,7 @@ export const commodityTypeEnum = pgEnum("commodity_type", [
 ]);
 
 export const offerTypeEnum = pgEnum("offer_type", ["buy", "sell"]);
-export const offerStatusEnum = pgEnum("offer_status", ["active", "pending", "closed", "cancelled", "draft", "submitted", "hidden", "archived"]);
+export const offerStatusEnum = pgEnum("offer_status", ["active", "pending", "closed", "cancelled", "draft", "submitted", "verified", "hidden", "archived"]);
 
 export const commodities = pgTable("commodities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

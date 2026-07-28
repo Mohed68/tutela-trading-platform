@@ -14,6 +14,7 @@ import {
   recoveryModeGuard,
 } from "./recoveryMode";
 import { safeErrorMessage } from "./safeErrors";
+import { startVerificationWorker } from "./verification/worker";
 
 assertRecoveryModeIsLocal();
 const recoveryMode = isRecoveryMode();
@@ -96,6 +97,10 @@ app.use((req, res, next) => {
   }
 
   const server = await registerRoutes(app);
+  const stopVerificationWorker = startVerificationWorker({
+    onError: (message) =>
+      console.error(`Verification worker failed safely: ${message}`),
+  });
 
   // Setup Sentry error handler after all routes
   setupSentryErrorHandler(app);
@@ -139,6 +144,7 @@ app.use((req, res, next) => {
 
   const shutdown = (signal: string) => {
     log(`${signal} received; shutting down gracefully`);
+    stopVerificationWorker();
     server.close(async () => {
       try {
         await pool.end();

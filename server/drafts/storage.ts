@@ -14,6 +14,11 @@ import type {
   SubmittedOfferDetailDto,
   UpdateDraftOfferRequest,
 } from "../../shared/drafts.js";
+import type { SubmittedOfferVerificationSnapshot } from "../../shared/verification.js";
+import {
+  VERIFICATION_SNAPSHOT_SCHEMA_VERSION,
+} from "../verification/policy.js";
+import { queueVerificationAttempt } from "../verification/repository.js";
 import {
   PHASE_5B_DRAFT_CURRENCY,
   phase5bDraftUnitsForCommodity,
@@ -393,40 +398,89 @@ export async function submitOwnedDraftOffer(
   ownerId: string,
   draftId: string,
 ): Promise<SubmittedOfferDetailDto | undefined> {
-  const result = await pool.query<DraftRow>(
-    `
-      WITH submitted AS (
-        UPDATE public.offers
-        SET
-          status = 'submitted'::public.offer_status,
-          updated_at = now()
-        WHERE id = $1
-          AND user_id = $2
-          AND status::text = 'draft'
-        RETURNING *
-      )
-      SELECT
-        submitted.id,
-        submitted.type::text AS offer_type,
-        commodity.id AS commodity_id,
-        commodity.name AS commodity_name,
-        commodity.type::text AS commodity_category,
-        submitted.quantity::text,
-        submitted.unit,
-        submitted.price_per_unit::text,
-        submitted.currency,
-        submitted.location,
-        submitted.status::text,
-        submitted.valid_until,
-        submitted.created_at,
-        submitted.updated_at
-      FROM submitted
-      INNER JOIN public.commodities AS commodity
-        ON commodity.id = submitted.commodity_id
-    `,
-    [draftId, ownerId],
-  );
-  if (result.rows[0]) return toSubmittedDto(result.rows[0]);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<DraftRow>(
+      `
+        WITH submitted AS (
+          UPDATE public.offers
+          SET
+            status = 'submitted'::public.offer_status,
+            updated_at = now()
+          WHERE id = $1
+            AND user_id = $2
+            AND status::text = 'draft'
+          RETURNING *
+        )
+        SELECT
+          submitted.id,
+          submitted.type::text AS offer_type,
+          commodity.id AS commodity_id,
+          commodity.name AS commodity_name,
+          commodity.type::text AS commodity_category,
+          submitted.quantity::text,
+          submitted.unit,
+          submitted.price_per_unit::text,
+          submitted.currency,
+          submitted.location,
+          submitted.status::text,
+          submitted.valid_until,
+          submitted.created_at,
+          submitted.updated_at
+        FROM submitted
+        INNER JOIN public.commodities AS commodity
+          ON commodity.id = submitted.commodity_id
+      `,
+      [draftId, ownerId],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      await client.query("ROLLBACK");
+    } else {
+      const nextRevision = (
+        await client.query<{ revision: number }>(
+          `
+            SELECT (COALESCE(max(revision), 0) + 1)::int AS revision
+            FROM public.offer_submission_revisions
+            WHERE offer_id = $1
+          `,
+          [draftId],
+        )
+      ).rows[0].revision;
+      const submittedRecordVersion = isoTimestamp(row.updated_at);
+      if (!submittedRecordVersion) {
+        throw new Error("SUBMITTED_RECORD_VERSION_REQUIRED");
+      }
+      const snapshot: SubmittedOfferVerificationSnapshot = {
+        snapshotSchemaVersion: VERIFICATION_SNAPSHOT_SCHEMA_VERSION,
+        offerId: row.id,
+        submissionRevision: nextRevision,
+        submittedRecordVersion,
+        offerType: row.offer_type,
+        commodity: {
+          id: row.commodity_id,
+          name: row.commodity_name,
+          category: row.commodity_category,
+        },
+        quantity: row.quantity,
+        unit: row.unit,
+        amountPerUnit: row.price_per_unit,
+        currency: row.currency,
+        location: row.location,
+        validUntil: isoTimestamp(row.valid_until),
+        lifecycleStatus: "submitted",
+      };
+      await queueVerificationAttempt(client, snapshot);
+      await client.query("COMMIT");
+      return toSubmittedDto(row);
+    }
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 
   const existing = await getOwnedPrivateOffer(ownerId, draftId);
   return existing?.status === "submitted" ? existing : undefined;
