@@ -4,10 +4,9 @@
 
 Date: 2026-07-28
 
-Status: architecture approval candidate
+Status: approved; authoritative architecture
 
-Intended authority: official Tutela Offer Verification Engine reference after
-Version 2 approval
+Authority: official Tutela Offer Verification Engine reference
 
 Scope: documentation and architecture only
 
@@ -1251,23 +1250,17 @@ It strengthens Version 1 by:
 No business rule, lifecycle state, verification decision, marketplace policy,
 or Phase 5 recovery behavior is redesigned.
 
-## 26. Approval boundary
+## 26. Implementation authority and retained boundaries
 
-Version 2 is an architecture approval candidate.
+Version 2 was formally approved as the authoritative implementation
+architecture for Phase 6B.
 
-Approval is required before:
+Phase 6B may implement only the contracts, deterministic validation, policies,
+decision engine, immutable verification persistence/history, durable internal
+orchestration, Workflow Coordinator, required additive migrations, and
+automated tests defined by this document.
 
-- declaring this document the official implementation authority;
-- modifying runtime behavior;
-- adding lifecycle/database enum values;
-- adding Submission Revision persistence;
-- creating attempt, finding, event, command/outbox, or transition-history
-  storage;
-- creating migrations;
-- creating workers, coordinators, routes, APIs, or frontend;
-- writing any database record;
-- running verification against any offer.
-
-KYB, compliance, sanctions, moderation, marketplace publication, orders,
-contracts, payment, escrow, settlement, blockchain, AI decision making,
-notifications, email, and deployment remain outside Phase 6 approval.
+KYB, compliance, sanctions, organization verification, moderation, marketplace
+publication, orders, negotiation, contracts, payment, escrow, settlement,
+blockchain, AI decision making, risk scoring, notifications, email, and
+deployment remain outside Phase 6B authority.
