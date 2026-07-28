@@ -220,27 +220,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Dashboard routes
   app.get('/api/dashboard/overview', isAuthenticated, async (req: any, res) => {
-    const userId = req.user?.claims?.sub;
-    const identity = userId
-      ? await storage.getAuthenticationUser(userId)
-      : undefined;
+    try {
+      const userId = req.user?.claims?.sub;
+      const identity = userId
+        ? await storage.getAuthenticationUser(userId)
+        : undefined;
 
-    if (!isLocallyAuthenticatable(identity)) {
-      return res.status(401).json({ message: "Unauthorized" });
+      if (!isLocallyAuthenticatable(identity)) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const [ownedOfferCount, publishedOfferCount] = await Promise.allSettled([
+        storage.getDashboardOwnedOfferCount(identity.id),
+        getPublishedMarketplaceOfferRecords().then((records) => records.length),
+      ]);
+
+      return res.json(
+        buildDashboardOverview(
+          toCurrentUserDto(identity),
+          ownedOfferCount,
+          publishedOfferCount,
+        ),
+      );
+    } catch {
+      return res.status(500).json({
+        message: "Dashboard temporarily unavailable.",
+      });
     }
-
-    const [ownedOfferCount, publishedOfferCount] = await Promise.allSettled([
-      storage.getDashboardOwnedOfferCount(identity.id),
-      getPublishedMarketplaceOfferRecords().then((records) => records.length),
-    ]);
-
-    return res.json(
-      buildDashboardOverview(
-        toCurrentUserDto(identity),
-        ownedOfferCount,
-        publishedOfferCount,
-      ),
-    );
   });
 
   app.get('/api/dashboard/metrics', isAuthenticated, async (req: any, res) => {

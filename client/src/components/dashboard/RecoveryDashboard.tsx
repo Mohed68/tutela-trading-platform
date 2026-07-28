@@ -56,7 +56,7 @@ function UnavailableModule({
   const message =
     module.state === "error"
       ? "This module could not be loaded safely."
-      : "This module is not yet available in the controlled recovery environment.";
+      : "This module is not yet available.";
 
   return (
     <div className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 p-4">
@@ -91,7 +91,7 @@ export function RecoveryDashboard({
             Trading Dashboard
           </h1>
           <p className="mt-2 text-gray-600">
-            Safe account and marketplace summaries for the recovery environment.
+            Account access and marketplace availability at a glance.
           </p>
         </div>
         <button
