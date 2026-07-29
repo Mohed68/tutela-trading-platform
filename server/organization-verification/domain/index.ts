@@ -1,4 +1,5 @@
 import * as organizationVerificationPolicy from "./policy/index.js";
+import * as organizationVerificationEvidenceSnapshot from "./evidence-snapshot/index.js";
 
 export {
   createAttemptForRevision,
@@ -80,4 +81,7 @@ export {
   type OrganizationVerificationSubmission,
   type SubmissionResult,
 } from "./submission.js";
-export { organizationVerificationPolicy };
+export {
+  organizationVerificationEvidenceSnapshot,
+  organizationVerificationPolicy,
+};

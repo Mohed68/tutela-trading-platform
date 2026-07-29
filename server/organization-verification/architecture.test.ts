@@ -40,7 +40,14 @@ type ArchitectureViolationCode =
   | "POLICY_DOMAIN_PUBLIC_EXPORT_LEAK"
   | "UNAUTHORIZED_POLICY_CONSTRUCTION"
   | "POLICY_DOMAIN_RUNTIME_WIRING"
-  | "FROZEN_DOMAIN_IMPORTS_POLICY";
+  | "FROZEN_DOMAIN_IMPORTS_POLICY"
+  | "SNAPSHOT_DOMAIN_FORBIDDEN_DEPENDENCY"
+  | "SNAPSHOT_DOMAIN_FORBIDDEN_AUTHORITY"
+  | "SNAPSHOT_DOMAIN_PUBLIC_EXPORT_LEAK"
+  | "UNAUTHORIZED_SNAPSHOT_CONSTRUCTION"
+  | "UNAUTHORIZED_SNAPSHOT_AUTHENTICITY_READ"
+  | "SNAPSHOT_DOMAIN_RUNTIME_WIRING"
+  | "FROZEN_DOMAIN_IMPORTS_SNAPSHOT";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -169,11 +176,15 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isPolicyDomain = lowerFile.startsWith(
     "server/organization-verification/domain/policy/",
   );
+  const isEvidenceSnapshotDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/evidence-snapshot/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
     !isTrustStatusDomain &&
-    !isPolicyDomain;
+    !isPolicyDomain &&
+    !isEvidenceSnapshotDomain;
   const isDomainPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/index.ts",
   );
@@ -185,6 +196,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isPolicyPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/policy/index.ts",
+  );
+  const isEvidenceSnapshotPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/evidence-snapshot/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -235,6 +249,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "POLICY_DOMAIN_PUBLIC_EXPORT_LEAK",
       file,
       "Policy public surface exposes internal authenticity or construction authority",
+    );
+  }
+
+  if (
+    isEvidenceSnapshotPublicIndex &&
+    (/\b(?:evidenceSnapshotSeal|createOrganizationVerificationEvidenceSnapshotInternal|readOrganizationVerificationEvidenceSnapshotInternal|canonicalizeEvidenceSnapshotValueInternal|computeEvidenceSnapshotFingerprintInternal|freezeOrganizationVerificationEvidenceSet)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "SNAPSHOT_DOMAIN_PUBLIC_EXPORT_LEAK",
+      file,
+      "Evidence Snapshot public surface exposes construction, authenticity, canonicalization, or freezing internals",
     );
   }
 
@@ -312,6 +341,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         authority.symbol,
       );
     }
+  }
+
+  if (
+    /\breadOrganizationVerificationEvidenceSnapshotInternal\b/.test(
+      input.source,
+    ) &&
+    !lowerFile.endsWith("/domain/evidence-snapshot/evidencesnapshot.ts") &&
+    !lowerFile.endsWith("/domain/evidence-snapshot/evidencesnapshotbuilder.ts")
+  ) {
+    addViolation(
+      violations,
+      "UNAUTHORIZED_SNAPSHOT_AUTHENTICITY_READ",
+      file,
+      "Evidence Snapshot authenticity is private to the model and sole Builder",
+    );
   }
 
   if (isOrganizationVerification) {
@@ -525,6 +569,96 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         "Revision construction must remain behind Submission",
       );
     }
+  }
+
+  if (isEvidenceSnapshotDomain) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9]+\.js$/.test(specifier) ||
+        specifier === "../index.js" ||
+        specifier === "../../../organization-registry/index.js" ||
+        specifier === "node:crypto";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:db|database|schema|storage|repository|routes?|workers?|startup|frontend|client|providers?|services?|sessions?)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /(?:^|\/)(?:verification|marketplace|kyb|aml|sanctions|compliance|payments?|orders?|contracts?|notifications?|blockchain|ai|openai|stripe|sentry)(?:\/|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:drizzle-orm|pg|@neondatabase\/|openai|stripe|@sentry\/)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "SNAPSHOT_DOMAIN_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|transitionAttemptProcess|createOrganizationVerificationFinding|evaluateOrganizationVerificationPolicy|ParticipationEligibility)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "SNAPSHOT_DOMAIN_FORBIDDEN_AUTHORITY",
+        file,
+        "Evidence Snapshot must record source facts without Policy, Finding, Decision, Trust, Eligibility, or workflow authority",
+      );
+    }
+  }
+
+  if (
+    /\bcreateOrganizationVerificationEvidenceSnapshotInternal\b/.test(
+      input.source,
+    ) &&
+    !lowerFile.endsWith("/domain/evidence-snapshot/evidencesnapshot.ts") &&
+    !lowerFile.endsWith("/domain/evidence-snapshot/evidencesnapshotbuilder.ts")
+  ) {
+    addViolation(
+      violations,
+      "UNAUTHORIZED_SNAPSHOT_CONSTRUCTION",
+      file,
+      "Only the Evidence Snapshot Builder may invoke the private constructor",
+    );
+  }
+
+  if (
+    (isDecisionDomain ||
+      isTrustStatusDomain ||
+      isPolicyDomain ||
+      (isOrganizationVerificationCoreDomain && !isDomainPublicIndex) ||
+      isOrganizationRegistry) &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)evidence-snapshot(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "FROZEN_DOMAIN_IMPORTS_SNAPSHOT",
+      file,
+      "Architecture-frozen predecessor domains must not depend on Evidence Snapshot",
+    );
+  }
+
+  if (
+    !isEvidenceSnapshotDomain &&
+    !isDomainPublicIndex &&
+    !lowerFile.endsWith("/organization-verification/index.ts") &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)evidence-snapshot(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "SNAPSHOT_DOMAIN_RUNTIME_WIRING",
+      file,
+      "Evidence Snapshot Builder must remain inert outside its curated public surface",
+    );
   }
 
   if (isDecisionDomain) {
@@ -1206,5 +1340,101 @@ test("intentional fixture rejects unrestricted Policy internal exports", () => {
       "server/organization-verification/domain/policy/index.ts",
     source:
       'export { readOrganizationVerificationPolicyEvaluationCompletion } from "./policyEvaluationCompletion.js";',
+  });
+});
+
+test("intentional fixture rejects unauthorized Evidence Snapshot construction", () => {
+  expectFixtureViolation("UNAUTHORIZED_SNAPSHOT_CONSTRUCTION", {
+    file: "server/organization-verification/domain/reviewer.ts",
+    source:
+      "export function createOrganizationVerificationEvidenceSnapshotInternal() { return {}; }",
+  });
+});
+
+test("intentional fixture rejects Evidence Snapshot private authenticity reads", () => {
+  expectFixtureViolation("UNAUTHORIZED_SNAPSHOT_AUTHENTICITY_READ", {
+    file: "server/organization-verification/domain/policy/evaluator.ts",
+    source:
+      'import { readOrganizationVerificationEvidenceSnapshotInternal } from "../evidence-snapshot/evidenceSnapshot.js";',
+  });
+});
+
+test("intentional fixture rejects unrestricted Evidence Snapshot exports", () => {
+  expectFixtureViolation("SNAPSHOT_DOMAIN_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/domain/evidence-snapshot/index.ts",
+    source: 'export * from "./evidenceSnapshot.js";',
+  });
+});
+
+test("intentional fixture rejects Evidence Snapshot database imports", () => {
+  expectFixtureViolation("SNAPSHOT_DOMAIN_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/evidence-snapshot/evidenceSnapshotBuilder.ts",
+    source: 'import { db } from "../../../db.js";',
+  });
+});
+
+test("intentional fixture rejects Evidence Snapshot storage imports", () => {
+  expectFixtureViolation("SNAPSHOT_DOMAIN_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/evidence-snapshot/evidenceSnapshotBuilder.ts",
+    source: 'import { storage } from "../../../storage/client.js";',
+  });
+});
+
+test("intentional fixture rejects Evidence Snapshot provider imports", () => {
+  expectFixtureViolation("SNAPSHOT_DOMAIN_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/evidence-snapshot/evidenceSnapshotBuilder.ts",
+    source: 'import { provider } from "../../../providers/kyb.js";',
+  });
+});
+
+test("intentional fixture rejects Evidence Snapshot Policy authority", () => {
+  expectFixtureViolation("SNAPSHOT_DOMAIN_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evidence-snapshot/evaluator.ts",
+    source: "evaluateOrganizationVerificationPolicy(snapshot);",
+  });
+});
+
+test("intentional fixture rejects Evidence Snapshot Decision authority", () => {
+  expectFixtureViolation("SNAPSHOT_DOMAIN_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evidence-snapshot/evaluator.ts",
+    source: "decideOrganizationVerification(snapshot);",
+  });
+});
+
+test("intentional fixture rejects Evidence Snapshot Trust authority", () => {
+  expectFixtureViolation("SNAPSHOT_DOMAIN_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evidence-snapshot/evaluator.ts",
+    source: "deriveOrganizationVerificationTrustStatus(snapshot);",
+  });
+});
+
+test("intentional fixture rejects Evidence Snapshot workflow authority", () => {
+  expectFixtureViolation("SNAPSHOT_DOMAIN_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evidence-snapshot/coordinator.ts",
+    source: "transitionAttemptProcess(attempt, 'running');",
+  });
+});
+
+test("intentional fixture rejects runtime wiring of Evidence Snapshot Builder", () => {
+  expectFixtureViolation("SNAPSHOT_DOMAIN_RUNTIME_WIRING", {
+    file: "server/organization-verification/worker.ts",
+    source:
+      'import { buildOrganizationVerificationEvidenceSnapshot } from "./domain/evidence-snapshot/index.js";',
+  });
+});
+
+test("intentional fixture rejects reverse Core dependency on Evidence Snapshot", () => {
+  expectFixtureViolation("FROZEN_DOMAIN_IMPORTS_SNAPSHOT", {
+    file: "server/organization-verification/domain/submission.ts",
+    source:
+      'import type { OrganizationVerificationEvidenceSnapshot } from "./evidence-snapshot/index.js";',
   });
 });
