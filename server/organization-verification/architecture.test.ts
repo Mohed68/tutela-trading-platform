@@ -116,6 +116,10 @@ type ArchitectureViolationCode =
   | "APPLICATION_SERVICE_CONTRACT_FORBIDDEN_AUTHORITY"
   | "APPLICATION_SERVICE_CONTRACT_PUBLIC_EXPORT_LEAK"
   | "APPLICATION_SERVICE_CONTRACT_IMPLEMENTATION"
+  | "CROSS_LAYER_CONFORMANCE_FORBIDDEN_DEPENDENCY"
+  | "CROSS_LAYER_CONFORMANCE_FORBIDDEN_AUTHORITY"
+  | "CROSS_LAYER_CONFORMANCE_PUBLIC_EXPORT_LEAK"
+  | "CROSS_LAYER_CONFORMANCE_REVERSE_DEPENDENCY"
   | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
@@ -290,6 +294,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isApplicationServiceContract = lowerFile.startsWith(
     "server/organization-verification/application/application-service-contract/",
   );
+  const isCrossLayerConformance = lowerFile.startsWith(
+    "server/organization-verification/application/cross-layer-conformance/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
@@ -352,6 +359,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isApplicationServiceContractPublicIndex = lowerFile.endsWith(
     "server/organization-verification/application/application-service-contract/index.ts",
+  );
+  const isCrossLayerConformancePublicIndex = lowerFile.endsWith(
+    "server/organization-verification/application/cross-layer-conformance/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -2515,6 +2525,80 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     );
   }
 
+  if (isCrossLayerConformance) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "../application-service-contract/index.js";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:db|database|schema|migrations?|storage|repositories?|routes?|controllers?|frontend|client|providers?|startup|workers?|queues?|notifications?|permissions?|eligibility|unit-of-work|transactions?|infrastructure)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:node:fs|node:http|node:https|node:net|node:tls|node:dns|node:crypto)$/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "CROSS_LAYER_CONFORMANCE_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:executeOrganizationVerificationWorkflowStep|replayOrganizationVerificationWorkflow|appendOrganizationVerificationEvidence|loadOrganizationVerificationEvidenceStream|executeOrganizationVerificationAttemptTransition|buildOrganizationVerificationEvidenceSnapshot|buildOrganizationVerificationEvaluationProjection|buildOrganizationVerificationPolicyEvaluationInput|executeOrganizationVerificationPolicyEvaluation|executeOrganizationVerificationDecisionTrustIntegration)\s*\(/.test(
+        input.source,
+      ) ||
+      /\b(?:createOrganizationVerificationStoredEvidence|createOrganizationVerificationEvidenceAppendBatch|createOrganizationVerificationEvidenceAppendReceipt|createOrganizationVerificationReplayRequest)\s*\(/.test(
+        input.source,
+      ) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bMath\.random\s*\(|\bas\s+unknown\s+as\b|\bas\s+never\b/.test(
+        input.source,
+      ) ||
+      /\b(?:WorkflowEngine|executeUntilComplete|automaticProgression|ApplicationServiceRuntime|UnitOfWork|TransactionManager|AuthorizationService|ParticipationEligibility|PublicationEligibility)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "CROSS_LAYER_CONFORMANCE_FORBIDDEN_AUTHORITY",
+        file,
+        "Cross-layer conformance attempted execution, orchestration, hidden input, or excluded authority",
+      );
+    }
+  }
+
+  if (
+    isCrossLayerConformancePublicIndex &&
+    /\b(?:function|class|create\w*|execute\w*|invoke\w*|orchestrate\w*|persist\w*|replayOrganizationVerificationWorkflow)\b/.test(
+      input.source,
+    )
+  ) {
+    addViolation(
+      violations,
+      "CROSS_LAYER_CONFORMANCE_PUBLIC_EXPORT_LEAK",
+      file,
+      "Cross-layer conformance public surface must expose inert matrices only",
+    );
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isCrossLayerConformance &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)cross-layer-conformance(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "CROSS_LAYER_CONFORMANCE_REVERSE_DEPENDENCY",
+      file,
+      "Runtime, Domain, Persistence, Replay, Application Service, and delivery layers must not depend on validation-only conformance data",
+    );
+  }
+
   if (
     /\bcreateOrganizationVerificationPolicyEvaluationExecutionInternal\s*\(/.test(
       input.source,
@@ -4481,5 +4565,63 @@ test("Application-service public surface protects private construction authority
       "server/organization-verification/application/application-service-contract/index.ts",
     source:
       'export { applicationRequestSeal, createOrganizationVerificationApplicationExecutionInternal, fingerprintApplicationServiceContract } from "./internal.js";',
+  });
+});
+
+test("Cross-layer conformance rejects infrastructure dependencies", () => {
+  for (const source of [
+    'import { db } from "../../../db.js";',
+    'import { adapter } from "../../infrastructure/persistence/in-memory/index.js";',
+    'import fs from "node:fs";',
+    'import { router } from "../../../routes.js";',
+  ]) {
+    expectFixtureViolation("CROSS_LAYER_CONFORMANCE_FORBIDDEN_DEPENDENCY", {
+      file:
+        "server/organization-verification/application/cross-layer-conformance/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("Cross-layer conformance rejects execution and orchestration", () => {
+  for (const source of [
+    "executeOrganizationVerificationWorkflowStep(input);",
+    "replayOrganizationVerificationWorkflow(input);",
+    "appendOrganizationVerificationEvidence(input);",
+    "loadOrganizationVerificationEvidenceStream(input);",
+    "const now = Date.now();",
+    "const service: ApplicationServiceRuntime = input;",
+    "const unit: UnitOfWork = input;",
+  ]) {
+    expectFixtureViolation("CROSS_LAYER_CONFORMANCE_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/application/cross-layer-conformance/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("Cross-layer conformance rejects reverse runtime dependencies", () => {
+  for (const file of [
+    "server/organization-verification/domain/forbidden.ts",
+    "server/organization-verification/application/workflow-runtime/forbidden.ts",
+    "server/organization-verification/application/persistence-contract/forbidden.ts",
+    "server/organization-verification/application/replay-runtime/forbidden.ts",
+    "server/organization-verification/application/application-service-contract/forbidden.ts",
+  ]) {
+    expectFixtureViolation("CROSS_LAYER_CONFORMANCE_REVERSE_DEPENDENCY", {
+      file,
+      source:
+        'import { ORGANIZATION_VERIFICATION_IDENTITY_LINEAGE } from "../cross-layer-conformance/index.js";',
+    });
+  }
+});
+
+test("Cross-layer conformance public surface remains inert", () => {
+  expectFixtureViolation("CROSS_LAYER_CONFORMANCE_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/application/cross-layer-conformance/index.ts",
+    source:
+      'export { executeConformance, createConformanceRuntime } from "./runtime.js";',
   });
 });
