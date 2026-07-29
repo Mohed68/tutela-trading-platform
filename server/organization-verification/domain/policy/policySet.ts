@@ -26,6 +26,8 @@ export const ORGANIZATION_VERIFICATION_POLICY_SET_STATUSES = [
 export type OrganizationVerificationPolicySetStatus =
   (typeof ORGANIZATION_VERIFICATION_POLICY_SET_STATUSES)[number];
 
+const policySetSeal = Symbol("organization-verification-policy-set");
+
 export interface OrganizationVerificationPolicyRuleReference {
   readonly ruleId: OrganizationVerificationRuleId;
   readonly ruleVersion: OrganizationVerificationRuleVersion;
@@ -48,6 +50,7 @@ export interface OrganizationVerificationPolicySet {
     readonly jurisdictionCodes: readonly string[];
   }>;
   readonly status: OrganizationVerificationPolicySetStatus;
+  readonly [policySetSeal]: true;
 }
 
 export interface CreateOrganizationVerificationPolicySetInput {
@@ -169,22 +172,39 @@ export function createOrganizationVerificationPolicySet(
     });
   }
 
-  return policySuccess(
-    Object.freeze({
-      policySetId: input.policySetId,
-      policySetVersion: input.policySetVersion,
-      policyContractVersion: POLICY_CONTRACT_VERSION,
-      name: input.name,
-      effectiveFrom: input.effectiveFrom,
-      ...(input.effectiveUntil
-        ? { effectiveUntil: input.effectiveUntil }
-        : {}),
-      rules: Object.freeze(rules),
-      evaluationContractVersion: POLICY_EVALUATION_CONTRACT_VERSION,
-      provenanceReference: input.provenanceReference,
-      integrityReference: input.integrityReference,
-      ...(applicabilityMetadata ? { applicabilityMetadata } : {}),
-      status: input.status as OrganizationVerificationPolicySetStatus,
-    }),
+  const policySet = {
+    policySetId: input.policySetId,
+    policySetVersion: input.policySetVersion,
+    policyContractVersion: POLICY_CONTRACT_VERSION,
+    name: input.name,
+    effectiveFrom: input.effectiveFrom,
+    ...(input.effectiveUntil
+      ? { effectiveUntil: input.effectiveUntil }
+      : {}),
+    rules: Object.freeze(rules),
+    evaluationContractVersion: POLICY_EVALUATION_CONTRACT_VERSION,
+    provenanceReference: input.provenanceReference,
+    integrityReference: input.integrityReference,
+    ...(applicabilityMetadata ? { applicabilityMetadata } : {}),
+    status: input.status as OrganizationVerificationPolicySetStatus,
+  } as OrganizationVerificationPolicySet;
+  Object.defineProperty(policySet, policySetSeal, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return policySuccess(Object.freeze(policySet));
+}
+
+export function isOrganizationVerificationPolicySet(
+  value: unknown,
+): value is OrganizationVerificationPolicySet {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as Partial<OrganizationVerificationPolicySet>)[policySetSeal] ===
+      true &&
+    Object.isFrozen(value)
   );
 }

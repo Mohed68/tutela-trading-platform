@@ -65,7 +65,11 @@ type ArchitectureViolationCode =
   | "FROZEN_DOMAIN_IMPORTS_EVALUATION_INPUT"
   | "POLICY_PREPARATION_BYPASS"
   | "DECISION_PREPARATION_BYPASS"
-  | "TRUST_PREPARATION_BYPASS";
+  | "TRUST_PREPARATION_BYPASS"
+  | "POLICY_RUNTIME_CONTRACT_FORBIDDEN_DEPENDENCY"
+  | "POLICY_RUNTIME_CONTRACT_FORBIDDEN_AUTHORITY"
+  | "POLICY_RUNTIME_CONTRACT_PUBLIC_EXPORT_LEAK"
+  | "POLICY_RUNTIME_EXECUTION_STARTED";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -203,6 +207,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isEvaluationInputDomain = lowerFile.startsWith(
     "server/organization-verification/domain/evaluation-input/",
   );
+  const isPolicyRuntimeContractDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/policy-runtime-contract/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
@@ -210,7 +217,8 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPolicyDomain &&
     !isEvidenceSnapshotDomain &&
     !isEvaluationProjectionDomain &&
-    !isEvaluationInputDomain;
+    !isEvaluationInputDomain &&
+    !isPolicyRuntimeContractDomain;
   const isDomainPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/index.ts",
   );
@@ -231,6 +239,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isEvaluationInputPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/evaluation-input/index.ts",
+  );
+  const isPolicyRuntimeContractPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/policy-runtime-contract/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -326,6 +337,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "EVALUATION_INPUT_PUBLIC_EXPORT_LEAK",
       file,
       "Evaluation Input public surface exposes seals, constructors, readers, hashing, or canonicalization internals",
+    );
+  }
+
+  if (
+    isPolicyRuntimeContractPublicIndex &&
+    (/\b(?:fingerprintInternal|canonicalize|runtimeContractSuccess|runtimeContractFailure|ruleImplementationSeal|ruleImplementationSetSeal|executionArtifactsSeal)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "POLICY_RUNTIME_CONTRACT_PUBLIC_EXPORT_LEAK",
+      file,
+      "Executable Rule contract public surface exposes construction, seal, result, hashing, or canonicalization internals",
     );
   }
 
@@ -843,6 +869,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
 
   if (
     !isEvaluationInputDomain &&
+    !isPolicyRuntimeContractDomain &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1116,6 +1143,84 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     }
   }
 
+  if (isPolicyRuntimeContractDomain) {
+    for (const specifier of specifiers) {
+      const isLocalContractModule =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier);
+      const isApprovedPolicySurface = specifier === "../policy/index.js";
+      const isApprovedEvaluationInputSurface =
+        specifier === "../evaluation-input/index.js";
+      const isApprovedHashingPrimitive = specifier === "node:crypto";
+      if (
+        !isLocalContractModule &&
+        !isApprovedPolicySurface &&
+        !isApprovedEvaluationInputSurface &&
+        !isApprovedHashingPrimitive
+      ) {
+        addViolation(
+          violations,
+          "POLICY_RUNTIME_CONTRACT_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+      if (
+        /(?:^|\/)(?:evidence-snapshot|evaluation-projection|decision|trust-status|db|database|schema|storage|repository|routes?|workers?|startup|providers?|services?|sessions?)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /(?:^|\/)(?:verification|marketplace|kyb|aml|sanctions|compliance|payments?|orders?|contracts?|notifications?|blockchain|ai|openai|stripe|sentry)(?:\/|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:drizzle-orm|pg|@neondatabase\/|openai|stripe|@sentry\/)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "POLICY_RUNTIME_CONTRACT_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+
+    if (
+      /\b(?:decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|transitionAttemptProcess|createOrganizationVerificationFinding|createOrganizationVerificationRuleEvaluationResult|completeOrganizationVerificationPolicyEvaluation|createOrganizationVerificationPolicyEvaluationCompletionInternal)\b/.test(
+        input.source,
+      ) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bas\s+unknown\s+as\b/.test(
+        input.source,
+      ) ||
+      /["'](?:approved|rejected|trusted|not_trusted|allowed_to_trade|allowed_to_publish|marketplace_access)["']/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "POLICY_RUNTIME_CONTRACT_FORBIDDEN_AUTHORITY",
+        file,
+        "Executable Rule contract attempted to own findings, results, completion, Decision, Trust, lifecycle, workflow, or downstream authority",
+      );
+    }
+
+    if (
+      (!lowerFile.endsWith(
+        "/domain/policy-runtime-contract/ruleimplementation.ts",
+      ) &&
+        /\bcreateOrganizationVerificationRuleImplementation\s*\(/.test(
+          input.source,
+        )) ||
+      /\.evaluate\s*\(/.test(input.source)
+    ) {
+      addViolation(
+        violations,
+        "POLICY_RUNTIME_EXECUTION_STARTED",
+        file,
+        "Phase 7B-6A.0 defines contracts only; production Rule construction or execution is not authorized",
+      );
+    }
+  }
+
   if (
     /\bcreateOrganizationVerificationPolicyEvaluationCompletionInternal\b/.test(
       input.source,
@@ -1179,6 +1284,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     isOrganizationVerification &&
     !isPolicyDomain &&
     !isEvaluationInputDomain &&
+    !isPolicyRuntimeContractDomain &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1955,6 +2061,121 @@ test("intentional fixture rejects reverse Projection dependency on Evaluation In
       "server/organization-verification/domain/evaluation-projection/evaluationProjection.ts",
     source:
       'import type { OrganizationVerificationPolicyEvaluationInput } from "../evaluation-input/index.js";',
+  });
+});
+
+test("Executable Rule contract rejects direct Snapshot access", () => {
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/bypass.ts",
+    source:
+      'import type { OrganizationVerificationEvidenceSnapshot } from "../evidence-snapshot/index.js";',
+  });
+});
+
+test("Executable Rule contract rejects direct Projection access", () => {
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/bypass.ts",
+    source:
+      'import type { OrganizationVerificationEvaluationProjection } from "../evaluation-projection/index.js";',
+  });
+});
+
+test("Executable Rule contract rejects database infrastructure", () => {
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/repository.ts",
+    source: 'import { db } from "../../../db.js";',
+  });
+});
+
+test("Executable Rule contract rejects providers and dynamic Registry lookup", () => {
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/loader.ts",
+    source:
+      'import { registry } from "../../../organization-registry/index.js";',
+  });
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/provider.ts",
+    source: 'import { provider } from "../../../providers/kyb.js";',
+  });
+});
+
+test("Executable Rule contract rejects Finding and completion production", () => {
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/executor.ts",
+    source:
+      "createOrganizationVerificationFinding(input); completeOrganizationVerificationPolicyEvaluation(input);",
+  });
+});
+
+test("Executable Rule contract rejects Decision, Trust, and Attempt authority", () => {
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/decision.ts",
+    source: "decideOrganizationVerification(input);",
+  });
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/trust.ts",
+    source: "deriveOrganizationVerificationTrustStatus(input);",
+  });
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/workflow.ts",
+    source: "transitionAttemptProcess(attempt, 'running');",
+  });
+});
+
+test("Executable Rule contract rejects environment, hidden clock, and hidden ID authority", () => {
+  for (const source of [
+    "const configured = process.env.POLICY_SET;",
+    "const timestamp = Date.now();",
+    "const timestamp = new Date();",
+    "const id = randomUUID();",
+    "const id = nanoid();",
+  ]) {
+    expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/policy-runtime-contract/hiddenAuthority.ts",
+      source,
+    });
+  }
+});
+
+test("Executable Rule contract rejects unsafe opaque-type substitution", () => {
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/unsafe.ts",
+    source: "const executionId = value as unknown as ExecutionId;",
+  });
+});
+
+test("Phase 7B-6A.0 rejects production Rule execution", () => {
+  expectFixtureViolation("POLICY_RUNTIME_EXECUTION_STARTED", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/executor.ts",
+    source: "implementation.evaluate(facts);",
+  });
+});
+
+test("Phase 7B-6A.0 rejects production Rule implementation creation", () => {
+  expectFixtureViolation("POLICY_RUNTIME_EXECUTION_STARTED", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/businessRule.ts",
+    source: "createOrganizationVerificationRuleImplementation(input);",
+  });
+});
+
+test("Executable Rule contract protects seals and canonicalization from public exports", () => {
+  expectFixtureViolation("POLICY_RUNTIME_CONTRACT_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/domain/policy-runtime-contract/index.ts",
+    source: 'export { fingerprintInternal } from "./canonical.js";',
   });
 });
 

@@ -64,6 +64,7 @@ export {
 export {
   ORGANIZATION_VERIFICATION_POLICY_SET_STATUSES,
   createOrganizationVerificationPolicySet,
+  isOrganizationVerificationPolicySet,
   type CreateOrganizationVerificationPolicySetInput,
   type OrganizationVerificationPolicyRuleReference,
   type OrganizationVerificationPolicySet,
