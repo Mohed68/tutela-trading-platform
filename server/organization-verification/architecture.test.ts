@@ -86,6 +86,10 @@ type ArchitectureViolationCode =
   | "DECISION_TRUST_INTEGRATION_TRUST_BOUNDARY"
   | "CORE_AUTHENTICITY_PUBLIC_EXPORT_LEAK"
   | "CORE_AUTHENTICITY_GUARD_UNAUTHORIZED_CONSUMER"
+  | "ATTEMPT_LIFECYCLE_CONTRACT_FORBIDDEN_DEPENDENCY"
+  | "ATTEMPT_LIFECYCLE_CONTRACT_FORBIDDEN_AUTHORITY"
+  | "ATTEMPT_LIFECYCLE_CONTRACT_PUBLIC_EXPORT_LEAK"
+  | "ATTEMPT_LIFECYCLE_CONTRACT_EXTERNAL_WIRING"
   | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
@@ -236,6 +240,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isDecisionTrustIntegrationDomain = lowerFile.startsWith(
     "server/organization-verification/domain/decision-trust-integration/",
   );
+  const isAttemptLifecycleContract = lowerFile.startsWith(
+    "server/organization-verification/application/attempt-lifecycle-contract/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
@@ -280,6 +287,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isDecisionTrustIntegrationPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/decision-trust-integration/index.ts",
+  );
+  const isAttemptLifecycleContractPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/application/attempt-lifecycle-contract/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -494,6 +504,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "DECISION_TRUST_INTEGRATION_PUBLIC_EXPORT_LEAK",
       file,
       "Decision–Trust integration public surface exposes a seal, constructor, internal helper, result helper, or canonicalization authority",
+    );
+  }
+
+  if (
+    isAttemptLifecycleContractPublicIndex &&
+    (/\b(?:transitionRecordSeal|lifecycleExecutionSeal|authenticTransitionRecords|authenticLifecycleExecutions|sealTransitionRecord|sealLifecycleExecution|canonicalizeAttemptLifecycleValue|fingerprintAttemptLifecycleValue|contractSuccess|contractFailure|normalizeAttemptLifecycleEvidenceArtifacts)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "ATTEMPT_LIFECYCLE_CONTRACT_PUBLIC_EXPORT_LEAK",
+      file,
+      "Attempt Lifecycle contract exposes a seal, constructor helper, canonicalization, or result internal",
     );
   }
 
@@ -1678,6 +1703,71 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         "Decision–Trust integration cannot access private Decision or Trust construction authority",
       );
     }
+  }
+
+  if (isAttemptLifecycleContract) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "node:crypto" ||
+        specifier === "../../../organization-registry/index.js" ||
+        /^\.\.\/\.\.\/domain\/(?:attempt|ids|process|record|revision|submission)\.js$/.test(
+          specifier,
+        );
+      if (
+        !allowed ||
+        /(?:^|\/)(?:snapshot|evaluation|policy|decision|trust|eligibility|workflow|marketplace|db|database|schema|migrations?|storage|repository|routes?|controllers?|workers?|queues?|providers?|services?|startup|frontend|client)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:drizzle-orm|pg|@neondatabase\/|openai|stripe|@sentry\/)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "ATTEMPT_LIFECYCLE_CONTRACT_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:transitionAttemptProcess|createAttemptForRevision|createOrganizationVerificationRecord|submitDraftToRevision|decideOrganizationVerification|deriveOrganizationVerificationTrustStatus)\s*\(/.test(
+        input.source,
+      ) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bMath\.random\s*\(|\bas\s+unknown\s+as\b/.test(
+        input.source,
+      ) ||
+      /\b(?:ParticipationEligibility|PublicationEligibility|WorkflowCoordinator|AttemptRepository)\b/.test(
+        input.source,
+      ) ||
+      /["'](?:failed|cancelled|retrying|expired|timed_out|restarted|lease_expired)["']/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "ATTEMPT_LIFECYCLE_CONTRACT_FORBIDDEN_AUTHORITY",
+        file,
+        "Attempt Lifecycle contract attempted Domain transition, construction, downstream authority, hidden input, or excluded lifecycle semantics",
+      );
+    }
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isAttemptLifecycleContract &&
+    !lowerFile.endsWith("/organization-verification/index.ts") &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)attempt-lifecycle-contract(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "ATTEMPT_LIFECYCLE_CONTRACT_EXTERNAL_WIRING",
+      file,
+      "Pure Attempt Lifecycle execution contracts must remain unwired",
+    );
   }
 
   if (
@@ -3165,4 +3255,61 @@ test("Core authenticity guards are reserved for the Phase 8A.0 contract boundary
     ),
     false,
   );
+});
+
+test("Attempt Lifecycle contract rejects infrastructure and downstream domain imports", () => {
+  for (const source of [
+    'import { db } from "../../../db.js";',
+    'import { policy } from "../../domain/policy/index.js";',
+    'import { trust } from "../../domain/trust-status/index.js";',
+    'import { repository } from "../../../repositories/attempt.js";',
+    'import { workflow } from "../../../workflow/index.js";',
+  ]) {
+    expectFixtureViolation(
+      "ATTEMPT_LIFECYCLE_CONTRACT_FORBIDDEN_DEPENDENCY",
+      {
+        file:
+          "server/organization-verification/application/attempt-lifecycle-contract/forbidden.ts",
+        source,
+      },
+    );
+  }
+});
+
+test("Attempt Lifecycle contract rejects transition execution and hidden authority", () => {
+  for (const source of [
+    "transitionAttemptProcess(attempt, input);",
+    "createAttemptForRevision(record, revision, input);",
+    "const now = Date.now();",
+    "const value = process.env.RUNTIME;",
+    "const id = randomUUID();",
+    'const state = "cancelled";',
+    "const result: WorkflowCoordinator = input;",
+  ]) {
+    expectFixtureViolation(
+      "ATTEMPT_LIFECYCLE_CONTRACT_FORBIDDEN_AUTHORITY",
+      {
+        file:
+          "server/organization-verification/application/attempt-lifecycle-contract/executor.ts",
+        source,
+      },
+    );
+  }
+});
+
+test("Attempt Lifecycle contract protects private construction internals", () => {
+  expectFixtureViolation("ATTEMPT_LIFECYCLE_CONTRACT_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/application/attempt-lifecycle-contract/index.ts",
+    source:
+      'export { lifecycleExecutionSeal, sealTransitionRecord, canonicalizeAttemptLifecycleValue } from "./internal.js";',
+  });
+});
+
+test("Attempt Lifecycle contract remains unwired before Phase 8A runtime", () => {
+  expectFixtureViolation("ATTEMPT_LIFECYCLE_CONTRACT_EXTERNAL_WIRING", {
+    file: "server/organization-verification/application/runtime.ts",
+    source:
+      'import { execution } from "./attempt-lifecycle-contract/index.js";',
+  });
 });
