@@ -72,10 +72,16 @@ export type OrganizationVerificationEvidenceSnapshotData = Omit<
 export function createOrganizationVerificationEvidenceSnapshotInternal(
   data: OrganizationVerificationEvidenceSnapshotData,
 ): OrganizationVerificationEvidenceSnapshot {
-  return Object.freeze({
+  const snapshot = {
     ...data,
-    [evidenceSnapshotSeal]: true as const,
+  } as OrganizationVerificationEvidenceSnapshot;
+  Object.defineProperty(snapshot, evidenceSnapshotSeal, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
   });
+  return Object.freeze(snapshot);
 }
 
 export function readOrganizationVerificationEvidenceSnapshotInternal(

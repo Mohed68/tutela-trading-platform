@@ -141,10 +141,16 @@ export type OrganizationVerificationEvaluationProjectionData = Omit<
 export function createOrganizationVerificationEvaluationProjectionInternal(
   data: OrganizationVerificationEvaluationProjectionData,
 ): OrganizationVerificationEvaluationProjection {
-  return Object.freeze({
+  const projection = {
     ...data,
-    [evaluationProjectionSeal]: true as const,
+  } as OrganizationVerificationEvaluationProjection;
+  Object.defineProperty(projection, evaluationProjectionSeal, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
   });
+  return Object.freeze(projection);
 }
 
 export function isOrganizationVerificationEvaluationProjection(

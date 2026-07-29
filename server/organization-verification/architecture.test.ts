@@ -53,6 +53,7 @@ type ArchitectureViolationCode =
   | "EVALUATION_PROJECTION_PUBLIC_EXPORT_LEAK"
   | "UNAUTHORIZED_EVALUATION_PROJECTION_CONSTRUCTION"
   | "EVALUATION_PROJECTION_RUNTIME_WIRING"
+  | "EVALUATION_PROJECTION_DIRECT_REVISION_CONSUMPTION"
   | "FROZEN_DOMAIN_IMPORTS_EVALUATION_PROJECTION"
   | "EVALUATION_INPUT_FORBIDDEN_DEPENDENCY"
   | "EVALUATION_INPUT_FORBIDDEN_AUTHORITY"
@@ -61,7 +62,10 @@ type ArchitectureViolationCode =
   | "UNAUTHORIZED_EVALUATION_INPUT_AUTHENTICITY_READ"
   | "EVALUATION_INPUT_DIRECT_SNAPSHOT_CONSUMPTION"
   | "EVALUATION_INPUT_RUNTIME_WIRING"
-  | "FROZEN_DOMAIN_IMPORTS_EVALUATION_INPUT";
+  | "FROZEN_DOMAIN_IMPORTS_EVALUATION_INPUT"
+  | "POLICY_PREPARATION_BYPASS"
+  | "DECISION_PREPARATION_BYPASS"
+  | "TRUST_PREPARATION_BYPASS";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -711,6 +715,19 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         "Projection must select and redact without evaluation, inference, Policy, Finding, Decision, Trust, Eligibility, or workflow authority",
       );
     }
+    if (
+      specifiers.some((specifier) =>
+        /(?:^|\/)(?:revision|submission)(?:\.js)?$/i.test(specifier),
+      ) ||
+      /\bOrganizationVerificationRevision\b/.test(input.source)
+    ) {
+      addViolation(
+        violations,
+        "EVALUATION_PROJECTION_DIRECT_REVISION_CONSUMPTION",
+        file,
+        "Evaluation Projection must consume an authentic Evidence Snapshot and cannot construct from Verification Revision directly",
+      );
+    }
   }
 
   if (isEvaluationInputDomain) {
@@ -946,6 +963,20 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   }
 
   if (isDecisionDomain) {
+    if (
+      specifiers.some((specifier) =>
+        /(?:^|\/)(?:evidence-snapshot|evaluation-projection|evaluation-input)(?:\/|$)/i.test(
+          specifier,
+        ),
+      )
+    ) {
+      addViolation(
+        violations,
+        "DECISION_PREPARATION_BYPASS",
+        file,
+        "Decision Domain cannot consume preparation-layer construction internals or raw preparation inputs",
+      );
+    }
     for (const specifier of specifiers) {
       if (
         !/^\.\/[A-Za-z0-9]+\.js$/.test(specifier) &&
@@ -1010,6 +1041,20 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   }
 
   if (isPolicyDomain) {
+    if (
+      specifiers.some((specifier) =>
+        /(?:^|\/)(?:evidence-snapshot|evaluation-projection)(?:\/|$)/i.test(
+          specifier,
+        ),
+      )
+    ) {
+      addViolation(
+        violations,
+        "POLICY_PREPARATION_BYPASS",
+        file,
+        "Policy execution cannot consume Snapshot or Projection as a substitute for authenticated Evaluation Input",
+      );
+    }
     for (const specifier of specifiers) {
       const isLocalPolicyModule = /^\.\/[A-Za-z0-9]+\.js$/.test(specifier);
       const isApprovedCoreIdentity = specifier === "../index.js";
@@ -1149,6 +1194,24 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   }
 
   if (isTrustStatusDomain) {
+    if (
+      specifiers.some(
+        (specifier) =>
+          /(?:^|\/)(?:evidence-snapshot|evaluation-projection|evaluation-input)(?:\/|$)/i.test(
+            specifier,
+          ) ||
+          /(?:^|\/)policy\/(?:finding|policyEvaluationCompletion|evaluationInput)(?:\.js)?$/i.test(
+            specifier,
+          ),
+      )
+    ) {
+      addViolation(
+        violations,
+        "TRUST_PREPARATION_BYPASS",
+        file,
+        "Trust Status Domain cannot consume preparation internals, Findings, Policy Evaluation Completion, or raw Policy inputs directly",
+      );
+    }
     for (const specifier of specifiers) {
       if (
         !/^\.\/[A-Za-z0-9]+\.js$/.test(specifier) &&
@@ -1892,5 +1955,68 @@ test("intentional fixture rejects reverse Projection dependency on Evaluation In
       "server/organization-verification/domain/evaluation-projection/evaluationProjection.ts",
     source:
       'import type { OrganizationVerificationPolicyEvaluationInput } from "../evaluation-input/index.js";',
+  });
+});
+
+test("combined-pipeline fixture rejects Snapshot importing Evaluation Input", () => {
+  expectFixtureViolation("FROZEN_DOMAIN_IMPORTS_EVALUATION_INPUT", {
+    file:
+      "server/organization-verification/domain/evidence-snapshot/evidenceSnapshot.ts",
+    source:
+      'import type { OrganizationVerificationPolicyEvaluationInput } from "../evaluation-input/index.js";',
+  });
+});
+
+test("combined-pipeline fixture rejects Projection consuming Verification Revision directly", () => {
+  expectFixtureViolation("EVALUATION_PROJECTION_DIRECT_REVISION_CONSUMPTION", {
+    file:
+      "server/organization-verification/domain/evaluation-projection/evaluationProjectionBuilder.ts",
+    source:
+      'import type { OrganizationVerificationRevision } from "../revision.js";',
+  });
+});
+
+test("combined-pipeline fixture rejects Policy consuming Snapshot directly", () => {
+  expectFixtureViolation("POLICY_PREPARATION_BYPASS", {
+    file:
+      "server/organization-verification/domain/policy/policyExecutor.ts",
+    source:
+      'import type { OrganizationVerificationEvidenceSnapshot } from "../evidence-snapshot/index.js";',
+  });
+});
+
+test("combined-pipeline fixture rejects Policy consuming Projection as Evaluation Input", () => {
+  expectFixtureViolation("POLICY_PREPARATION_BYPASS", {
+    file:
+      "server/organization-verification/domain/policy/policyExecutor.ts",
+    source:
+      'import type { OrganizationVerificationEvaluationProjection } from "../evaluation-projection/index.js";',
+  });
+});
+
+test("combined-pipeline fixture rejects Decision consuming preparation internals", () => {
+  expectFixtureViolation("DECISION_PREPARATION_BYPASS", {
+    file:
+      "server/organization-verification/domain/decision/decisionEngine.ts",
+    source:
+      'import type { OrganizationVerificationPolicyEvaluationInput } from "../evaluation-input/policyEvaluationInput.js";',
+  });
+});
+
+test("combined-pipeline fixture rejects Trust consuming preparation internals", () => {
+  expectFixtureViolation("TRUST_PREPARATION_BYPASS", {
+    file:
+      "server/organization-verification/domain/trust-status/trustStatusDeriver.ts",
+    source:
+      'import type { OrganizationVerificationEvaluationProjection } from "../evaluation-projection/evaluationProjection.js";',
+  });
+});
+
+test("combined-pipeline fixture rejects Trust consuming Findings directly", () => {
+  expectFixtureViolation("TRUST_PREPARATION_BYPASS", {
+    file:
+      "server/organization-verification/domain/trust-status/trustStatusDeriver.ts",
+    source:
+      'import type { OrganizationVerificationFinding } from "../policy/finding.js";',
   });
 });

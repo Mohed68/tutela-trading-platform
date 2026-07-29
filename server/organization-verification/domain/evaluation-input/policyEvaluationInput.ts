@@ -60,10 +60,16 @@ export type OrganizationVerificationPolicyEvaluationInputData = Omit<
 export function createOrganizationVerificationPolicyEvaluationInputInternal(
   data: OrganizationVerificationPolicyEvaluationInputData,
 ): OrganizationVerificationPolicyEvaluationInput {
-  return Object.freeze({
+  const policyEvaluationInput = {
     ...data,
-    [policyEvaluationInputSeal]: true as const,
+  } as OrganizationVerificationPolicyEvaluationInput;
+  Object.defineProperty(policyEvaluationInput, policyEvaluationInputSeal, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
   });
+  return Object.freeze(policyEvaluationInput);
 }
 
 export function readOrganizationVerificationPolicyEvaluationInputInternal(
