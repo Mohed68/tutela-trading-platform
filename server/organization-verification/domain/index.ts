@@ -1,5 +1,6 @@
 import * as organizationVerificationPolicy from "./policy/index.js";
 import * as organizationVerificationEvidenceSnapshot from "./evidence-snapshot/index.js";
+import * as organizationVerificationEvaluationProjection from "./evaluation-projection/index.js";
 
 export {
   createAttemptForRevision,
@@ -82,6 +83,7 @@ export {
   type SubmissionResult,
 } from "./submission.js";
 export {
+  organizationVerificationEvaluationProjection,
   organizationVerificationEvidenceSnapshot,
   organizationVerificationPolicy,
 };

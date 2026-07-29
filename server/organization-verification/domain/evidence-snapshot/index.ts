@@ -57,6 +57,7 @@ export type {
   OrganizationVerificationEvidenceSnapshot,
   OrganizationVerificationEvidenceSnapshotAttemptBinding as EvidenceSnapshotAttemptBinding,
 } from "./evidenceSnapshot.js";
+export { isOrganizationVerificationEvidenceSnapshot } from "./evidenceSnapshot.js";
 export type {
   EvidenceSnapshotAttributeValue,
   OrganizationVerificationEvidenceSnapshotAttribute,

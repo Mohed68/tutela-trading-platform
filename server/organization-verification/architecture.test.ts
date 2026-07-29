@@ -47,7 +47,13 @@ type ArchitectureViolationCode =
   | "UNAUTHORIZED_SNAPSHOT_CONSTRUCTION"
   | "UNAUTHORIZED_SNAPSHOT_AUTHENTICITY_READ"
   | "SNAPSHOT_DOMAIN_RUNTIME_WIRING"
-  | "FROZEN_DOMAIN_IMPORTS_SNAPSHOT";
+  | "FROZEN_DOMAIN_IMPORTS_SNAPSHOT"
+  | "EVALUATION_PROJECTION_FORBIDDEN_DEPENDENCY"
+  | "EVALUATION_PROJECTION_FORBIDDEN_AUTHORITY"
+  | "EVALUATION_PROJECTION_PUBLIC_EXPORT_LEAK"
+  | "UNAUTHORIZED_EVALUATION_PROJECTION_CONSTRUCTION"
+  | "EVALUATION_PROJECTION_RUNTIME_WIRING"
+  | "FROZEN_DOMAIN_IMPORTS_EVALUATION_PROJECTION";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -179,12 +185,16 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isEvidenceSnapshotDomain = lowerFile.startsWith(
     "server/organization-verification/domain/evidence-snapshot/",
   );
+  const isEvaluationProjectionDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/evaluation-projection/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
     !isTrustStatusDomain &&
     !isPolicyDomain &&
-    !isEvidenceSnapshotDomain;
+    !isEvidenceSnapshotDomain &&
+    !isEvaluationProjectionDomain;
   const isDomainPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/index.ts",
   );
@@ -199,6 +209,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isEvidenceSnapshotPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/evidence-snapshot/index.ts",
+  );
+  const isEvaluationProjectionPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/evaluation-projection/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -264,6 +277,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "SNAPSHOT_DOMAIN_PUBLIC_EXPORT_LEAK",
       file,
       "Evidence Snapshot public surface exposes construction, authenticity, canonicalization, or freezing internals",
+    );
+  }
+
+  if (
+    isEvaluationProjectionPublicIndex &&
+    (/\b(?:evaluationProjectionSeal|createOrganizationVerificationEvaluationProjectionInternal|computeEvaluationProjectionFingerprintInternal|createEvaluationProjectionFingerprintInternal|canonical)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "EVALUATION_PROJECTION_PUBLIC_EXPORT_LEAK",
+      file,
+      "Evaluation Projection public surface exposes construction, seal, fingerprint, or canonicalization internals",
     );
   }
 
@@ -612,6 +640,103 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     }
   }
 
+  if (isEvaluationProjectionDomain) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9]+\.js$/.test(specifier) ||
+        specifier === "../evidence-snapshot/index.js" ||
+        specifier === "node:crypto";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:db|database|schema|storage|repository|routes?|workers?|startup|frontend|client|providers?|services?|sessions?)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /(?:^|\/)(?:marketplace|kyb|aml|sanctions|compliance|payments?|orders?|contracts?|notifications?|blockchain|ai|openai|stripe|sentry|policy|decision|trust-status)(?:\/|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:drizzle-orm|pg|@neondatabase\/|openai|stripe|@sentry\/)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "EVALUATION_PROJECTION_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:evaluateOrganizationVerificationPolicy|createOrganizationVerificationFinding|decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|transitionAttemptProcess|ParticipationEligibility|PolicyEvaluationInput|EvaluationInput)\b/.test(
+        input.source,
+      ) ||
+      /\b(?:hasLicense|documentExpired|supportedJurisdiction|isEligible|isCompliant|isAuthentic|riskScore)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "EVALUATION_PROJECTION_FORBIDDEN_AUTHORITY",
+        file,
+        "Projection must select and redact without evaluation, inference, Policy, Finding, Decision, Trust, Eligibility, or workflow authority",
+      );
+    }
+  }
+
+  if (
+    /\bcreateOrganizationVerificationEvaluationProjectionInternal\b/.test(
+      input.source,
+    ) &&
+    !lowerFile.endsWith(
+      "/domain/evaluation-projection/evaluationprojection.ts",
+    ) &&
+    !lowerFile.endsWith(
+      "/domain/evaluation-projection/evaluationprojectionbuilder.ts",
+    )
+  ) {
+    addViolation(
+      violations,
+      "UNAUTHORIZED_EVALUATION_PROJECTION_CONSTRUCTION",
+      file,
+      "Only the Evaluation Projection Builder may invoke the private constructor",
+    );
+  }
+
+  if (
+    (isOrganizationRegistry ||
+      isEvidenceSnapshotDomain ||
+      isDecisionDomain ||
+      isTrustStatusDomain ||
+      isPolicyDomain ||
+      (isOrganizationVerificationCoreDomain && !isDomainPublicIndex)) &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)evaluation-projection(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "FROZEN_DOMAIN_IMPORTS_EVALUATION_PROJECTION",
+      file,
+      "Architecture-frozen predecessor domains must not depend on Evaluation Projection",
+    );
+  }
+
+  if (
+    !isEvaluationProjectionDomain &&
+    !isDomainPublicIndex &&
+    !lowerFile.endsWith("/organization-verification/index.ts") &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)evaluation-projection(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "EVALUATION_PROJECTION_RUNTIME_WIRING",
+      file,
+      "Evaluation Projection Builder must remain inert outside its curated public surface",
+    );
+  }
+
   if (
     /\bcreateOrganizationVerificationEvidenceSnapshotInternal\b/.test(
       input.source,
@@ -647,6 +772,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
 
   if (
     !isEvidenceSnapshotDomain &&
+    !isEvaluationProjectionDomain &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1436,5 +1562,86 @@ test("intentional fixture rejects reverse Core dependency on Evidence Snapshot",
     file: "server/organization-verification/domain/submission.ts",
     source:
       'import type { OrganizationVerificationEvidenceSnapshot } from "./evidence-snapshot/index.js";',
+  });
+});
+
+test("intentional fixture rejects unauthorized Evaluation Projection construction", () => {
+  expectFixtureViolation("UNAUTHORIZED_EVALUATION_PROJECTION_CONSTRUCTION", {
+    file: "server/organization-verification/domain/reviewer.ts",
+    source:
+      "export function createOrganizationVerificationEvaluationProjectionInternal() { return {}; }",
+  });
+});
+
+test("intentional fixture rejects unrestricted Evaluation Projection exports", () => {
+  expectFixtureViolation("EVALUATION_PROJECTION_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/domain/evaluation-projection/index.ts",
+    source: 'export * from "./evaluationProjection.js";',
+  });
+});
+
+test("intentional fixture rejects Evaluation Projection Policy dependency", () => {
+  expectFixtureViolation("EVALUATION_PROJECTION_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/evaluation-projection/evaluator.ts",
+    source: 'import { policy } from "../policy/index.js";',
+  });
+});
+
+test("intentional fixture rejects Evaluation Projection database dependency", () => {
+  expectFixtureViolation("EVALUATION_PROJECTION_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/evaluation-projection/builder.ts",
+    source: 'import { db } from "../../../db.js";',
+  });
+});
+
+test("intentional fixture rejects Evaluation Projection storage dependency", () => {
+  expectFixtureViolation("EVALUATION_PROJECTION_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/evaluation-projection/builder.ts",
+    source: 'import { storage } from "../../../storage/client.js";',
+  });
+});
+
+test("intentional fixture rejects Evaluation Projection business inference", () => {
+  expectFixtureViolation("EVALUATION_PROJECTION_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evaluation-projection/inference.ts",
+    source: "const supportedJurisdiction = jurisdiction === 'ZZ';",
+  });
+});
+
+test("intentional fixture rejects Evaluation Projection Decision authority", () => {
+  expectFixtureViolation("EVALUATION_PROJECTION_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evaluation-projection/decision.ts",
+    source: "decideOrganizationVerification(projection);",
+  });
+});
+
+test("intentional fixture rejects Evaluation Projection Workflow authority", () => {
+  expectFixtureViolation("EVALUATION_PROJECTION_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evaluation-projection/workflow.ts",
+    source: "transitionAttemptProcess(attempt, 'running');",
+  });
+});
+
+test("intentional fixture rejects Evaluation Projection runtime wiring", () => {
+  expectFixtureViolation("EVALUATION_PROJECTION_RUNTIME_WIRING", {
+    file: "server/organization-verification/worker.ts",
+    source:
+      'import { buildOrganizationVerificationEvaluationProjection } from "./domain/evaluation-projection/index.js";',
+  });
+});
+
+test("intentional fixture rejects reverse Snapshot dependency on Evaluation Projection", () => {
+  expectFixtureViolation("FROZEN_DOMAIN_IMPORTS_EVALUATION_PROJECTION", {
+    file:
+      "server/organization-verification/domain/evidence-snapshot/evidenceSnapshot.ts",
+    source:
+      'import type { Projection } from "../evaluation-projection/index.js";',
   });
 });

@@ -93,3 +93,11 @@ export function readOrganizationVerificationEvidenceSnapshotInternal(
   }
   return value as OrganizationVerificationEvidenceSnapshot;
 }
+
+export function isOrganizationVerificationEvidenceSnapshot(
+  value: unknown,
+): value is OrganizationVerificationEvidenceSnapshot {
+  return (
+    readOrganizationVerificationEvidenceSnapshotInternal(value) !== undefined
+  );
+}
