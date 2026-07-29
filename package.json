@@ -38,6 +38,7 @@
     "test:organization-verification-evaluation-input-domain": "tsx --test server/organization-verification/domain/evaluation-input/policyEvaluationInput.test.ts",
     "test:organization-verification-evaluation-preparation-pipeline": "tsx --test server/organization-verification/domain/evaluation-preparation-pipeline.test.ts",
     "test:organization-verification-policy-runtime-contract": "tsx --test server/organization-verification/domain/policy-runtime-contract/policyRuntimeContract.test.ts",
+    "test:organization-verification-policy-runtime": "tsx --test server/organization-verification/domain/policy-runtime/policyRuntime.test.ts",
     "test:organization-registry-contracts": "tsx --test server/organization-registry/contracts.test.ts",
     "test:verification-engine": "tsx --test server/verification/engine.test.ts server/verification/architecture.test.ts",
     "test:verification-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-6b.runtime.test.ts",

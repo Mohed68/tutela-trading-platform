@@ -215,6 +215,17 @@ export function createOrganizationVerificationExecutionArtifacts(
   if (ruleResults.length !== input.implementationSet.bindings.length) {
     return runtimeContractFailure("missing_execution_artifact", "ruleResults");
   }
+  const ruleOrder = new Map(
+    input.implementationSet.bindings.map((binding, index) => [
+      `${binding.rule.ruleId}\u0000${binding.rule.ruleVersion}`,
+      index,
+    ]),
+  );
+  ruleResults.sort(
+    (left, right) =>
+      (ruleOrder.get(`${left.ruleId}\u0000${left.ruleVersion}`) ?? 0) -
+      (ruleOrder.get(`${right.ruleId}\u0000${right.ruleVersion}`) ?? 0),
+  );
 
   const findingIds = new Set<string>();
   const findings: OrganizationVerificationFindingArtifact[] = [];
@@ -255,6 +266,14 @@ export function createOrganizationVerificationExecutionArtifacts(
     findingIds.add(artifact.findingId);
     findings.push(Object.freeze({ ...artifact }));
   }
+  findings.sort((left, right) => {
+    const orderDifference =
+      (ruleOrder.get(`${left.ruleId}\u0000${left.ruleVersion}`) ?? 0) -
+      (ruleOrder.get(`${right.ruleId}\u0000${right.ruleVersion}`) ?? 0);
+    return orderDifference !== 0
+      ? orderDifference
+      : left.findingId.localeCompare(right.findingId);
+  });
 
   if (
     !validIdentity(input.completion.completionId) ||

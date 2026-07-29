@@ -69,7 +69,12 @@ type ArchitectureViolationCode =
   | "POLICY_RUNTIME_CONTRACT_FORBIDDEN_DEPENDENCY"
   | "POLICY_RUNTIME_CONTRACT_FORBIDDEN_AUTHORITY"
   | "POLICY_RUNTIME_CONTRACT_PUBLIC_EXPORT_LEAK"
-  | "POLICY_RUNTIME_EXECUTION_STARTED";
+  | "POLICY_RUNTIME_EXECUTION_STARTED"
+  | "POLICY_RUNTIME_FORBIDDEN_DEPENDENCY"
+  | "POLICY_RUNTIME_FORBIDDEN_AUTHORITY"
+  | "POLICY_RUNTIME_PUBLIC_EXPORT_LEAK"
+  | "UNAUTHORIZED_POLICY_RUNTIME_CONSTRUCTION"
+  | "POLICY_RUNTIME_EXTERNAL_WIRING";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -210,6 +215,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isPolicyRuntimeContractDomain = lowerFile.startsWith(
     "server/organization-verification/domain/policy-runtime-contract/",
   );
+  const isPolicyRuntimeDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/policy-runtime/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
@@ -218,7 +226,8 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isEvidenceSnapshotDomain &&
     !isEvaluationProjectionDomain &&
     !isEvaluationInputDomain &&
-    !isPolicyRuntimeContractDomain;
+    !isPolicyRuntimeContractDomain &&
+    !isPolicyRuntimeDomain;
   const isDomainPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/index.ts",
   );
@@ -242,6 +251,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isPolicyRuntimeContractPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/policy-runtime-contract/index.ts",
+  );
+  const isPolicyRuntimePublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/policy-runtime/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -352,6 +364,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "POLICY_RUNTIME_CONTRACT_PUBLIC_EXPORT_LEAK",
       file,
       "Executable Rule contract public surface exposes construction, seal, result, hashing, or canonicalization internals",
+    );
+  }
+
+  if (
+    isPolicyRuntimePublicIndex &&
+    (/\b(?:policyRuntimeExecutionSeal|createOrganizationVerificationPolicyEvaluationExecutionInternal|fingerprintPolicyRuntimeExecutionInternal|canonicalize|policyRuntimeSuccess|policyRuntimeFailure|adaptAuthenticatedEvaluationInputToFrozenPolicyInput)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "POLICY_RUNTIME_PUBLIC_EXPORT_LEAK",
+      file,
+      "Policy Runtime public surface exposes construction, seal, result, adapter, hashing, or canonicalization internals",
     );
   }
 
@@ -870,6 +897,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     !isEvaluationInputDomain &&
     !isPolicyRuntimeContractDomain &&
+    !isPolicyRuntimeDomain &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1221,6 +1249,142 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     }
   }
 
+  if (isPolicyRuntimeDomain) {
+    for (const specifier of specifiers) {
+      const isLocalRuntimeModule =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier);
+      const isApprovedEvaluationInputSurface =
+        specifier === "../evaluation-input/index.js";
+      const isApprovedPolicySurface = specifier === "../policy/index.js";
+      const isApprovedExecutionContractSurface =
+        specifier === "../policy-runtime-contract/index.js";
+      const isApprovedCoreSurface = specifier === "../index.js";
+      const isApprovedHashingPrimitive = specifier === "node:crypto";
+      if (
+        !isLocalRuntimeModule &&
+        !isApprovedEvaluationInputSurface &&
+        !isApprovedPolicySurface &&
+        !isApprovedExecutionContractSurface &&
+        !isApprovedCoreSurface &&
+        !isApprovedHashingPrimitive
+      ) {
+        addViolation(
+          violations,
+          "POLICY_RUNTIME_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+      if (
+        /(?:^|\/)(?:evidence-snapshot|evaluation-projection|decision|trust-status|organization-registry|eligibility|db|database|schema|storage|repository|routes?|controllers?|workers?|queues?|schedulers?|startup|providers?|services?|sessions?)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /(?:^|\/)(?:verification|marketplace|kyb|aml|sanctions|compliance|payments?|orders?|contracts?|notifications?|blockchain|ai|openai|stripe|sentry)(?:\/|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:drizzle-orm|pg|@neondatabase\/|openai|stripe|@sentry\/)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "POLICY_RUNTIME_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+
+    if (
+      /\b(?:decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|transitionAttemptProcess|ParticipationEligibility|PolicyRegistry|RuleProvider|RuleLoader)\b/.test(
+        input.source,
+      ) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bas\s+unknown\s+as\b/.test(
+        input.source,
+      ) ||
+      /["'](?:approved|rejected|trusted|not_trusted|allowed_to_trade|allowed_to_publish|marketplace_access)["']/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "POLICY_RUNTIME_FORBIDDEN_AUTHORITY",
+        file,
+        "Policy Runtime attempted to own Decision, Trust, Eligibility, Workflow, dynamic discovery, environment, hidden clock, hidden ID, or unsafe opaque conversion authority",
+      );
+    }
+
+    const isExecutor = lowerFile.endsWith(
+      "/domain/policy-runtime/policyevaluationexecutor.ts",
+    );
+    if (
+      !isExecutor &&
+      (/\bcreateOrganizationVerificationFinding\s*\(/.test(input.source) ||
+        /\bcreateOrganizationVerificationRuleEvaluationResult\s*\(/.test(
+          input.source,
+        ) ||
+        /\bcompleteOrganizationVerificationPolicyEvaluation\s*\(/.test(
+          input.source,
+        ) ||
+        /\.evaluate\s*\(/.test(input.source))
+    ) {
+      addViolation(
+        violations,
+        "POLICY_RUNTIME_FORBIDDEN_AUTHORITY",
+        file,
+        "Only the Policy Evaluation Executor may invoke Rules or frozen Finding, Result, and Completion authority",
+      );
+    }
+
+    if (
+      /\bcreateOrganizationVerificationRuleImplementation\s*\(/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "POLICY_RUNTIME_FORBIDDEN_AUTHORITY",
+        file,
+        "Policy Runtime must not define production business Rule implementations",
+      );
+    }
+  }
+
+  if (
+    /\bcreateOrganizationVerificationPolicyEvaluationExecutionInternal\s*\(/.test(
+      input.source,
+    ) &&
+    !lowerFile.endsWith(
+      "/domain/policy-runtime/policyevaluationexecution.ts",
+    ) &&
+    !lowerFile.endsWith(
+      "/domain/policy-runtime/policyevaluationexecutor.ts",
+    )
+  ) {
+    addViolation(
+      violations,
+      "UNAUTHORIZED_POLICY_RUNTIME_CONSTRUCTION",
+      file,
+      "Only the Policy Runtime model and sole Executor may construct an authenticated Execution",
+    );
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isPolicyRuntimeDomain &&
+    !isDomainPublicIndex &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)policy-runtime(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "POLICY_RUNTIME_EXTERNAL_WIRING",
+      file,
+      "Pure Policy Runtime must remain unwired outside its curated domain boundary",
+    );
+  }
+
   if (
     /\bcreateOrganizationVerificationPolicyEvaluationCompletionInternal\b/.test(
       input.source,
@@ -1285,6 +1449,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPolicyDomain &&
     !isEvaluationInputDomain &&
     !isPolicyRuntimeContractDomain &&
+    !isPolicyRuntimeDomain &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -2176,6 +2341,123 @@ test("Executable Rule contract protects seals and canonicalization from public e
     file:
       "server/organization-verification/domain/policy-runtime-contract/index.ts",
     source: 'export { fingerprintInternal } from "./canonical.js";',
+  });
+});
+
+test("Policy Runtime rejects direct Snapshot and Projection access", () => {
+  expectFixtureViolation("POLICY_RUNTIME_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy-runtime/bypass.ts",
+    source:
+      'import type { OrganizationVerificationEvidenceSnapshot } from "../evidence-snapshot/index.js";',
+  });
+  expectFixtureViolation("POLICY_RUNTIME_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/policy-runtime/bypass.ts",
+    source:
+      'import type { OrganizationVerificationEvaluationProjection } from "../evaluation-projection/index.js";',
+  });
+});
+
+test("Policy Runtime rejects database, provider, and Registry dependencies", () => {
+  for (const source of [
+    'import { db } from "../../../db.js";',
+    'import { provider } from "../../../providers/kyb.js";',
+    'import { registry } from "../../../organization-registry/index.js";',
+  ]) {
+    expectFixtureViolation("POLICY_RUNTIME_FORBIDDEN_DEPENDENCY", {
+      file:
+        "server/organization-verification/domain/policy-runtime/infrastructure.ts",
+      source,
+    });
+  }
+});
+
+test("Policy Runtime rejects Decision, Trust, Eligibility, and Attempt authority", () => {
+  for (const source of [
+    "decideOrganizationVerification(input);",
+    "deriveOrganizationVerificationTrustStatus(input);",
+    "transitionAttemptProcess(attempt, 'completed');",
+    "const eligibility: ParticipationEligibility = value;",
+  ]) {
+    expectFixtureViolation("POLICY_RUNTIME_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/policy-runtime/authority.ts",
+      source,
+    });
+  }
+});
+
+test("Policy Runtime rejects environment, hidden clock, and hidden IDs", () => {
+  for (const source of [
+    "const policy = process.env.POLICY;",
+    "const timestamp = Date.now();",
+    "const timestamp = new Date();",
+    "const id = randomUUID();",
+    "const id = nanoid();",
+  ]) {
+    expectFixtureViolation("POLICY_RUNTIME_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/policy-runtime/hidden.ts",
+      source,
+    });
+  }
+});
+
+test("Policy Runtime rejects unsafe opaque-type substitution", () => {
+  expectFixtureViolation("POLICY_RUNTIME_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/policy-runtime/unsafe.ts",
+    source: "const id = input as unknown as ExecutionId;",
+  });
+});
+
+test("Policy Runtime rejects production business Rule construction", () => {
+  expectFixtureViolation("POLICY_RUNTIME_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/policy-runtime/businessRule.ts",
+    source: "createOrganizationVerificationRuleImplementation(input);",
+  });
+});
+
+test("Policy Runtime limits Rule and frozen Policy invocation to the Executor", () => {
+  for (const source of [
+    "implementation.evaluate(facts);",
+    "createOrganizationVerificationFinding(input, context);",
+    "createOrganizationVerificationRuleEvaluationResult(input);",
+    "completeOrganizationVerificationPolicyEvaluation(input);",
+  ]) {
+    expectFixtureViolation("POLICY_RUNTIME_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/policy-runtime/helper.ts",
+      source,
+    });
+  }
+});
+
+test("Policy Runtime protects Execution construction authority", () => {
+  expectFixtureViolation("UNAUTHORIZED_POLICY_RUNTIME_CONSTRUCTION", {
+    file:
+      "server/organization-verification/domain/policy-runtime/helper.ts",
+    source:
+      "createOrganizationVerificationPolicyEvaluationExecutionInternal(input);",
+  });
+});
+
+test("Policy Runtime protects its private public-export surface", () => {
+  expectFixtureViolation("POLICY_RUNTIME_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/domain/policy-runtime/index.ts",
+    source:
+      'export { policyRuntimeExecutionSeal } from "./policyEvaluationExecution.js";',
+  });
+});
+
+test("Policy Runtime remains unwired outside the curated domain boundary", () => {
+  expectFixtureViolation("POLICY_RUNTIME_EXTERNAL_WIRING", {
+    file: "server/organization-verification/worker.ts",
+    source:
+      'import { executeOrganizationVerificationPolicyEvaluation } from "./domain/policy-runtime/index.js";',
   });
 });
 

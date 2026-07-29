@@ -3,6 +3,7 @@ import * as organizationVerificationEvidenceSnapshot from "./evidence-snapshot/i
 import * as organizationVerificationEvaluationProjection from "./evaluation-projection/index.js";
 import * as organizationVerificationEvaluationInput from "./evaluation-input/index.js";
 import * as organizationVerificationPolicyRuntimeContract from "./policy-runtime-contract/index.js";
+import * as organizationVerificationPolicyRuntime from "./policy-runtime/index.js";
 
 export {
   createAttemptForRevision,
@@ -90,4 +91,5 @@ export {
   organizationVerificationEvidenceSnapshot,
   organizationVerificationPolicy,
   organizationVerificationPolicyRuntimeContract,
+  organizationVerificationPolicyRuntime,
 };
