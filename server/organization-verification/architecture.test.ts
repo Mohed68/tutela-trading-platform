@@ -94,6 +94,10 @@ type ArchitectureViolationCode =
   | "ATTEMPT_LIFECYCLE_RUNTIME_FORBIDDEN_AUTHORITY"
   | "ATTEMPT_LIFECYCLE_RUNTIME_PUBLIC_EXPORT_LEAK"
   | "ATTEMPT_LIFECYCLE_RUNTIME_EXTERNAL_WIRING"
+  | "WORKFLOW_CONTRACT_FORBIDDEN_DEPENDENCY"
+  | "WORKFLOW_CONTRACT_FORBIDDEN_AUTHORITY"
+  | "WORKFLOW_CONTRACT_PUBLIC_EXPORT_LEAK"
+  | "WORKFLOW_CONTRACT_EXTERNAL_WIRING"
   | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
@@ -250,6 +254,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isAttemptLifecycleRuntime = lowerFile.startsWith(
     "server/organization-verification/application/attempt-lifecycle-runtime/",
   );
+  const isWorkflowContract = lowerFile.startsWith(
+    "server/organization-verification/application/workflow-contract/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
@@ -300,6 +307,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isAttemptLifecycleRuntimePublicIndex = lowerFile.endsWith(
     "server/organization-verification/application/attempt-lifecycle-runtime/index.ts",
+  );
+  const isWorkflowContractPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/application/workflow-contract/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -547,6 +557,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "ATTEMPT_LIFECYCLE_RUNTIME_PUBLIC_EXPORT_LEAK",
       file,
       "Attempt Lifecycle runtime exposes a seal, constructor, fingerprint, or result internal",
+    );
+  }
+
+  if (
+    isWorkflowContractPublicIndex &&
+    (/\b(?:workflowExecutionSeal|workflowStepSeal|authenticWorkflowExecutions|authenticWorkflowStepRecords|canonicalizeWorkflowValue|fingerprintWorkflowValue|workflowSuccess|workflowFailure|validateArtifacts|validateArtifactChain)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "WORKFLOW_CONTRACT_PUBLIC_EXPORT_LEAK",
+      file,
+      "Workflow contract exposes a seal, constructor internal, canonicalization, fingerprint, or result helper",
     );
   }
 
@@ -1090,6 +1115,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isEvaluationInputDomain &&
     !isPolicyRuntimeContractDomain &&
     !isPolicyRuntimeDomain &&
+    !isWorkflowContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1145,6 +1171,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     !isEvaluationProjectionDomain &&
     !isEvaluationInputDomain &&
+    !isWorkflowContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1195,6 +1222,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     !isEvidenceSnapshotDomain &&
     !isEvaluationProjectionDomain &&
+    !isWorkflowContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1835,6 +1863,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     isOrganizationVerification &&
     !isAttemptLifecycleRuntime &&
+    !isWorkflowContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)attempt-lifecycle-runtime(?:\/|$)/i.test(specifier),
     )
@@ -1851,6 +1880,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     isOrganizationVerification &&
     !isAttemptLifecycleContract &&
     !isAttemptLifecycleRuntime &&
+    !isWorkflowContract &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)attempt-lifecycle-contract(?:\/|$)/i.test(specifier),
@@ -1861,6 +1891,74 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "ATTEMPT_LIFECYCLE_CONTRACT_EXTERNAL_WIRING",
       file,
       "Pure Attempt Lifecycle execution contracts must remain unwired",
+    );
+  }
+
+  if (isWorkflowContract) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "node:crypto" ||
+        specifier === "../attempt-lifecycle-contract/index.js" ||
+        specifier === "../attempt-lifecycle-runtime/index.js" ||
+        specifier === "../../domain/evidence-snapshot/index.js" ||
+        specifier === "../../domain/evaluation-projection/index.js" ||
+        specifier === "../../domain/evaluation-input/index.js" ||
+        specifier === "../../domain/policy-runtime/index.js" ||
+        specifier ===
+          "../../domain/decision-trust-integration/index.js";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:db|database|schema|migrations?|storage|repositories?|routes?|controllers?|frontend|client|providers?|services?|startup|workers?|queues?|notifications?|permissions?|eligibility)(?:\/|\.|$)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "WORKFLOW_CONTRACT_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:transitionAttemptProcess|executeOrganizationVerificationAttemptTransition|buildOrganizationVerificationEvidenceSnapshot|buildOrganizationVerificationEvaluationProjection|buildOrganizationVerificationPolicyEvaluationInput|executeOrganizationVerificationPolicyEvaluation|decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|executeOrganizationVerificationDecisionTrustIntegration)\s*\(/.test(
+        input.source,
+      ) ||
+      /\b(?:createOrganizationVerificationEvidenceSnapshotInternal|createOrganizationVerificationEvaluationProjectionInternal|createOrganizationVerificationPolicyEvaluationInputInternal|createOrganizationVerificationPolicyEvaluationExecutionInternal|createDecisionInternal|createTrustStatusInternal|createOrganizationVerificationDecisionTrustIntegrationExecutionInternal)\s*\(/.test(
+        input.source,
+      ) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bMath\.random\s*\(|\bas\s+unknown\s+as\b|\bas\s+never\b/.test(
+        input.source,
+      ) ||
+      /\b(?:WorkflowCoordinator|UnitOfWork|AttemptRepository|ParticipationEligibility)\b/.test(
+        input.source,
+      ) ||
+      /["'](?:failed|cancelled|retrying|suspended|timed_out|approved|rejected|eligible|verified)["']/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "WORKFLOW_CONTRACT_FORBIDDEN_AUTHORITY",
+        file,
+        "Workflow contract attempted authority execution, hidden input, construction, or excluded semantics",
+      );
+    }
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isWorkflowContract &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)workflow-contract(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "WORKFLOW_CONTRACT_EXTERNAL_WIRING",
+      file,
+      "Pure Workflow evidence contracts must remain unwired before Phase 8B.1",
     );
   }
 
@@ -1888,6 +1986,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPolicyRuntimeDomain &&
     !isDecisionTrustIntegrationContractDomain &&
     !isDecisionTrustIntegrationDomain &&
+    !isWorkflowContract &&
     !isDomainPublicIndex &&
     specifiers.some((specifier) =>
       /(?:^|\/)policy-runtime(?:\/|$)/i.test(specifier),
@@ -1922,6 +2021,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     isOrganizationVerification &&
     !isDecisionTrustIntegrationDomain &&
+    !isWorkflowContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -3458,5 +3558,54 @@ test("Attempt Lifecycle runtime remains unwired before Phase 8B", () => {
   expectFixtureViolation("ATTEMPT_LIFECYCLE_RUNTIME_EXTERNAL_WIRING", {
     file: "server/organization-verification/application/workflow.ts",
     source: 'import { runtime } from "./attempt-lifecycle-runtime/index.js";',
+  });
+});
+
+test("Workflow contract rejects infrastructure and downstream imports", () => {
+  for (const source of [
+    'import { db } from "../../../db.js";',
+    'import { repository } from "../../../repositories/workflow.js";',
+    'import { provider } from "../../../providers/verification.js";',
+    'import { eligibility } from "../../domain/eligibility/index.js";',
+  ]) {
+    expectFixtureViolation("WORKFLOW_CONTRACT_FORBIDDEN_DEPENDENCY", {
+      file:
+        "server/organization-verification/application/workflow-contract/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("Workflow contract rejects authority execution and hidden inputs", () => {
+  for (const source of [
+    "executeOrganizationVerificationAttemptTransition(input);",
+    "buildOrganizationVerificationEvidenceSnapshot(input);",
+    "executeOrganizationVerificationPolicyEvaluation(input);",
+    "executeOrganizationVerificationDecisionTrustIntegration(input);",
+    "const now = Date.now();",
+    "const value = process.env.WORKFLOW;",
+    'const state = "approved";',
+  ]) {
+    expectFixtureViolation("WORKFLOW_CONTRACT_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/application/workflow-contract/bypass.ts",
+      source,
+    });
+  }
+});
+
+test("Workflow contract protects private authenticity and fingerprint internals", () => {
+  expectFixtureViolation("WORKFLOW_CONTRACT_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/application/workflow-contract/index.ts",
+    source:
+      'export { workflowExecutionSeal, fingerprintWorkflowValue } from "./internal.js";',
+  });
+});
+
+test("Workflow contract remains unwired before Phase 8B.1", () => {
+  expectFixtureViolation("WORKFLOW_CONTRACT_EXTERNAL_WIRING", {
+    file: "server/organization-verification/application/coordinator.ts",
+    source: 'import { workflow } from "./workflow-contract/index.js";',
   });
 });
