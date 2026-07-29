@@ -157,10 +157,13 @@ The result union is:
 - `advance_rejected`.
 
 `advance_completed` binds one authentic Workflow Step Execution, its one
-authority result, one Workflow Step Record, one append receipt, the resulting
-Workflow and Lifecycle state, exact before/after versions, and a coordination
-terminal indicator. Runtime success without persistence success cannot be an
-application success. No partial-success variant exists.
+authority result, one Workflow Step Record, one append receipt, an authentic
+Replay execution, the Replay-reconstructed authoritative Workflow and
+Lifecycle state, exact before/after versions, and a coordination terminal
+indicator. Runtime success without persistence success cannot be an
+application success. Runtime and Replay state are aligned semantically by
+identity, version, stage, and fingerprint—never by object-reference identity.
+No partial-success variant exists.
 
 `advance_idempotent` is structurally different. It contains no Workflow Step
 Execution and no fresh authority result. It binds the original persisted
@@ -362,11 +365,14 @@ Application execution fingerprints bind the request and lower-layer
 fingerprints without replacing them.
 
 For `advance_completed`, the lower-layer binding includes the authentic
-Workflow Step Execution. For `advance_idempotent`, the binding excludes any
-Workflow Step Execution and instead binds the persisted authority artifact,
-Workflow Step Record, original append receipt, Replay execution, persistence
-stream, and Replay-reconstructed current Workflow and Lifecycle state. The two
-outcomes therefore cannot share an application execution fingerprint.
+Workflow Step Execution, Replay execution identity and fingerprint,
+persistence-stream fingerprint, persisted authority-artifact fingerprint,
+Workflow Step Record, append receipt, and authoritative Replay-reconstructed
+state. For `advance_idempotent`, the binding excludes any Workflow Step
+Execution and instead binds the persisted authority artifact, Workflow Step
+Record, original append receipt, Replay execution, persistence stream, and
+Replay-reconstructed current Workflow and Lifecycle state. The two outcomes
+therefore cannot share an application execution fingerprint.
 
 Canonicalization is property-order independent. Semantically unordered
 references are sorted; ordered evidence remains order-sensitive. Mutable

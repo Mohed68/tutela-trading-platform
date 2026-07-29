@@ -250,12 +250,18 @@ function advanceResultFixture() {
   };
   const completedLowerLayerFingerprints = [
     stepExecution.workflowStepExecutionFingerprint,
+    replayExecution.replayExecutionId,
+    replayExecution.replayFingerprint,
+    replayExecution.sourceEvidenceStreamFingerprint,
+    stepExecution.authorityResult.executionFingerprint,
     stepExecution.workflowStepRecord.workflowStepBindingFingerprint,
     completedReceipt.appendReceiptFingerprint,
-    stepExecution.nextWorkflowExecution.workflowExecutionFingerprint,
-    stepExecution.nextWorkflowExecution.lifecycleExecution
+    replayExecution.reconstructedWorkflowExecution.workflowExecutionFingerprint,
+    replayExecution.reconstructedAttemptLifecycleExecution
       .attemptLifecycleExecutionFingerprint,
-  ].sort((left, right) => left.localeCompare(right));
+  ]
+    .filter((fingerprint, index, values) => values.indexOf(fingerprint) === index)
+    .sort((left, right) => left.localeCompare(right));
   const idempotentLowerLayerFingerprints = [
     stepExecution.authorityResult.executionFingerprint,
     stepExecution.workflowStepRecord.workflowStepBindingFingerprint,
@@ -287,6 +293,7 @@ function advanceResultFixture() {
   return {
     fixture,
     entries,
+    stream,
     replayExecution,
     stepExecution,
     completedReceipt,
@@ -312,10 +319,12 @@ function completedAdvanceResultInput(
     authorityResult: step.authorityResult,
     workflowStepRecord: step.workflowStepRecord,
     workflowStepExecution: step,
+    replayExecution: fixture.replayExecution,
     appendReceipt: fixture.completedReceipt,
-    currentWorkflowExecution: step.nextWorkflowExecution,
+    currentWorkflowExecution:
+      fixture.replayExecution.reconstructedWorkflowExecution,
     currentLifecycleExecution:
-      step.nextWorkflowExecution.lifecycleExecution,
+      fixture.replayExecution.reconstructedAttemptLifecycleExecution,
     terminalCoordinationReached: true,
   };
 }
@@ -841,6 +850,7 @@ test("advance completion and idempotent retrieval have distinct exact result sha
   assert.equal(completed.outcome, "advance_completed");
   assert.equal(idempotent.outcome, "advance_idempotent");
   assert.equal("workflowStepExecution" in completed, true);
+  assert.equal("replayExecution" in completed, true);
   assert.equal("workflowStepExecution" in idempotent, false);
   assert.equal("authorityResult" in idempotent, false);
   assert.equal("persistedAuthorityResult" in idempotent, true);
@@ -856,6 +866,139 @@ test("advance completion and idempotent retrieval have distinct exact result sha
   assert.equal(
     contract.isOrganizationVerificationApplicationServiceResult(idempotent),
     true,
+  );
+});
+
+test("advance completion accepts Runtime–Replay reference inequality with exact semantic alignment", () => {
+  const fixture = advanceResultFixture();
+  const input = completedAdvanceResultInput(fixture);
+  assert.notEqual(
+    fixture.stepExecution.nextWorkflowExecution,
+    fixture.replayExecution.reconstructedWorkflowExecution,
+  );
+  assert.equal(
+    fixture.stepExecution.nextWorkflowExecution.workflowExecutionId,
+    fixture.replayExecution.reconstructedWorkflowExecution.workflowExecutionId,
+  );
+  assert.equal(
+    fixture.stepExecution.nextWorkflowExecution.workflowExecutionVersion,
+    fixture.replayExecution.reconstructedWorkflowExecution
+      .workflowExecutionVersion,
+  );
+  assert.equal(
+    fixture.stepExecution.nextWorkflowExecution.workflowStage,
+    fixture.replayExecution.reconstructedWorkflowExecution.workflowStage,
+  );
+  assert.equal(
+    fixture.stepExecution.nextWorkflowExecution.workflowExecutionFingerprint,
+    fixture.replayExecution.reconstructedWorkflowExecution
+      .workflowExecutionFingerprint,
+  );
+
+  const result = createAdvanceCompletedResultInternal(input);
+  assert.ok(result);
+  assert.equal(
+    result.currentWorkflowExecution,
+    fixture.replayExecution.reconstructedWorkflowExecution,
+  );
+  assert.equal(
+    result.currentLifecycleExecution,
+    fixture.replayExecution.reconstructedAttemptLifecycleExecution,
+  );
+  assert.equal(result.workflowStepExecution, fixture.stepExecution);
+  assert.notEqual(
+    result.workflowStepExecution.nextWorkflowExecution,
+    result.currentWorkflowExecution,
+  );
+});
+
+test("advance completion rejects semantic state mismatch and requires Replay execution", () => {
+  const fixture = advanceResultFixture();
+  const input = completedAdvanceResultInput(fixture);
+  assert.equal(
+    createAdvanceCompletedResultInternal({
+      ...input,
+      currentWorkflowExecution:
+        fixture.stepExecution.predecessorWorkflowExecution,
+      currentLifecycleExecution:
+        fixture.stepExecution.predecessorWorkflowExecution.lifecycleExecution,
+    }),
+    undefined,
+  );
+  const { replayExecution: omittedReplay, ...withoutReplay } = input;
+  assert.ok(omittedReplay);
+  assert.equal(
+    Reflect.apply(createAdvanceCompletedResultInternal, undefined, [
+      withoutReplay,
+    ]),
+    undefined,
+  );
+});
+
+test("advance completion rejects Replay and persistence fingerprint mismatches", () => {
+  const fixture = advanceResultFixture();
+  const input = completedAdvanceResultInput(fixture);
+  const alternateRequest = must(
+    createOrganizationVerificationReplayRequest({
+      replayExecutionId: "application-result-alternate-replay",
+      sourceEvidenceStream: fixture.stream,
+      replayedAt: "2026-10-01T00:42:00.000Z",
+      provenanceReferences: ["application-result-alternate-provenance"],
+      integrityReferences: ["application-result-alternate-integrity"],
+    }),
+  );
+  const alternateResult =
+    replayOrganizationVerificationWorkflow(alternateRequest);
+  assert.equal(alternateResult.outcome, "replay_completed");
+  if (alternateResult.outcome !== "replay_completed") {
+    throw new Error(alternateResult.failure.code);
+  }
+  assert.equal(
+    createAdvanceCompletedResultInternal({
+      ...input,
+      replayExecution: alternateResult.execution,
+      currentWorkflowExecution:
+        alternateResult.execution.reconstructedWorkflowExecution,
+      currentLifecycleExecution:
+        alternateResult.execution.reconstructedAttemptLifecycleExecution,
+    }),
+    undefined,
+  );
+
+  const changedLowerLayerFingerprints = [
+    ...input.applicationExecution.lowerLayerFingerprints.filter(
+      (fingerprint) =>
+        fingerprint !== input.replayExecution.sourceEvidenceStreamFingerprint,
+    ),
+    "changed-persistence-stream-fingerprint",
+  ].sort((left, right) => left.localeCompare(right));
+  const changedApplicationExecution =
+    createOrganizationVerificationApplicationExecutionInternal({
+      applicationExecutionId: input.applicationExecution.applicationExecutionId,
+      useCase: input.applicationExecution.useCase,
+      requestIdentity: input.applicationExecution.requestIdentity,
+      requestFingerprint: input.applicationExecution.requestFingerprint,
+      outcome: input.applicationExecution.outcome,
+      streamIdentityFingerprint:
+        input.applicationExecution.streamIdentityFingerprint,
+      completedAt: input.applicationExecution.completedAt,
+      previousPersistenceStreamVersion:
+        input.applicationExecution.previousPersistenceStreamVersion,
+      resultingPersistenceStreamVersion:
+        input.applicationExecution.resultingPersistenceStreamVersion,
+      previousWorkflowVersion:
+        input.applicationExecution.previousWorkflowVersion,
+      resultingWorkflowVersion:
+        input.applicationExecution.resultingWorkflowVersion,
+      lowerLayerFingerprints: changedLowerLayerFingerprints,
+    });
+  assert.ok(changedApplicationExecution);
+  assert.equal(
+    createAdvanceCompletedResultInternal({
+      ...input,
+      applicationExecution: changedApplicationExecution,
+    }),
+    undefined,
   );
 });
 

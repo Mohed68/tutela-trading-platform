@@ -46,8 +46,10 @@ The fresh-completion result contains:
 - terminal coordination indicator.
 
 Its application execution fingerprint binds the Workflow Step Execution,
-Workflow Step Record, append receipt, resulting Workflow, and resulting
-Lifecycle evidence.
+Replay execution identity and fingerprint, persistence stream, persisted
+authority artifact, Workflow Step Record, append receipt, and resulting
+Replay-reconstructed Workflow and Lifecycle evidence. Phase 8D.0.7 removed
+the former Runtime-to-current-state reference coupling.
 
 ### `advance_idempotent`
 

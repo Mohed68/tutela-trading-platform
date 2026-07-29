@@ -75,6 +75,10 @@ export const ORGANIZATION_VERIFICATION_ADVANCE_RESULT_FINGERPRINT_BINDINGS =
       duplicateProofOwner: "persistence_contract",
       requiredEvidence: Object.freeze([
         "workflow_step_execution_fingerprint",
+        "replay_execution_identity",
+        "replay_fingerprint",
+        "persistence_stream_fingerprint",
+        "persisted_authority_artifact_fingerprint",
         "workflow_step_record_fingerprint",
         "append_receipt_fingerprint",
         "resulting_workflow_execution_fingerprint",

@@ -171,6 +171,30 @@ test("advance fingerprint lineage distinguishes fresh execution from idempotent 
     true,
   );
   assert.equal(
+    bindings.advance_completed.requiredEvidence.includes(
+      "replay_execution_identity",
+    ),
+    true,
+  );
+  assert.equal(
+    bindings.advance_completed.requiredEvidence.includes(
+      "replay_fingerprint",
+    ),
+    true,
+  );
+  assert.equal(
+    bindings.advance_completed.requiredEvidence.includes(
+      "persistence_stream_fingerprint",
+    ),
+    true,
+  );
+  assert.equal(
+    bindings.advance_completed.requiredEvidence.includes(
+      "persisted_authority_artifact_fingerprint",
+    ),
+    true,
+  );
+  assert.equal(
     bindings.advance_idempotent.workflowRuntimeExecutionOccurred,
     false,
   );

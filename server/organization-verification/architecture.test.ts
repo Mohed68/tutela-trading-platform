@@ -4591,6 +4591,34 @@ test("Advance idempotent contract cannot contain Workflow Step Execution", () =>
   assert.equal(/\bpersistedAuthorityResult\b/.test(idempotentShape), true);
 });
 
+test("Advance completed binds Replay authoritative state without Runtime reference coupling", () => {
+  const source = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/application-service-contract/applicationServiceResults.ts",
+    ),
+    "utf8",
+  );
+  const completedShape = source.match(
+    /interface AdvanceCompletedSuccess[\s\S]*?\n}\n/,
+  )?.[0];
+  assert.ok(completedShape);
+  assert.equal(/\bworkflowStepExecution\b/.test(completedShape), true);
+  assert.equal(/\breplayExecution\b/.test(completedShape), true);
+  assert.equal(
+    /stepExecution\.nextWorkflowExecution\s*!==\s*value\.currentWorkflowExecution/.test(
+      source,
+    ),
+    false,
+  );
+  assert.equal(
+    /semanticallySameWorkflowExecution\(\s*stepExecution\.nextWorkflowExecution,\s*replay\.reconstructedWorkflowExecution,\s*\)/m.test(
+      source,
+    ),
+    true,
+  );
+});
+
 test("Workflow Step Execution remains derived, non-persisted, and unreplayed", () => {
   const persistenceKinds = fs.readFileSync(
     path.join(
