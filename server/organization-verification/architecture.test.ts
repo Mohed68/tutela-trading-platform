@@ -112,6 +112,10 @@ type ArchitectureViolationCode =
   | "REPLAY_RUNTIME_PERSISTENCE_WRITE"
   | "REPLAY_RUNTIME_PUBLIC_EXPORT_LEAK"
   | "REPLAY_RUNTIME_EXTERNAL_WIRING"
+  | "APPLICATION_SERVICE_CONTRACT_FORBIDDEN_DEPENDENCY"
+  | "APPLICATION_SERVICE_CONTRACT_FORBIDDEN_AUTHORITY"
+  | "APPLICATION_SERVICE_CONTRACT_PUBLIC_EXPORT_LEAK"
+  | "APPLICATION_SERVICE_CONTRACT_IMPLEMENTATION"
   | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
@@ -283,6 +287,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isReplayRuntime = lowerFile.startsWith(
     "server/organization-verification/application/replay-runtime/",
   );
+  const isApplicationServiceContract = lowerFile.startsWith(
+    "server/organization-verification/application/application-service-contract/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
@@ -342,6 +349,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isPersistenceContractPublicIndex = lowerFile.endsWith(
     "server/organization-verification/application/persistence-contract/index.ts",
+  );
+  const isApplicationServiceContractPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/application/application-service-contract/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -1150,6 +1160,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isApplicationServiceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1208,6 +1219,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isApplicationServiceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1261,6 +1273,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isApplicationServiceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1904,6 +1917,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isApplicationServiceContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)attempt-lifecycle-runtime(?:\/|$)/i.test(specifier),
     )
@@ -1924,6 +1938,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowRuntime &&
     !isPersistenceContract &&
     !isReplayRuntime &&
+    !isApplicationServiceContract &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)attempt-lifecycle-contract(?:\/|$)/i.test(specifier),
@@ -1996,6 +2011,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowRuntime &&
     !isPersistenceContract &&
     !isReplayRuntime &&
+    !isApplicationServiceContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)workflow-contract(?:\/|$)/i.test(specifier),
     )
@@ -2105,6 +2121,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     isOrganizationVerification &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isApplicationServiceContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)workflow-runtime(?:\/|$)/i.test(specifier),
     )
@@ -2203,6 +2220,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPersistenceContract &&
     !isInMemoryPersistenceAdapter &&
     !isReplayRuntime &&
+    !isApplicationServiceContract &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)persistence-contract(?:\/|$)/i.test(specifier),
@@ -2393,6 +2411,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     isOrganizationVerification &&
     !isReplayRuntime &&
+    !isApplicationServiceContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)replay-runtime(?:\/|$)/i.test(specifier),
     )
@@ -2402,6 +2421,97 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "REPLAY_RUNTIME_EXTERNAL_WIRING",
       file,
       "Pure Replay runtime must remain unwired from Domain, Workflow, persistence adapters, API, and startup",
+    );
+  }
+
+  if (isApplicationServiceContract) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "node:crypto" ||
+        specifier === "../attempt-lifecycle-contract/index.js" ||
+        specifier === "../attempt-lifecycle-runtime/index.js" ||
+        specifier === "../workflow-contract/index.js" ||
+        specifier === "../workflow-runtime/index.js" ||
+        specifier === "../persistence-contract/index.js" ||
+        specifier === "../replay-runtime/index.js" ||
+        specifier === "../../domain/evidence-snapshot/index.js" ||
+        specifier === "../../domain/evaluation-projection/index.js" ||
+        specifier === "../../domain/evaluation-input/index.js" ||
+        specifier === "../../domain/policy/index.js" ||
+        specifier === "../../domain/policy-runtime-contract/index.js" ||
+        specifier === "../../domain/policy-runtime/index.js" ||
+        specifier ===
+          "../../domain/decision-trust-integration/index.js";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:db|database|schema|migrations?|storage|routes?|controllers?|frontend|client|providers?|startup|workers?|queues?|notifications?|permissions?|eligibility|unit-of-work|transactions?|infrastructure)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:node:fs|node:http|node:https|node:net|node:tls|node:dns)$/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "APPLICATION_SERVICE_CONTRACT_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:executeOrganizationVerificationWorkflowStep|replayOrganizationVerificationWorkflow|appendOrganizationVerificationEvidence|loadOrganizationVerificationEvidenceStream|executeOrganizationVerificationAttemptTransition|buildOrganizationVerificationEvidenceSnapshot|buildOrganizationVerificationEvaluationProjection|buildOrganizationVerificationPolicyEvaluationInput|executeOrganizationVerificationPolicyEvaluation|executeOrganizationVerificationDecisionTrustIntegration)\s*\(/.test(
+        input.source,
+      ) ||
+      /\b(?:createOrganizationVerificationStoredEvidence|createOrganizationVerificationEvidenceAppendBatch|createOrganizationVerificationEvidenceAppendReceipt)\s*\(/.test(
+        input.source,
+      ) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bMath\.random\s*\(|\bas\s+unknown\s+as\b|\bas\s+never\b/.test(
+        input.source,
+      ) ||
+      /\b(?:WorkflowEngine|executeUntilComplete|automaticProgression|loadAndRepair|getOrCreateVerification|replayAndPersist|advanceUntilBlocked|ParticipationEligibility|PublicationEligibility|AuthorizationService|RetryPolicy|TimeoutPolicy|LockManager|TransactionManager|UnitOfWork|ServiceLocator|CommandBus)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "APPLICATION_SERVICE_CONTRACT_FORBIDDEN_AUTHORITY",
+        file,
+        "Application-service contracts attempted orchestration, lower-layer execution, hidden input, automatic progression, or excluded behavior",
+      );
+    }
+    if (
+      /\b(?:drizzle|sequelize|typeorm|prisma|knex|postgres|pgPool|sql\s*`|fetch\s*\(|readFile|writeFile|createConnection)\b/i.test(
+        input.source,
+      ) ||
+      /\bclass\s+\w*(?:ApplicationService|Repository|Adapter|Store|Controller)\b/.test(
+        input.source,
+      ) ||
+      /\b(?:requestBody|responseBody|statusCode|routeHandler|httpStatus)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "APPLICATION_SERVICE_CONTRACT_IMPLEMENTATION",
+        file,
+        "Application-service contract contains implementation, infrastructure, or delivery-layer behavior",
+      );
+    }
+  }
+
+  if (
+    isApplicationServiceContractPublicIndex &&
+    /\b(?:applicationRequestSeal|applicationExecutionSeal|applicationResultSeal|authenticApplicationRequests|authenticApplicationExecutions|authenticApplicationResults|sealApplicationRequestInternal|sealApplicationExecutionInternal|sealApplicationResultInternal|createOrganizationVerificationApplicationExecutionInternal|createStartOrganizationVerificationSuccessInternal|createAdvanceOrganizationVerificationSuccessInternal|applicationFailureInternal|fingerprintApplicationServiceContract)\b/.test(
+      input.source,
+    )
+  ) {
+    addViolation(
+      violations,
+      "APPLICATION_SERVICE_CONTRACT_PUBLIC_EXPORT_LEAK",
+      file,
+      "Application-service public surface exposes a seal, authenticity registry, internal result authority, or fingerprint helper",
     );
   }
 
@@ -2432,6 +2542,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isApplicationServiceContract &&
     !isDomainPublicIndex &&
     specifiers.some((specifier) =>
       /(?:^|\/)policy-runtime(?:\/|$)/i.test(specifier),
@@ -2469,6 +2580,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isApplicationServiceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -2549,6 +2661,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPolicyRuntimeContractDomain &&
     !isPolicyRuntimeDomain &&
     !isDecisionTrustIntegrationDomain &&
+    !isApplicationServiceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -4296,5 +4409,77 @@ test("Replay runtime remains unwired from API and startup", () => {
     file: "server/organization-verification/application/api.ts",
     source:
       'import { replayOrganizationVerificationWorkflow } from "./replay-runtime/index.js";',
+  });
+});
+
+test("Application-service contracts reject infrastructure and delivery dependencies", () => {
+  for (const source of [
+    'import { db } from "../../../db.js";',
+    'import { adapter } from "../../infrastructure/persistence/in-memory/index.js";',
+    'import fs from "node:fs";',
+    'import { router } from "../../../routes.js";',
+  ]) {
+    expectFixtureViolation("APPLICATION_SERVICE_CONTRACT_FORBIDDEN_DEPENDENCY", {
+      file:
+        "server/organization-verification/application/application-service-contract/forbidden.ts",
+      source,
+    });
+  }
+  for (const source of [
+    "const secret = process.env.DATABASE_URL;",
+    "const now = Date.now();",
+    "const id = crypto.randomUUID();",
+    "const unsafe = input as unknown as ApplicationRequest;",
+  ]) {
+    expectFixtureViolation("APPLICATION_SERVICE_CONTRACT_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/application/application-service-contract/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("Application-service contracts reject orchestration and lower-layer invocation", () => {
+  for (const source of [
+    "executeOrganizationVerificationWorkflowStep(input);",
+    "replayOrganizationVerificationWorkflow(input);",
+    "appendOrganizationVerificationEvidence(input);",
+    "loadOrganizationVerificationEvidenceStream(input);",
+    "createOrganizationVerificationEvidenceAppendBatch(input);",
+    "const engine: WorkflowEngine = input;",
+    "const progression = executeUntilComplete(input);",
+    "const unit: UnitOfWork = input;",
+    "const authorization: AuthorizationService = input;",
+  ]) {
+    expectFixtureViolation("APPLICATION_SERVICE_CONTRACT_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/application/application-service-contract/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("Application-service contracts reject implementation and API terminology", () => {
+  for (const source of [
+    "class OrganizationVerificationApplicationService {}",
+    "class VerificationRepository {}",
+    "const query = sql`select 1`;",
+    "const responseBody = requestBody;",
+    "const statusCode = 200;",
+  ]) {
+    expectFixtureViolation("APPLICATION_SERVICE_CONTRACT_IMPLEMENTATION", {
+      file:
+        "server/organization-verification/application/application-service-contract/implementation.ts",
+      source,
+    });
+  }
+});
+
+test("Application-service public surface protects private construction authority", () => {
+  expectFixtureViolation("APPLICATION_SERVICE_CONTRACT_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/application/application-service-contract/index.ts",
+    source:
+      'export { applicationRequestSeal, createOrganizationVerificationApplicationExecutionInternal, fingerprintApplicationServiceContract } from "./internal.js";',
   });
 });
