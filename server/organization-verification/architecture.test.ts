@@ -103,6 +103,10 @@ type ArchitectureViolationCode =
   | "PERSISTENCE_CONTRACT_PUBLIC_EXPORT_LEAK"
   | "PERSISTENCE_CONTRACT_IMPLEMENTATION"
   | "PERSISTENCE_CONTRACT_EXTERNAL_WIRING"
+  | "PERSISTENCE_IN_MEMORY_FORBIDDEN_DEPENDENCY"
+  | "PERSISTENCE_IN_MEMORY_FORBIDDEN_AUTHORITY"
+  | "PERSISTENCE_IN_MEMORY_PUBLIC_EXPORT_LEAK"
+  | "PERSISTENCE_IN_MEMORY_EXTERNAL_WIRING"
   | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
@@ -267,6 +271,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isPersistenceContract = lowerFile.startsWith(
     "server/organization-verification/application/persistence-contract/",
+  );
+  const isInMemoryPersistenceAdapter = lowerFile.startsWith(
+    "server/organization-verification/infrastructure/persistence/in-memory/",
   );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
@@ -2184,6 +2191,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     isOrganizationVerification &&
     !isPersistenceContract &&
+    !isInMemoryPersistenceAdapter &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)persistence-contract(?:\/|$)/i.test(specifier),
@@ -2194,6 +2202,94 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "PERSISTENCE_CONTRACT_EXTERNAL_WIRING",
       file,
       "Pure persistence ports remain unwired until an explicitly authorized application integration phase",
+    );
+  }
+
+  if (isInMemoryPersistenceAdapter) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier ===
+          "../../../application/persistence-contract/index.js";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:db|database|schema|migrations?|routes?|controllers?|frontend|client|providers?|services?|startup|workers?|queues?|notifications?|permissions?|eligibility|unit-of-work|transactions?)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:node:fs|node:http|node:https|node:net|node:tls|node:dns)$/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "PERSISTENCE_IN_MEMORY_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:drizzle|sequelize|typeorm|prisma|knex|postgres|pgPool|sql\s*`|fetch\s*\(|readFile|writeFile|createConnection)\b/i.test(
+        input.source,
+      ) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bMath\.random\s*\(|\bas\s+unknown\s+as\b|\bas\s+never\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "PERSISTENCE_IN_MEMORY_FORBIDDEN_DEPENDENCY",
+        file,
+        "In-memory adapter introduced technology, environment, hidden time, randomness, or unsafe conversion",
+      );
+    }
+    if (
+      /\b(?:executeOrganizationVerificationWorkflowStep|executeOrganizationVerificationAttemptTransition|buildOrganizationVerificationEvidenceSnapshot|buildOrganizationVerificationEvaluationProjection|buildOrganizationVerificationPolicyEvaluationInput|executeOrganizationVerificationPolicyEvaluation|executeOrganizationVerificationDecisionTrustIntegration|transitionAttemptProcess|decideOrganizationVerification|deriveOrganizationVerificationTrustStatus)\s*\(/.test(
+        input.source,
+      ) ||
+      /\b(?:ReplayEngine|WorkflowEngine|WorkflowCoordinator|UnitOfWork|ParticipationEligibility|PublicationEligibility|RetryPolicy|LockManager|TransactionManager)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "PERSISTENCE_IN_MEMORY_FORBIDDEN_AUTHORITY",
+        file,
+        "In-memory adapter introduced business execution, replay, coordination, retries, locking, or downstream authority",
+      );
+    }
+  }
+
+  if (
+    lowerFile.endsWith(
+      "/infrastructure/persistence/in-memory/index.ts",
+    ) &&
+    /\b(?:Map|streams|committedAppends|canonicalStreamKey|InMemoryPersistenceInvariantError|delete|reset|seed|set|store)\b/.test(
+      input.source,
+    )
+  ) {
+    addViolation(
+      violations,
+      "PERSISTENCE_IN_MEMORY_PUBLIC_EXPORT_LEAK",
+      file,
+      "In-memory adapter public surface exposes internal storage, mutation, or implementation details",
+    );
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isInMemoryPersistenceAdapter &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)infrastructure\/persistence\/in-memory(?:\/|$)/i.test(
+        specifier,
+      ),
+    )
+  ) {
+    addViolation(
+      violations,
+      "PERSISTENCE_IN_MEMORY_EXTERNAL_WIRING",
+      file,
+      "Reference persistence adapter must remain unwired from Domain, Workflow, runtime, API, and startup",
     );
   }
 
@@ -3960,9 +4056,61 @@ test("Persistence contract public surface protects seals and canonical helpers",
   });
 });
 
-test("Persistence ports remain unwired before an adapter phase", () => {
+test("Persistence ports remain unwired outside the authorized reference adapter", () => {
   expectFixtureViolation("PERSISTENCE_CONTRACT_EXTERNAL_WIRING", {
     file: "server/organization-verification/application/api.ts",
     source: 'import { repository } from "./persistence-contract/index.js";',
+  });
+});
+
+test("In-memory persistence adapter rejects technology and infrastructure dependencies", () => {
+  for (const source of [
+    'import { db } from "../../../../db.js";',
+    'import { sql } from "drizzle-orm";',
+    'import fs from "node:fs";',
+    "const secret = process.env.DATABASE_URL;",
+    "const now = Date.now();",
+    "const id = crypto.randomUUID();",
+    "const unsafe = input as unknown as StoredEvidence;",
+  ]) {
+    expectFixtureViolation("PERSISTENCE_IN_MEMORY_FORBIDDEN_DEPENDENCY", {
+      file:
+        "server/organization-verification/infrastructure/persistence/in-memory/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("In-memory persistence adapter rejects replay and business authority", () => {
+  for (const source of [
+    "executeOrganizationVerificationWorkflowStep(input);",
+    "executeOrganizationVerificationPolicyEvaluation(input);",
+    "const replay: ReplayEngine = input;",
+    "const workflow: WorkflowEngine = input;",
+    "const retry: RetryPolicy = input;",
+    "const transaction: TransactionManager = input;",
+  ]) {
+    expectFixtureViolation("PERSISTENCE_IN_MEMORY_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/infrastructure/persistence/in-memory/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("In-memory persistence adapter protects its internal store from public exports", () => {
+  expectFixtureViolation("PERSISTENCE_IN_MEMORY_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/infrastructure/persistence/in-memory/index.ts",
+    source:
+      'export { streams, committedAppends, resetStore } from "./internal.js";',
+  });
+});
+
+test("In-memory persistence adapter remains unwired from application runtime", () => {
+  expectFixtureViolation("PERSISTENCE_IN_MEMORY_EXTERNAL_WIRING", {
+    file: "server/organization-verification/application/api.ts",
+    source:
+      'import { createInMemoryOrganizationVerificationEvidenceRepository } from "../infrastructure/persistence/in-memory/index.js";',
   });
 });
