@@ -56,6 +56,7 @@ export {
 } from "./trustStatus.js";
 export {
   deriveOrganizationVerificationTrustStatus,
+  isOrganizationVerificationTrustStatus,
   type OrganizationVerificationTrustStatus,
   type TrustStatusDerivationContext,
 } from "./trustStatusDeriver.js";

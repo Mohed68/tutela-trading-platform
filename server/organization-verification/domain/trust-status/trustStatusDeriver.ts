@@ -56,18 +56,24 @@ const STATUS_BY_DECISION = Object.freeze({
 function createTrustStatusInternal(
   input: OrganizationVerificationTrustStatusData,
 ): OrganizationVerificationTrustStatus {
-  return Object.freeze({
-    ...input,
-    [trustStatusSeal]: true as const,
+  const trustStatus = { ...input };
+  Object.defineProperty(trustStatus, trustStatusSeal, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
   });
+  return Object.freeze(trustStatus) as OrganizationVerificationTrustStatus;
 }
 
-function isTrustStatus(
+export function isOrganizationVerificationTrustStatus(
   input: unknown,
 ): input is OrganizationVerificationTrustStatus {
   if (typeof input !== "object" || input === null) return false;
-  const candidate = input as OrganizationVerificationTrustStatus;
-  return candidate[trustStatusSeal] === true && Object.isFrozen(candidate);
+  return (
+    Object.getOwnPropertyDescriptor(input, trustStatusSeal)?.value === true &&
+    Object.isFrozen(input)
+  );
 }
 
 function sameProjectionSemantics(
@@ -220,7 +226,7 @@ export function deriveOrganizationVerificationTrustStatus(
   });
 
   if (context.existingProjection) {
-    if (!isTrustStatus(context.existingProjection)) {
+    if (!isOrganizationVerificationTrustStatus(context.existingProjection)) {
       return trustStatusFailure("conflicting_trust_status_projection");
     }
     const sameSemantics = sameProjectionSemantics(

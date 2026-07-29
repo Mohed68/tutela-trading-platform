@@ -74,7 +74,12 @@ type ArchitectureViolationCode =
   | "POLICY_RUNTIME_FORBIDDEN_AUTHORITY"
   | "POLICY_RUNTIME_PUBLIC_EXPORT_LEAK"
   | "UNAUTHORIZED_POLICY_RUNTIME_CONSTRUCTION"
-  | "POLICY_RUNTIME_EXTERNAL_WIRING";
+  | "POLICY_RUNTIME_EXTERNAL_WIRING"
+  | "DECISION_TRUST_BINDING_FORBIDDEN_DEPENDENCY"
+  | "DECISION_TRUST_BINDING_FORBIDDEN_AUTHORITY"
+  | "DECISION_TRUST_BINDING_PUBLIC_EXPORT_LEAK"
+  | "DECISION_TRUST_BINDING_EXTERNAL_WIRING"
+  | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -218,6 +223,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isPolicyRuntimeDomain = lowerFile.startsWith(
     "server/organization-verification/domain/policy-runtime/",
   );
+  const isDecisionTrustIntegrationContractDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/decision-trust-integration-contract/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
@@ -227,7 +235,8 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isEvaluationProjectionDomain &&
     !isEvaluationInputDomain &&
     !isPolicyRuntimeContractDomain &&
-    !isPolicyRuntimeDomain;
+    !isPolicyRuntimeDomain &&
+    !isDecisionTrustIntegrationContractDomain;
   const isDomainPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/index.ts",
   );
@@ -254,6 +263,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isPolicyRuntimePublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/policy-runtime/index.ts",
+  );
+  const isDecisionTrustIntegrationContractPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/decision-trust-integration-contract/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -379,6 +391,39 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "POLICY_RUNTIME_PUBLIC_EXPORT_LEAK",
       file,
       "Policy Runtime public surface exposes construction, seal, result, adapter, hashing, or canonicalization internals",
+    );
+  }
+
+  if (
+    isDecisionTrustIntegrationContractPublicIndex &&
+    (/\b(?:integrationBindingSeal|integrationInputBindingSeal|fingerprintDecisionTrustBindingInternal|canonicalize|bindingSuccess|bindingFailure|createTrustStatusInternal|createDecisionInternal)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "DECISION_TRUST_BINDING_PUBLIC_EXPORT_LEAK",
+      file,
+      "Decision–Trust binding public surface exposes a seal, constructor, result helper, or canonicalization internal",
+    );
+  }
+
+  if (
+    /\bisOrganizationVerificationTrustStatus\b/.test(input.source) &&
+    !lowerFile.endsWith(
+      "/domain/trust-status/truststatusderiver.ts",
+    ) &&
+    !lowerFile.endsWith("/domain/trust-status/index.ts") &&
+    !lowerFile.endsWith(
+      "/domain/decision-trust-integration-contract/integrationbinding.ts",
+    )
+  ) {
+    addViolation(
+      violations,
+      "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER",
+      file,
+      "Trust Status authenticity guard is restricted to Trust public validation and the Decision–Trust binding contract",
     );
   }
 
@@ -1350,6 +1395,56 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     }
   }
 
+  if (isDecisionTrustIntegrationContractDomain) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "../policy-runtime/index.js" ||
+        specifier === "../decision/index.js" ||
+        specifier === "../trust-status/index.js" ||
+        specifier === "node:crypto";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:evaluation-input|evidence-snapshot|evaluation-projection|policy-runtime-contract|db|database|schema|migrations?|storage|repository|routes?|controllers?|workers?|queues?|schedulers?|startup|frontend|client|providers?|services?|sessions?)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /(?:^|\/)(?:marketplace|kyb|aml|sanctions|compliance|payments?|orders?|contracts?|notifications?|blockchain|ai|openai|stripe|sentry|eligibility|workflow)(?:\/|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:drizzle-orm|pg|@neondatabase\/|openai|stripe|@sentry\/)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "DECISION_TRUST_BINDING_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+
+    if (
+      /\b(?:decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|createDecisionInternal|createTrustStatusInternal|transitionAttemptProcess|ParticipationEligibility|PublicationEligibility|MarketplaceAccess|TransactionAuthorization)\b/.test(
+        input.source,
+      ) ||
+      /\.(?:findings|ruleResults|ruleExecutions)\b/.test(input.source) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bas\s+unknown\s+as\b/.test(
+        input.source,
+      ) ||
+      /["'](?:allowed_to_trade|allowed_to_publish|marketplace_access|seller_access|buyer_access)["']/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "DECISION_TRUST_BINDING_FORBIDDEN_AUTHORITY",
+        file,
+        "Decision–Trust binding contract attempted execution, downstream authority, direct Finding/Result consumption, hidden input, or unsafe conversion",
+      );
+    }
+  }
+
   if (
     /\bcreateOrganizationVerificationPolicyEvaluationExecutionInternal\s*\(/.test(
       input.source,
@@ -1372,6 +1467,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     isOrganizationVerification &&
     !isPolicyRuntimeDomain &&
+    !isDecisionTrustIntegrationContractDomain &&
     !isDomainPublicIndex &&
     specifiers.some((specifier) =>
       /(?:^|\/)policy-runtime(?:\/|$)/i.test(specifier),
@@ -1382,6 +1478,23 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "POLICY_RUNTIME_EXTERNAL_WIRING",
       file,
       "Pure Policy Runtime must remain unwired outside its curated domain boundary",
+    );
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isDecisionTrustIntegrationContractDomain &&
+    !isDomainPublicIndex &&
+    !lowerFile.endsWith("/organization-verification/index.ts") &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)decision-trust-integration-contract(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "DECISION_TRUST_BINDING_EXTERNAL_WIRING",
+      file,
+      "Decision–Trust binding contract must remain inert outside its curated domain boundary",
     );
   }
 
@@ -2521,5 +2634,106 @@ test("combined-pipeline fixture rejects Trust consuming Findings directly", () =
       "server/organization-verification/domain/trust-status/trustStatusDeriver.ts",
     source:
       'import type { OrganizationVerificationFinding } from "../policy/finding.js";',
+  });
+});
+
+test("Decision–Trust binding rejects infrastructure and provider dependencies", () => {
+  for (const source of [
+    'import { db } from "../../../db.js";',
+    'import { repository } from "../../../repositories/trust.js";',
+    'import { provider } from "../../../providers/organization.js";',
+    'import { worker } from "../../../workers/trust.js";',
+  ]) {
+    expectFixtureViolation("DECISION_TRUST_BINDING_FORBIDDEN_DEPENDENCY", {
+      file:
+        "server/organization-verification/domain/decision-trust-integration-contract/infrastructure.ts",
+      source,
+    });
+  }
+});
+
+test("Decision–Trust binding rejects Decision, Trust, Workflow, and Eligibility execution", () => {
+  for (const source of [
+    "decideOrganizationVerification(input);",
+    "deriveOrganizationVerificationTrustStatus(input);",
+    "transitionAttemptProcess(attempt, input);",
+    "const result: ParticipationEligibility = input;",
+  ]) {
+    expectFixtureViolation("DECISION_TRUST_BINDING_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/decision-trust-integration-contract/executor.ts",
+      source,
+    });
+  }
+});
+
+test("Decision–Trust binding rejects direct Finding and Rule Result consumption", () => {
+  for (const source of [
+    "const findings = execution.findings;",
+    "const results = completion.ruleResults;",
+    "const executions = execution.ruleExecutions;",
+  ]) {
+    expectFixtureViolation("DECISION_TRUST_BINDING_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/decision-trust-integration-contract/bypass.ts",
+      source,
+    });
+  }
+});
+
+test("Decision–Trust binding rejects environment, hidden clocks, IDs, and unsafe conversion", () => {
+  for (const source of [
+    "const value = process.env.BINDING;",
+    "const timestamp = Date.now();",
+    "const timestamp = new Date();",
+    "const id = randomUUID();",
+    "const id = nanoid();",
+    "const id = value as unknown as DecisionId;",
+  ]) {
+    expectFixtureViolation("DECISION_TRUST_BINDING_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/decision-trust-integration-contract/hidden.ts",
+      source,
+    });
+  }
+});
+
+test("Decision–Trust binding protects seals, constructors, and canonicalization", () => {
+  expectFixtureViolation("DECISION_TRUST_BINDING_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/domain/decision-trust-integration-contract/index.ts",
+    source:
+      'export { integrationBindingSeal, fingerprintDecisionTrustBindingInternal } from "./canonical.js";',
+  });
+});
+
+test("Decision–Trust binding remains unwired outside its curated boundary", () => {
+  expectFixtureViolation("DECISION_TRUST_BINDING_EXTERNAL_WIRING", {
+    file: "server/organization-verification/worker.ts",
+    source:
+      'import { binding } from "./domain/decision-trust-integration-contract/index.js";',
+  });
+});
+
+test("Trust Status authenticity guard rejects unauthorized consumers", () => {
+  for (const file of [
+    "server/organization-verification/workflow.ts",
+    "server/organization-verification/eligibility.ts",
+    "server/organization-verification/repository.ts",
+    "server/marketplace/trust.ts",
+  ]) {
+    expectFixtureViolation("TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER", {
+      file,
+      source: "isOrganizationVerificationTrustStatus(value);",
+    });
+  }
+});
+
+test("Decision–Trust contract accepts only curated public domain surfaces", () => {
+  expectFixtureViolation("DECISION_TRUST_BINDING_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/decision-trust-integration-contract/bypass.ts",
+    source:
+      'import { readOrganizationVerificationPolicyEvaluationCompletion } from "../policy/policyEvaluationCompletion.js";',
   });
 });

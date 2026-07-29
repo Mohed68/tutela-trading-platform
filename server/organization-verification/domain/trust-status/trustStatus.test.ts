@@ -56,6 +56,7 @@ import {
   createTrustStatusProvenanceReference,
   createTrustStatusSourceAuthorityReference,
   deriveOrganizationVerificationTrustStatus,
+  isOrganizationVerificationTrustStatus,
   DECISION_APPLICABILITY_VERSION,
   ORGANIZATION_VERIFICATION_TRUST_STATUS_VALUES,
   TRUST_STATUS_DERIVER_VERSION,
@@ -69,6 +70,7 @@ import {
   type OrganizationVerificationTrustStatusSourceFactsInput,
   type TrustStatusDomainResult,
 } from "./index.js";
+import * as trustStatusPublic from "./index.js";
 
 type IsAssignable<From, To> = From extends To ? true : false;
 type AssertFalse<Value extends false> = Value;
@@ -944,4 +946,57 @@ test("legacy, reviewer, Registry lifecycle, Offer, and eligibility data have no 
     });
     assert.equal(result.ok, false);
   }
+});
+
+test("public Trust Status authenticity guard rejects every structural impersonation", () => {
+  const decision = createDecisionFixture().first.decision;
+  const projection = trustValue(derive(sourceInput(decision)));
+  assert.equal(isOrganizationVerificationTrustStatus(projection), true);
+  assert.equal(isOrganizationVerificationTrustStatus({}), false);
+
+  const spread = { ...projection };
+  assert.equal(isOrganizationVerificationTrustStatus(spread), false);
+  assert.equal(Object.getOwnPropertySymbols(spread).length, 0);
+
+  const frozenStructuralClone = Object.freeze({ ...projection });
+  assert.equal(
+    isOrganizationVerificationTrustStatus(frozenStructuralClone),
+    false,
+  );
+
+  const mutatedCopy = { ...projection, status: "invalidated" };
+  assert.equal(isOrganizationVerificationTrustStatus(mutatedCopy), false);
+  assert.equal(Object.isFrozen(projection), true);
+  assert.throws(() => {
+    (projection as { status: string }).status = "invalidated";
+  }, TypeError);
+  assert.equal(projection.status, "trusted");
+});
+
+test("Trust Status public surface exposes only the approved read-only guard addition", () => {
+  assert.deepEqual(Object.keys(trustStatusPublic).sort(), [
+    "DECISION_APPLICABILITY_STATES",
+    "DECISION_APPLICABILITY_VERSION",
+    "ORGANIZATION_VERIFICATION_TRUST_STATUS_VALUES",
+    "TRUST_STATUS_DERIVER_VERSION",
+    "TRUST_STATUS_SOURCE_FACTS_VERSION",
+    "createDecisionApplicability",
+    "createDecisionApplicabilityId",
+    "createDecisionApplicabilityVersion",
+    "createExpiryFactId",
+    "createInvalidationFactId",
+    "createOrganizationVerificationExpiryFact",
+    "createOrganizationVerificationInvalidationFact",
+    "createOrganizationVerificationTrustStatusSourceFacts",
+    "createTrustStatusDeriverVersion",
+    "createTrustStatusIntegrityReference",
+    "createTrustStatusProjectionId",
+    "createTrustStatusProvenanceReference",
+    "createTrustStatusSourceAuthorityReference",
+    "createTrustStatusSourceFactsVersion",
+    "deriveOrganizationVerificationTrustStatus",
+    "isOrganizationVerificationTrustStatus",
+  ]);
+  assert.equal("trustStatusSeal" in trustStatusPublic, false);
+  assert.equal("createTrustStatusInternal" in trustStatusPublic, false);
 });
