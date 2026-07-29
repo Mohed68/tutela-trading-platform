@@ -5,6 +5,7 @@ import * as organizationVerificationEvaluationInput from "./evaluation-input/ind
 import * as organizationVerificationPolicyRuntimeContract from "./policy-runtime-contract/index.js";
 import * as organizationVerificationPolicyRuntime from "./policy-runtime/index.js";
 import * as organizationVerificationDecisionTrustIntegrationContract from "./decision-trust-integration-contract/index.js";
+import * as organizationVerificationDecisionTrustIntegration from "./decision-trust-integration/index.js";
 
 export {
   createAttemptForRevision,
@@ -90,6 +91,7 @@ export {
   organizationVerificationEvaluationInput,
   organizationVerificationEvaluationProjection,
   organizationVerificationDecisionTrustIntegrationContract,
+  organizationVerificationDecisionTrustIntegration,
   organizationVerificationEvidenceSnapshot,
   organizationVerificationPolicy,
   organizationVerificationPolicyRuntimeContract,

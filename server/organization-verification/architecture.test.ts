@@ -79,6 +79,11 @@ type ArchitectureViolationCode =
   | "DECISION_TRUST_BINDING_FORBIDDEN_AUTHORITY"
   | "DECISION_TRUST_BINDING_PUBLIC_EXPORT_LEAK"
   | "DECISION_TRUST_BINDING_EXTERNAL_WIRING"
+  | "DECISION_TRUST_INTEGRATION_FORBIDDEN_DEPENDENCY"
+  | "DECISION_TRUST_INTEGRATION_FORBIDDEN_AUTHORITY"
+  | "DECISION_TRUST_INTEGRATION_PUBLIC_EXPORT_LEAK"
+  | "DECISION_TRUST_INTEGRATION_EXTERNAL_WIRING"
+  | "DECISION_TRUST_INTEGRATION_TRUST_BOUNDARY"
   | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
@@ -226,6 +231,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isDecisionTrustIntegrationContractDomain = lowerFile.startsWith(
     "server/organization-verification/domain/decision-trust-integration-contract/",
   );
+  const isDecisionTrustIntegrationDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/decision-trust-integration/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
@@ -236,7 +244,8 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isEvaluationInputDomain &&
     !isPolicyRuntimeContractDomain &&
     !isPolicyRuntimeDomain &&
-    !isDecisionTrustIntegrationContractDomain;
+    !isDecisionTrustIntegrationContractDomain &&
+    !isDecisionTrustIntegrationDomain;
   const isDomainPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/index.ts",
   );
@@ -266,6 +275,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isDecisionTrustIntegrationContractPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/decision-trust-integration-contract/index.ts",
+  );
+  const isDecisionTrustIntegrationPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/decision-trust-integration/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -410,6 +422,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   }
 
   if (
+    isDecisionTrustIntegrationPublicIndex &&
+    (/\b(?:decisionTrustIntegrationExecutionSeal|createOrganizationVerificationDecisionTrustIntegrationExecutionInternal|fingerprintDecisionTrustIntegrationExecutionInternal|canonicalize|integrationSuccess|integrationFailure|deriveTrustStatusFromAuthenticDecision)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "DECISION_TRUST_INTEGRATION_PUBLIC_EXPORT_LEAK",
+      file,
+      "Decision–Trust integration public surface exposes a seal, constructor, internal helper, result helper, or canonicalization authority",
+    );
+  }
+
+  if (
     /\bisOrganizationVerificationTrustStatus\b/.test(input.source) &&
     !lowerFile.endsWith(
       "/domain/trust-status/truststatusderiver.ts",
@@ -417,6 +444,12 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !lowerFile.endsWith("/domain/trust-status/index.ts") &&
     !lowerFile.endsWith(
       "/domain/decision-trust-integration-contract/integrationbinding.ts",
+    ) &&
+    !lowerFile.endsWith(
+      "/domain/decision-trust-integration/trustderivation.ts",
+    ) &&
+    !lowerFile.endsWith(
+      "/domain/decision-trust-integration/decisiontrustintegrationexecution.ts",
     )
   ) {
     addViolation(
@@ -1445,6 +1478,147 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     }
   }
 
+  if (isDecisionTrustIntegrationDomain) {
+    const isExecutor = lowerFile.endsWith(
+      "/domain/decision-trust-integration/executedecisiontrustintegration.ts",
+    );
+    const isTrustDerivationBoundary = lowerFile.endsWith(
+      "/domain/decision-trust-integration/trustderivation.ts",
+    );
+
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "../policy-runtime/index.js" ||
+        specifier === "../policy/index.js" ||
+        specifier === "../decision/index.js" ||
+        specifier === "../trust-status/index.js" ||
+        specifier === "../decision-trust-integration-contract/index.js" ||
+        specifier === "node:crypto";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:evaluation-input|evidence-snapshot|evaluation-projection|policy-runtime-contract|db|database|schema|migrations?|storage|repository|routes?|controllers?|workers?|queues?|schedulers?|startup|frontend|client|providers?|services?|sessions?)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /(?:^|\/)(?:marketplace|kyb|aml|sanctions|compliance|payments?|orders?|contracts?|notifications?|blockchain|ai|openai|stripe|sentry|eligibility|workflow)(?:\/|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:drizzle-orm|pg|@neondatabase\/|openai|stripe|@sentry\/)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "DECISION_TRUST_INTEGRATION_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+
+    if (
+      /\.(?:findings|ruleResults|ruleExecutions)\b/.test(input.source) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bMath\.random\s*\(|\bas\s+unknown\s+as\b/.test(
+        input.source,
+      ) ||
+      /\b(?:transitionAttemptProcess|ParticipationEligibility|PublicationEligibility|MarketplaceAccess|TransactionAuthorization)\b/.test(
+        input.source,
+      ) ||
+      /["'](?:allowed_to_trade|allowed_to_publish|marketplace_access|seller_access|buyer_access)["']/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "DECISION_TRUST_INTEGRATION_FORBIDDEN_AUTHORITY",
+        file,
+        "Decision–Trust integration attempted direct Rule output consumption, downstream authority, hidden input, or unsafe opaque conversion",
+      );
+    }
+
+    if (
+      !isExecutor &&
+      /\b(?:adaptPolicyEvaluationCompletionToNormalizedEvaluation|decideOrganizationVerification|createOrganizationVerificationDecisionTrustIntegrationInputBinding|createOrganizationVerificationDecisionTrustIntegrationBinding)\s*\(/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "DECISION_TRUST_INTEGRATION_FORBIDDEN_AUTHORITY",
+        file,
+        "Only the pure Decision–Trust integration executor may sequence the frozen adapter, Decision authority, Trust boundary, and binding authorities",
+      );
+    }
+
+    if (
+      !isExecutor &&
+      !isTrustDerivationBoundary &&
+      /\bderiveTrustStatusFromAuthenticDecision\s*\(/.test(input.source)
+    ) {
+      addViolation(
+        violations,
+        "DECISION_TRUST_INTEGRATION_FORBIDDEN_AUTHORITY",
+        file,
+        "Only the pure Decision–Trust integration executor may consume the isolated Decision-to-Trust derivation boundary",
+      );
+    }
+
+    if (
+      !isTrustDerivationBoundary &&
+      /\b(?:createOrganizationVerificationTrustStatusSourceFacts|deriveOrganizationVerificationTrustStatus)\s*\(/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "DECISION_TRUST_INTEGRATION_TRUST_BOUNDARY",
+        file,
+        "Trust source-fact construction and Trust derivation are isolated to the dedicated Decision-to-Trust boundary",
+      );
+    }
+
+    if (isTrustDerivationBoundary) {
+      for (const specifier of specifiers) {
+        if (
+          specifier !== "../decision/index.js" &&
+          specifier !== "../trust-status/index.js"
+        ) {
+          addViolation(
+            violations,
+            "DECISION_TRUST_INTEGRATION_TRUST_BOUNDARY",
+            file,
+            `Trust derivation boundary imported ${specifier}`,
+          );
+        }
+      }
+      if (
+        /\b(?:Policy|Completion|Finding|RuleResult|PolicyEvaluationExecution)\b/.test(
+          input.source,
+        )
+      ) {
+        addViolation(
+          violations,
+          "DECISION_TRUST_INTEGRATION_TRUST_BOUNDARY",
+          file,
+          "Trust derivation boundary must consume only an authentic Decision and explicit Trust source facts",
+        );
+      }
+    }
+
+    if (
+      /\b(?:createDecisionInternal|createTrustStatusInternal)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "DECISION_TRUST_INTEGRATION_FORBIDDEN_AUTHORITY",
+        file,
+        "Decision–Trust integration cannot access private Decision or Trust construction authority",
+      );
+    }
+  }
+
   if (
     /\bcreateOrganizationVerificationPolicyEvaluationExecutionInternal\s*\(/.test(
       input.source,
@@ -1468,6 +1642,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     isOrganizationVerification &&
     !isPolicyRuntimeDomain &&
     !isDecisionTrustIntegrationContractDomain &&
+    !isDecisionTrustIntegrationDomain &&
     !isDomainPublicIndex &&
     specifiers.some((specifier) =>
       /(?:^|\/)policy-runtime(?:\/|$)/i.test(specifier),
@@ -1484,6 +1659,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     isOrganizationVerification &&
     !isDecisionTrustIntegrationContractDomain &&
+    !isDecisionTrustIntegrationDomain &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1495,6 +1671,23 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "DECISION_TRUST_BINDING_EXTERNAL_WIRING",
       file,
       "Decision–Trust binding contract must remain inert outside its curated domain boundary",
+    );
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isDecisionTrustIntegrationDomain &&
+    !isDomainPublicIndex &&
+    !lowerFile.endsWith("/organization-verification/index.ts") &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)decision-trust-integration(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "DECISION_TRUST_INTEGRATION_EXTERNAL_WIRING",
+      file,
+      "Pure Decision–Trust integration must remain unwired outside its curated domain boundary",
     );
   }
 
@@ -1563,6 +1756,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isEvaluationInputDomain &&
     !isPolicyRuntimeContractDomain &&
     !isPolicyRuntimeDomain &&
+    !isDecisionTrustIntegrationDomain &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -2736,4 +2930,113 @@ test("Decision–Trust contract accepts only curated public domain surfaces", ()
     source:
       'import { readOrganizationVerificationPolicyEvaluationCompletion } from "../policy/policyEvaluationCompletion.js";',
   });
+});
+
+test("Decision–Trust integration rejects infrastructure and downstream capabilities", () => {
+  for (const source of [
+    'import { db } from "../../../db.js";',
+    'import { repository } from "../../../repositories/trust.js";',
+    'import { workflow } from "../../../workflow/organization.js";',
+    'import { eligibility } from "../../../eligibility/organization.js";',
+    'import { marketplace } from "../../../marketplace/index.js";',
+  ]) {
+    expectFixtureViolation("DECISION_TRUST_INTEGRATION_FORBIDDEN_DEPENDENCY", {
+      file:
+        "server/organization-verification/domain/decision-trust-integration/infrastructure.ts",
+      source,
+    });
+  }
+});
+
+test("Decision–Trust integration rejects direct Rule output consumption", () => {
+  for (const source of [
+    "const findings = execution.findings;",
+    "const results = completion.ruleResults;",
+    "const executions = execution.ruleExecutions;",
+  ]) {
+    expectFixtureViolation("DECISION_TRUST_INTEGRATION_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/decision-trust-integration/bypass.ts",
+      source,
+    });
+  }
+});
+
+test("Decision–Trust integration rejects hidden inputs and downstream authority", () => {
+  for (const source of [
+    "const value = process.env.INTEGRATION;",
+    "const timestamp = Date.now();",
+    "const timestamp = new Date();",
+    "const id = randomUUID();",
+    "const id = nanoid();",
+    "const id = Math.random();",
+    "const id = value as unknown as DecisionId;",
+    "transitionAttemptProcess(attempt, input);",
+    "const result: ParticipationEligibility = input;",
+  ]) {
+    expectFixtureViolation("DECISION_TRUST_INTEGRATION_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/decision-trust-integration/hidden.ts",
+      source,
+    });
+  }
+});
+
+test("Decision–Trust integration protects its private execution authority", () => {
+  expectFixtureViolation("DECISION_TRUST_INTEGRATION_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/domain/decision-trust-integration/index.ts",
+    source:
+      'export { decisionTrustIntegrationExecutionSeal, deriveTrustStatusFromAuthenticDecision } from "./internal.js";',
+  });
+});
+
+test("Decision–Trust integration remains unwired outside its curated boundary", () => {
+  expectFixtureViolation("DECISION_TRUST_INTEGRATION_EXTERNAL_WIRING", {
+    file: "server/organization-verification/worker.ts",
+    source:
+      'import { executeOrganizationVerificationDecisionTrustIntegration } from "./domain/decision-trust-integration/index.js";',
+  });
+});
+
+test("Decision–Trust integration centralizes authority sequencing in its executor", () => {
+  for (const source of [
+    "adaptPolicyEvaluationCompletionToNormalizedEvaluation(completion);",
+    "decideOrganizationVerification(input, context);",
+    "deriveTrustStatusFromAuthenticDecision(decision, facts, context);",
+    "createOrganizationVerificationDecisionTrustIntegrationBinding(input);",
+  ]) {
+    expectFixtureViolation("DECISION_TRUST_INTEGRATION_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/decision-trust-integration/alternateExecutor.ts",
+      source,
+    });
+  }
+});
+
+test("Decision–Trust integration isolates Decision-to-Trust derivation", () => {
+  expectFixtureViolation("DECISION_TRUST_INTEGRATION_TRUST_BOUNDARY", {
+    file:
+      "server/organization-verification/domain/decision-trust-integration/notTrustDerivation.ts",
+    source: "deriveOrganizationVerificationTrustStatus(facts, context);",
+  });
+  expectFixtureViolation("DECISION_TRUST_INTEGRATION_TRUST_BOUNDARY", {
+    file:
+      "server/organization-verification/domain/decision-trust-integration/trustDerivation.ts",
+    source:
+      'import { completion } from "../policy/index.js";\nconst value: PolicyEvaluationExecution = completion;',
+  });
+});
+
+test("Decision–Trust integration rejects private Decision and Trust constructors", () => {
+  for (const source of [
+    "createDecisionInternal(input);",
+    "createTrustStatusInternal(input);",
+  ]) {
+    expectFixtureViolation("DECISION_TRUST_INTEGRATION_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/domain/decision-trust-integration/privateAuthority.ts",
+      source,
+    });
+  }
 });
