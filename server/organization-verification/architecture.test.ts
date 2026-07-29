@@ -107,6 +107,11 @@ type ArchitectureViolationCode =
   | "PERSISTENCE_IN_MEMORY_FORBIDDEN_AUTHORITY"
   | "PERSISTENCE_IN_MEMORY_PUBLIC_EXPORT_LEAK"
   | "PERSISTENCE_IN_MEMORY_EXTERNAL_WIRING"
+  | "REPLAY_RUNTIME_FORBIDDEN_DEPENDENCY"
+  | "REPLAY_RUNTIME_FORBIDDEN_AUTHORITY"
+  | "REPLAY_RUNTIME_PERSISTENCE_WRITE"
+  | "REPLAY_RUNTIME_PUBLIC_EXPORT_LEAK"
+  | "REPLAY_RUNTIME_EXTERNAL_WIRING"
   | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
@@ -274,6 +279,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isInMemoryPersistenceAdapter = lowerFile.startsWith(
     "server/organization-verification/infrastructure/persistence/in-memory/",
+  );
+  const isReplayRuntime = lowerFile.startsWith(
+    "server/organization-verification/application/replay-runtime/",
   );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
@@ -1915,6 +1923,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isReplayRuntime &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)attempt-lifecycle-contract(?:\/|$)/i.test(specifier),
@@ -1986,6 +1995,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isReplayRuntime &&
     specifiers.some((specifier) =>
       /(?:^|\/)workflow-contract(?:\/|$)/i.test(specifier),
     )
@@ -2192,6 +2202,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     isOrganizationVerification &&
     !isPersistenceContract &&
     !isInMemoryPersistenceAdapter &&
+    !isReplayRuntime &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)persistence-contract(?:\/|$)/i.test(specifier),
@@ -2290,6 +2301,107 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "PERSISTENCE_IN_MEMORY_EXTERNAL_WIRING",
       file,
       "Reference persistence adapter must remain unwired from Domain, Workflow, runtime, API, and startup",
+    );
+  }
+
+  if (isReplayRuntime) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "node:crypto" ||
+        specifier === "../attempt-lifecycle-contract/index.js" ||
+        specifier === "../workflow-contract/index.js" ||
+        specifier === "../persistence-contract/index.js";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:db|database|schema|migrations?|repositories?|routes?|controllers?|frontend|client|providers?|services?|startup|workers?|queues?|notifications?|permissions?|eligibility|unit-of-work|transactions?|infrastructure|workflow-runtime|attempt-lifecycle-runtime)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:node:fs|node:http|node:https|node:net|node:tls|node:dns)$/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "REPLAY_RUNTIME_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bMath\.random\s*\(|\bas\s+unknown\s+as\b|\bas\s+never\b/.test(
+        input.source,
+      ) ||
+      /\b(?:drizzle|sequelize|typeorm|prisma|knex|postgres|pgPool|sql\s*`|fetch\s*\(|readFile|writeFile|createConnection)\b/i.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "REPLAY_RUNTIME_FORBIDDEN_DEPENDENCY",
+        file,
+        "Replay introduced infrastructure, environment, hidden time, randomness, or unsafe conversion",
+      );
+    }
+    if (
+      /\b(?:executeOrganizationVerificationWorkflowStep|executeOrganizationVerificationAttemptTransition|buildOrganizationVerificationEvidenceSnapshot|buildOrganizationVerificationEvaluationProjection|buildOrganizationVerificationPolicyEvaluationInput|executeOrganizationVerificationPolicyEvaluation|executeOrganizationVerificationDecisionTrustIntegration|transitionAttemptProcess|decideOrganizationVerification|deriveOrganizationVerificationTrustStatus)\s*\(/.test(
+        input.source,
+      ) ||
+      /\b(?:WorkflowEngine|WorkflowCoordinator|ReplayRepair|EventUpcaster|GenericReducer|executeUntilComplete|automaticProgression|ParticipationEligibility|PublicationEligibility|RetryPolicy|LockManager|TransactionManager)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "REPLAY_RUNTIME_FORBIDDEN_AUTHORITY",
+        file,
+        "Replay invoked business authority, automatic progression, repair, migration, retry, or downstream authority",
+      );
+    }
+    if (
+      /\b(?:appendOrganizationVerificationEvidence|createOrganizationVerificationStoredEvidence|createOrganizationVerificationEvidenceAppendBatch|createOrganizationVerificationEvidenceAppendReceipt|loadOrganizationVerificationEvidenceStream)\s*\(/.test(
+        input.source,
+      ) ||
+      /\bOrganizationVerificationEvidenceAppendPort\b|\bOrganizationVerificationEvidenceRepositoryPort\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "REPLAY_RUNTIME_PERSISTENCE_WRITE",
+        file,
+        "Replay attempted repository access or persistence mutation",
+      );
+    }
+  }
+
+  if (
+    lowerFile.endsWith("/application/replay-runtime/index.ts") &&
+    /\b(?:replayRequestSeal|replayBindingSeal|replayExecutionSeal|replayResultSeal|fingerprintOrganizationVerificationReplay|createReplayEvidenceBindingInternal|createReplayExecutionInternal|replayCompletedInternal|replayRejectedInternal)\b/.test(
+      input.source,
+    )
+  ) {
+    addViolation(
+      violations,
+      "REPLAY_RUNTIME_PUBLIC_EXPORT_LEAK",
+      file,
+      "Replay public surface exposes private seals, fingerprinting, or construction authority",
+    );
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isReplayRuntime &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)replay-runtime(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "REPLAY_RUNTIME_EXTERNAL_WIRING",
+      file,
+      "Pure Replay runtime must remain unwired from Domain, Workflow, persistence adapters, API, and startup",
     );
   }
 
@@ -4112,5 +4224,77 @@ test("In-memory persistence adapter remains unwired from application runtime", (
     file: "server/organization-verification/application/api.ts",
     source:
       'import { createInMemoryOrganizationVerificationEvidenceRepository } from "../infrastructure/persistence/in-memory/index.js";',
+  });
+});
+
+test("Replay runtime rejects infrastructure and adapter dependencies", () => {
+  for (const source of [
+    'import { db } from "../../../db.js";',
+    'import { adapter } from "../../infrastructure/persistence/in-memory/index.js";',
+    'import fs from "node:fs";',
+    'import { runtime } from "../workflow-runtime/index.js";',
+    "const secret = process.env.DATABASE_URL;",
+    "const now = Date.now();",
+    "const id = crypto.randomUUID();",
+    "const unsafe = input as unknown as ReplayExecution;",
+  ]) {
+    expectFixtureViolation("REPLAY_RUNTIME_FORBIDDEN_DEPENDENCY", {
+      file:
+        "server/organization-verification/application/replay-runtime/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("Replay runtime rejects business authority and automatic progression", () => {
+  for (const source of [
+    "executeOrganizationVerificationAttemptTransition(input);",
+    "buildOrganizationVerificationEvidenceSnapshot(input);",
+    "buildOrganizationVerificationEvaluationProjection(input);",
+    "buildOrganizationVerificationPolicyEvaluationInput(input);",
+    "executeOrganizationVerificationPolicyEvaluation(input);",
+    "executeOrganizationVerificationDecisionTrustIntegration(input);",
+    "executeOrganizationVerificationWorkflowStep(input);",
+    "const engine: WorkflowEngine = input;",
+    "const repair: ReplayRepair = input;",
+    "const reducer: GenericReducer = input;",
+  ]) {
+    expectFixtureViolation("REPLAY_RUNTIME_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/application/replay-runtime/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("Replay runtime rejects persistence reads and writes", () => {
+  for (const source of [
+    "appendOrganizationVerificationEvidence(request);",
+    "loadOrganizationVerificationEvidenceStream(request);",
+    "createOrganizationVerificationStoredEvidence(input);",
+    "const repository: OrganizationVerificationEvidenceRepositoryPort = input;",
+  ]) {
+    expectFixtureViolation("REPLAY_RUNTIME_PERSISTENCE_WRITE", {
+      file:
+        "server/organization-verification/application/replay-runtime/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("Replay runtime protects private authenticity and fingerprint authority", () => {
+  expectFixtureViolation("REPLAY_RUNTIME_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/application/replay-runtime/index.ts",
+    source:
+      'export { replayExecutionSeal, fingerprintOrganizationVerificationReplay, createReplayExecutionInternal } from "./internal.js";',
+  });
+});
+
+test("Replay runtime remains unwired from API and startup", () => {
+  expectFixtureViolation("REPLAY_RUNTIME_EXTERNAL_WIRING", {
+    file: "server/organization-verification/application/api.ts",
+    source:
+      'import { replayOrganizationVerificationWorkflow } from "./replay-runtime/index.js";',
   });
 });
