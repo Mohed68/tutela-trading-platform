@@ -53,7 +53,15 @@ type ArchitectureViolationCode =
   | "EVALUATION_PROJECTION_PUBLIC_EXPORT_LEAK"
   | "UNAUTHORIZED_EVALUATION_PROJECTION_CONSTRUCTION"
   | "EVALUATION_PROJECTION_RUNTIME_WIRING"
-  | "FROZEN_DOMAIN_IMPORTS_EVALUATION_PROJECTION";
+  | "FROZEN_DOMAIN_IMPORTS_EVALUATION_PROJECTION"
+  | "EVALUATION_INPUT_FORBIDDEN_DEPENDENCY"
+  | "EVALUATION_INPUT_FORBIDDEN_AUTHORITY"
+  | "EVALUATION_INPUT_PUBLIC_EXPORT_LEAK"
+  | "UNAUTHORIZED_EVALUATION_INPUT_CONSTRUCTION"
+  | "UNAUTHORIZED_EVALUATION_INPUT_AUTHENTICITY_READ"
+  | "EVALUATION_INPUT_DIRECT_SNAPSHOT_CONSUMPTION"
+  | "EVALUATION_INPUT_RUNTIME_WIRING"
+  | "FROZEN_DOMAIN_IMPORTS_EVALUATION_INPUT";
 
 interface ArchitectureViolation {
   code: ArchitectureViolationCode;
@@ -188,13 +196,17 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isEvaluationProjectionDomain = lowerFile.startsWith(
     "server/organization-verification/domain/evaluation-projection/",
   );
+  const isEvaluationInputDomain = lowerFile.startsWith(
+    "server/organization-verification/domain/evaluation-input/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
     !isTrustStatusDomain &&
     !isPolicyDomain &&
     !isEvidenceSnapshotDomain &&
-    !isEvaluationProjectionDomain;
+    !isEvaluationProjectionDomain &&
+    !isEvaluationInputDomain;
   const isDomainPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/index.ts",
   );
@@ -212,6 +224,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isEvaluationProjectionPublicIndex = lowerFile.endsWith(
     "server/organization-verification/domain/evaluation-projection/index.ts",
+  );
+  const isEvaluationInputPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/domain/evaluation-input/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -292,6 +307,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "EVALUATION_PROJECTION_PUBLIC_EXPORT_LEAK",
       file,
       "Evaluation Projection public surface exposes construction, seal, fingerprint, or canonicalization internals",
+    );
+  }
+
+  if (
+    isEvaluationInputPublicIndex &&
+    (/\b(?:policyEvaluationInputSeal|createOrganizationVerificationPolicyEvaluationInputInternal|readOrganizationVerificationPolicyEvaluationInputInternal|canonicalizePolicyEvaluationInputInternal|computePolicyEvaluationInputFingerprintInternal|createPolicyEvaluationInputFingerprintInternal)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "EVALUATION_INPUT_PUBLIC_EXPORT_LEAK",
+      file,
+      "Evaluation Input public surface exposes seals, constructors, readers, hashing, or canonicalization internals",
     );
   }
 
@@ -683,6 +713,133 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     }
   }
 
+  if (isEvaluationInputDomain) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9]+\.js$/.test(specifier) ||
+        specifier === "../evaluation-projection/index.js" ||
+        specifier === "../policy/index.js" ||
+        specifier === "node:crypto";
+      if (
+        !allowed ||
+        /(?:^|\/)evidence-snapshot(?:\/|$)/i.test(specifier) ||
+        /(?:^|\/)(?:db|database|schema|migrations?|storage|repository|routes?|workers?|startup|frontend|client|providers?|services?|sessions?)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /(?:^|\/)(?:marketplace|kyb|aml|sanctions|compliance|payments?|orders?|contracts?|notifications?|blockchain|ai|openai|stripe|sentry|decision|trust-status)(?:\/|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:drizzle-orm|pg|@neondatabase\/|openai|stripe|@sentry\/)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "EVALUATION_INPUT_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+      if (/(?:^|\/)evidence-snapshot(?:\/|$)/i.test(specifier)) {
+        addViolation(
+          violations,
+          "EVALUATION_INPUT_DIRECT_SNAPSHOT_CONSUMPTION",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:evaluateOrganizationVerificationPolicy|completeOrganizationVerificationPolicyEvaluation|createOrganizationVerificationFinding|createOrganizationVerificationRuleEvaluationResult|decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|transitionAttemptProcess|createAttemptForRevision|ParticipationEligibility|PolicyEvaluationCompletion|NormalizedEvaluationClassification)\b/.test(
+        input.source,
+      ) ||
+      /\b(?:documentValid|documentExpired|supportedJurisdiction|riskScore|riskClassification|complianceStatus|requiredEvidence|sufficientEvidence|uiSelectedPolicy)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "EVALUATION_INPUT_FORBIDDEN_AUTHORITY",
+        file,
+        "Evaluation Input must define an execution contract without Policy execution, inference, Finding, Decision, Trust, Eligibility, or workflow authority",
+      );
+    }
+  }
+
+  if (
+    /\bcreateOrganizationVerificationPolicyEvaluationInputInternal\b/.test(
+      input.source,
+    ) &&
+    !lowerFile.endsWith(
+      "/domain/evaluation-input/policyevaluationinput.ts",
+    ) &&
+    !lowerFile.endsWith(
+      "/domain/evaluation-input/policyevaluationinputbuilder.ts",
+    )
+  ) {
+    addViolation(
+      violations,
+      "UNAUTHORIZED_EVALUATION_INPUT_CONSTRUCTION",
+      file,
+      "Only the Evaluation Input Builder may invoke the private constructor",
+    );
+  }
+
+  if (
+    /\breadOrganizationVerificationPolicyEvaluationInputInternal\b/.test(
+      input.source,
+    ) &&
+    !lowerFile.endsWith(
+      "/domain/evaluation-input/policyevaluationinput.ts",
+    ) &&
+    !lowerFile.endsWith(
+      "/domain/evaluation-input/policyevaluationinputbuilder.ts",
+    )
+  ) {
+    addViolation(
+      violations,
+      "UNAUTHORIZED_EVALUATION_INPUT_AUTHENTICITY_READ",
+      file,
+      "Evaluation Input authenticity reader is private to the model and Builder",
+    );
+  }
+
+  if (
+    (isOrganizationRegistry ||
+      (isOrganizationVerificationCoreDomain && !isDomainPublicIndex) ||
+      isEvidenceSnapshotDomain ||
+      isEvaluationProjectionDomain ||
+      isDecisionDomain ||
+      isTrustStatusDomain ||
+      isPolicyDomain) &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)evaluation-input(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "FROZEN_DOMAIN_IMPORTS_EVALUATION_INPUT",
+      file,
+      "Architecture-frozen predecessor domains must not depend on Evaluation Input",
+    );
+  }
+
+  if (
+    !isEvaluationInputDomain &&
+    !isDomainPublicIndex &&
+    !lowerFile.endsWith("/organization-verification/index.ts") &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)evaluation-input(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "EVALUATION_INPUT_RUNTIME_WIRING",
+      file,
+      "Evaluation Input Builder must remain inert outside its curated public surface",
+    );
+  }
+
   if (
     /\bcreateOrganizationVerificationEvaluationProjectionInternal\b/.test(
       input.source,
@@ -723,6 +880,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
 
   if (
     !isEvaluationProjectionDomain &&
+    !isEvaluationInputDomain &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -975,6 +1133,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     isOrganizationVerification &&
     !isPolicyDomain &&
+    !isEvaluationInputDomain &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1643,5 +1802,95 @@ test("intentional fixture rejects reverse Snapshot dependency on Evaluation Proj
       "server/organization-verification/domain/evidence-snapshot/evidenceSnapshot.ts",
     source:
       'import type { Projection } from "../evaluation-projection/index.js";',
+  });
+});
+
+test("intentional fixture rejects unauthorized Evaluation Input construction", () => {
+  expectFixtureViolation("UNAUTHORIZED_EVALUATION_INPUT_CONSTRUCTION", {
+    file: "server/organization-verification/domain/reviewer.ts",
+    source:
+      "export function createOrganizationVerificationPolicyEvaluationInputInternal() { return {}; }",
+  });
+});
+
+test("intentional fixture rejects Evaluation Input seal or internal-reader export", () => {
+  expectFixtureViolation("EVALUATION_INPUT_PUBLIC_EXPORT_LEAK", {
+    file: "server/organization-verification/domain/evaluation-input/index.ts",
+    source:
+      'export { readOrganizationVerificationPolicyEvaluationInputInternal } from "./policyEvaluationInput.js";',
+  });
+});
+
+test("intentional fixture rejects direct Snapshot consumption by Evaluation Input", () => {
+  expectFixtureViolation("EVALUATION_INPUT_DIRECT_SNAPSHOT_CONSUMPTION", {
+    file:
+      "server/organization-verification/domain/evaluation-input/builder.ts",
+    source:
+      'import type { OrganizationVerificationEvidenceSnapshot } from "../evidence-snapshot/index.js";',
+  });
+});
+
+test("intentional fixture rejects Policy execution import by Evaluation Input", () => {
+  expectFixtureViolation("EVALUATION_INPUT_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evaluation-input/executor.ts",
+    source: "completeOrganizationVerificationPolicyEvaluation(input);",
+  });
+});
+
+test("intentional fixture rejects Decision authority in Evaluation Input", () => {
+  expectFixtureViolation("EVALUATION_INPUT_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evaluation-input/decision.ts",
+    source: "decideOrganizationVerification(input);",
+  });
+});
+
+test("intentional fixture rejects Trust authority in Evaluation Input", () => {
+  expectFixtureViolation("EVALUATION_INPUT_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evaluation-input/trust.ts",
+    source: "deriveOrganizationVerificationTrustStatus(input);",
+  });
+});
+
+test("intentional fixture rejects database imports in Evaluation Input", () => {
+  expectFixtureViolation("EVALUATION_INPUT_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/evaluation-input/repository.ts",
+    source: 'import { db } from "../../../db.js";',
+  });
+});
+
+test("intentional fixture rejects provider imports in Evaluation Input", () => {
+  expectFixtureViolation("EVALUATION_INPUT_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/domain/evaluation-input/provider.ts",
+    source: 'import { provider } from "../../../providers/kyb.js";',
+  });
+});
+
+test("intentional fixture rejects Attempt transition in Evaluation Input", () => {
+  expectFixtureViolation("EVALUATION_INPUT_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/domain/evaluation-input/workflow.ts",
+    source: "transitionAttemptProcess(attempt, 'running');",
+  });
+});
+
+test("intentional fixture rejects Evaluation Input runtime wiring", () => {
+  expectFixtureViolation("EVALUATION_INPUT_RUNTIME_WIRING", {
+    file: "server/organization-verification/worker.ts",
+    source:
+      'import { buildOrganizationVerificationPolicyEvaluationInput } from "./domain/evaluation-input/index.js";',
+  });
+});
+
+test("intentional fixture rejects reverse Projection dependency on Evaluation Input", () => {
+  expectFixtureViolation("FROZEN_DOMAIN_IMPORTS_EVALUATION_INPUT", {
+    file:
+      "server/organization-verification/domain/evaluation-projection/evaluationProjection.ts",
+    source:
+      'import type { OrganizationVerificationPolicyEvaluationInput } from "../evaluation-input/index.js";',
   });
 });
