@@ -84,6 +84,8 @@ type ArchitectureViolationCode =
   | "DECISION_TRUST_INTEGRATION_PUBLIC_EXPORT_LEAK"
   | "DECISION_TRUST_INTEGRATION_EXTERNAL_WIRING"
   | "DECISION_TRUST_INTEGRATION_TRUST_BOUNDARY"
+  | "CORE_AUTHENTICITY_PUBLIC_EXPORT_LEAK"
+  | "CORE_AUTHENTICITY_GUARD_UNAUTHORIZED_CONSUMER"
   | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
@@ -314,6 +316,65 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       file,
       "Public domain barrel exposes an internal helper or uncurated core module",
     );
+  }
+
+  if (
+    isDomainPublicIndex &&
+    /\b(?:recordAuthenticitySeal|revisionAuthenticitySeal|attemptAuthenticitySeal|authenticRecords|authenticRevisions|authenticAttempts|sealOrganizationVerificationRecord|sealOrganizationVerificationRevision|sealOrganizationVerificationAttempt)\b/.test(
+      input.source,
+    )
+  ) {
+    addViolation(
+      violations,
+      "CORE_AUTHENTICITY_PUBLIC_EXPORT_LEAK",
+      file,
+      "Core public surface exposes a private authenticity seal, registry, or stamping authority",
+    );
+  }
+
+  const coreAuthenticityGuardAuthorities: ReadonlyArray<{
+    readonly symbol: string;
+    readonly allowedSuffixes: readonly string[];
+  }> = [
+    {
+      symbol: "isOrganizationVerificationRecord",
+      allowedSuffixes: [
+        "/domain/record.ts",
+        "/domain/submission.ts",
+        "/domain/attempt.ts",
+        "/domain/index.ts",
+      ],
+    },
+    {
+      symbol: "isOrganizationVerificationRevision",
+      allowedSuffixes: [
+        "/domain/submission.ts",
+        "/domain/attempt.ts",
+        "/domain/index.ts",
+      ],
+    },
+    {
+      symbol: "isOrganizationVerificationAttempt",
+      allowedSuffixes: ["/domain/attempt.ts", "/domain/index.ts"],
+    },
+  ];
+  for (const authority of coreAuthenticityGuardAuthorities) {
+    const isApprovedLifecycleContract =
+      lowerFile.startsWith(
+        "server/organization-verification/application/attempt-lifecycle-contract/",
+      );
+    if (
+      new RegExp(`\\b${authority.symbol}\\b`).test(input.source) &&
+      !isApprovedLifecycleContract &&
+      !authority.allowedSuffixes.some((suffix) => lowerFile.endsWith(suffix))
+    ) {
+      addViolation(
+        violations,
+        "CORE_AUTHENTICITY_GUARD_UNAUTHORIZED_CONSUMER",
+        file,
+        authority.symbol,
+      );
+    }
   }
 
   if (
@@ -3039,4 +3100,69 @@ test("Decision–Trust integration rejects private Decision and Trust constructo
       source,
     });
   }
+});
+
+test("Core authenticity seals and stamping authorities remain private", () => {
+  for (const source of [
+    'export { recordAuthenticitySeal } from "./record.js";',
+    'export { revisionAuthenticitySeal } from "./submission.js";',
+    'export { attemptAuthenticitySeal } from "./attempt.js";',
+    'export { sealOrganizationVerificationAttempt } from "./attempt.js";',
+  ]) {
+    expectFixtureViolation("CORE_AUTHENTICITY_PUBLIC_EXPORT_LEAK", {
+      file: "server/organization-verification/domain/index.ts",
+      source,
+    });
+  }
+});
+
+test("Core authenticity guards reject unrelated application consumers", () => {
+  const fixtures = [
+    [
+      "server/organization-verification/eligibility.ts",
+      "isOrganizationVerificationRecord(value);",
+    ],
+    [
+      "server/organization-verification/workflow.ts",
+      "isOrganizationVerificationRevision(value);",
+    ],
+    [
+      "server/organization-verification/repository.ts",
+      "isOrganizationVerificationAttempt(value);",
+    ],
+    [
+      "server/marketplace/permissions.ts",
+      "isOrganizationVerificationAttempt(value);",
+    ],
+    [
+      "server/routes.ts",
+      "isOrganizationVerificationRecord(value);",
+    ],
+  ] as const;
+  for (const [file, source] of fixtures) {
+    expectFixtureViolation(
+      "CORE_AUTHENTICITY_GUARD_UNAUTHORIZED_CONSUMER",
+      { file, source },
+    );
+  }
+});
+
+test("Core authenticity guards are reserved for the Phase 8A.0 contract boundary", () => {
+  const violations = scanSourceFile({
+    file:
+      "server/organization-verification/application/attempt-lifecycle-contract/continuity.ts",
+    source: [
+      "isOrganizationVerificationRecord(record);",
+      "isOrganizationVerificationRevision(revision);",
+      "isOrganizationVerificationAttempt(attempt);",
+    ].join("\n"),
+  });
+  assert.equal(
+    violations.some(
+      (violation) =>
+        violation.code ===
+        "CORE_AUTHENTICITY_GUARD_UNAUTHORIZED_CONSUMER",
+    ),
+    false,
+  );
 });

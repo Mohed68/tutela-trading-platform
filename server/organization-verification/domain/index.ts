@@ -9,6 +9,7 @@ import * as organizationVerificationDecisionTrustIntegration from "./decision-tr
 
 export {
   createAttemptForRevision,
+  isOrganizationVerificationAttempt,
   transitionAttemptProcess,
   type AttemptCreationResult,
   type AttemptTransitionInput,
@@ -76,6 +77,7 @@ export {
 export {
   attachDraftToRecord,
   createOrganizationVerificationRecord,
+  isOrganizationVerificationRecord,
   type CreateVerificationRecordInput,
   type OrganizationVerificationRecord,
   type VerificationAttemptReference,
@@ -83,6 +85,7 @@ export {
 } from "./record.js";
 export type { OrganizationVerificationRevision } from "./revision.js";
 export {
+  isOrganizationVerificationRevision,
   submitDraftToRevision,
   type OrganizationVerificationSubmission,
   type SubmissionResult,

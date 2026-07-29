@@ -42,6 +42,37 @@ export interface CreateVerificationRecordInput {
   readonly createdAt: string;
 }
 
+const recordAuthenticitySeal = Symbol(
+  "organization-verification-record-authenticity",
+);
+const authenticRecords = new WeakSet<object>();
+
+function sealOrganizationVerificationRecord<T extends OrganizationVerificationRecord>(
+  record: T,
+): T {
+  Object.defineProperty(record, recordAuthenticitySeal, {
+    value: true,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+  authenticRecords.add(record);
+  return Object.freeze(record);
+}
+
+export function isOrganizationVerificationRecord(
+  value: unknown,
+): value is OrganizationVerificationRecord {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    authenticRecords.has(value) &&
+    Object.getOwnPropertyDescriptor(value, recordAuthenticitySeal)?.value ===
+      true &&
+    Object.isFrozen(value)
+  );
+}
+
 function validTimestamp(value: string): boolean {
   return value.length > 0 && Number.isFinite(Date.parse(value));
 }
@@ -57,7 +88,7 @@ export function createOrganizationVerificationRecord(
     return domainFailure("invalid_opaque_identifier");
   }
   return domainSuccess(
-    Object.freeze({
+    sealOrganizationVerificationRecord({
       recordId: input.recordId,
       organizationId: input.organizationId,
       revisions: Object.freeze([]),
@@ -73,6 +104,9 @@ export function attachDraftToRecord(
   record: OrganizationVerificationRecord,
   draft: OrganizationVerificationDraft,
 ): CoreDomainResult<OrganizationVerificationRecord> {
+  if (!isOrganizationVerificationRecord(record)) {
+    return domainFailure("mutable_input_rejected");
+  }
   if (draft.recordId !== record.recordId) {
     return domainFailure("record_id_mismatch");
   }
@@ -80,7 +114,7 @@ export function attachDraftToRecord(
     return domainFailure("organization_id_mismatch");
   }
   return domainSuccess(
-    Object.freeze({
+    sealOrganizationVerificationRecord({
       ...record,
       currentDraftId: draft.draftId,
       concurrencyVersion: record.concurrencyVersion + 1,
@@ -96,6 +130,9 @@ export function appendRevisionReference(
   reference: VerificationRevisionReference,
   submittedAt: string,
 ): CoreDomainResult<OrganizationVerificationRecord> {
+  if (!isOrganizationVerificationRecord(record)) {
+    return domainFailure("mutable_input_rejected");
+  }
   const last = record.revisions.at(-1);
   const expected = last ? Number(last.sequence) + 1 : 1;
   if (Number(reference.sequence) !== expected) {
@@ -109,7 +146,7 @@ export function appendRevisionReference(
     return domainFailure("non_monotonic_revision_sequence");
   }
   return domainSuccess(
-    Object.freeze({
+    sealOrganizationVerificationRecord({
       ...record,
       currentDraftId: undefined,
       revisions: Object.freeze([
@@ -128,6 +165,9 @@ export function appendAttemptReference(
   reference: VerificationAttemptReference,
   createdAt: string,
 ): CoreDomainResult<OrganizationVerificationRecord> {
+  if (!isOrganizationVerificationRecord(record)) {
+    return domainFailure("mutable_input_rejected");
+  }
   const last = record.attempts.at(-1);
   const expected = last ? Number(last.sequence) + 1 : 1;
   if (Number(reference.sequence) !== expected) {
@@ -144,7 +184,7 @@ export function appendAttemptReference(
     return domainFailure("record_id_mismatch");
   }
   return domainSuccess(
-    Object.freeze({
+    sealOrganizationVerificationRecord({
       ...record,
       revisions: Object.freeze([...record.revisions]),
       attempts: Object.freeze([

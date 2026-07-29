@@ -13,9 +13,11 @@ import type {
 } from "./ids.js";
 import {
   appendAttemptReference,
+  isOrganizationVerificationRecord,
   type OrganizationVerificationRecord,
 } from "./record.js";
 import type { OrganizationVerificationRevision } from "./revision.js";
+import { isOrganizationVerificationRevision } from "./submission.js";
 import {
   validateAttemptProcessTransition,
   type AttemptProcessState,
@@ -51,11 +53,48 @@ export interface AttemptCreationResult {
   readonly record: OrganizationVerificationRecord;
 }
 
+const attemptAuthenticitySeal = Symbol(
+  "organization-verification-attempt-authenticity",
+);
+const authenticAttempts = new WeakSet<object>();
+
+function sealOrganizationVerificationAttempt<T extends OrganizationVerificationAttempt>(
+  attempt: T,
+): T {
+  Object.defineProperty(attempt, attemptAuthenticitySeal, {
+    value: true,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+  authenticAttempts.add(attempt);
+  return Object.freeze(attempt);
+}
+
+export function isOrganizationVerificationAttempt(
+  value: unknown,
+): value is OrganizationVerificationAttempt {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    authenticAttempts.has(value) &&
+    Object.getOwnPropertyDescriptor(value, attemptAuthenticitySeal)?.value ===
+      true &&
+    Object.isFrozen(value)
+  );
+}
+
 export function createAttemptForRevision(
   record: OrganizationVerificationRecord,
   revision: OrganizationVerificationRevision,
   input: CreateAttemptInput,
 ): CoreDomainResult<AttemptCreationResult> {
+  if (
+    !isOrganizationVerificationRecord(record) ||
+    !isOrganizationVerificationRevision(revision)
+  ) {
+    return domainFailure("mutable_input_rejected");
+  }
   if (revision.recordId !== record.recordId) {
     return domainFailure("record_id_mismatch");
   }
@@ -76,19 +115,20 @@ export function createAttemptForRevision(
   if (!Number.isFinite(Date.parse(input.createdAt))) {
     return domainFailure("mutable_input_rejected");
   }
-  const attempt: OrganizationVerificationAttempt = Object.freeze({
-    attemptId: input.attemptId,
-    recordId: record.recordId,
-    revisionId: revision.revisionId,
-    sequence: input.sequence,
-    processState: "not_started",
-    ...(input.snapshotId ? { snapshotId: input.snapshotId } : {}),
-    ...(input.snapshotFingerprint
-      ? { snapshotFingerprint: input.snapshotFingerprint }
-      : {}),
-    createdAt: input.createdAt,
-    correlationId: input.correlationId,
-  });
+  const attempt: OrganizationVerificationAttempt =
+    sealOrganizationVerificationAttempt({
+      attemptId: input.attemptId,
+      recordId: record.recordId,
+      revisionId: revision.revisionId,
+      sequence: input.sequence,
+      processState: "not_started",
+      ...(input.snapshotId ? { snapshotId: input.snapshotId } : {}),
+      ...(input.snapshotFingerprint
+        ? { snapshotFingerprint: input.snapshotFingerprint }
+        : {}),
+      createdAt: input.createdAt,
+      correlationId: input.correlationId,
+    });
   const updatedRecord = appendAttemptReference(
     record,
     {
@@ -114,6 +154,9 @@ export function transitionAttemptProcess(
   current: OrganizationVerificationAttempt,
   input: AttemptTransitionInput,
 ): CoreDomainResult<OrganizationVerificationAttempt> {
+  if (!isOrganizationVerificationAttempt(current)) {
+    return domainFailure("mutable_input_rejected");
+  }
   if (!Number.isFinite(Date.parse(input.at))) {
     return domainFailure("mutable_input_rejected");
   }
@@ -135,7 +178,7 @@ export function transitionAttemptProcess(
     return domainFailure("mutable_input_rejected");
   }
   return domainSuccess(
-    Object.freeze({
+    sealOrganizationVerificationAttempt({
       ...current,
       processState: input.nextState,
       ...(input.nextState === "queued" ? { queuedAt: input.at } : {}),
