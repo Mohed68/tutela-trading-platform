@@ -140,10 +140,28 @@ export const ORGANIZATION_VERIFICATION_IDENTITY_LINEAGE = Object.freeze([
   }),
   Object.freeze({
     order: 8,
+    identity: "application_request_identity",
+    owner: "application_service_contract",
+    boundBy: "OrganizationVerificationApplicationExecution.requestIdentity",
+    parentIdentity: "replay_execution_id",
+    required: true,
+    consumers: Object.freeze([
+      "application_service_runtime",
+      "future_delivery_layer",
+    ]),
+    forbiddenCompetingOwners: Object.freeze([
+      "future_delivery_layer",
+      "replay_runtime",
+      "persistence_adapter",
+      "workflow_runtime",
+    ]),
+  }),
+  Object.freeze({
+    order: 9,
     identity: "application_execution_id",
     owner: "application_service_contract",
-    boundBy: "OrganizationVerificationApplicationExecution.streamIdentityFingerprint",
-    parentIdentity: "replay_execution_id",
+    boundBy: "OrganizationVerificationApplicationExecution.applicationExecutionId",
+    parentIdentity: "application_request_identity",
     required: true,
     consumers: Object.freeze([
       "application_service_runtime",

@@ -2513,7 +2513,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
 
   if (
     isApplicationServiceContractPublicIndex &&
-    /\b(?:applicationRequestSeal|applicationExecutionSeal|applicationResultSeal|authenticApplicationRequests|authenticApplicationExecutions|authenticApplicationResults|sealApplicationRequestInternal|sealApplicationExecutionInternal|sealApplicationResultInternal|createOrganizationVerificationApplicationExecutionInternal|createStartOrganizationVerificationSuccessInternal|createAdvanceOrganizationVerificationSuccessInternal|applicationFailureInternal|fingerprintApplicationServiceContract)\b/.test(
+    /\b(?:applicationRequestSeal|applicationExecutionSeal|applicationResultSeal|authenticApplicationRequests|authenticApplicationExecutions|authenticApplicationResults|sealApplicationRequestInternal|sealApplicationExecutionInternal|sealApplicationResultInternal|createOrganizationVerificationApplicationExecutionInternal|createStartOrganizationVerificationSuccessInternal|createAdvanceOrganizationVerificationSuccessInternal|createAdvanceCompletedResultInternal|createAdvanceIdempotentResultInternal|applicationFailureInternal|fingerprintApplicationServiceContract)\b/.test(
       input.source,
     )
   ) {
@@ -4566,6 +4566,65 @@ test("Application-service public surface protects private construction authority
     source:
       'export { applicationRequestSeal, createOrganizationVerificationApplicationExecutionInternal, fingerprintApplicationServiceContract } from "./internal.js";',
   });
+  expectFixtureViolation("APPLICATION_SERVICE_CONTRACT_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/application/application-service-contract/index.ts",
+    source:
+      'export { createAdvanceCompletedResultInternal, createAdvanceIdempotentResultInternal } from "./applicationServiceResults.js";',
+  });
+});
+
+test("Advance idempotent contract cannot contain Workflow Step Execution", () => {
+  const source = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/application-service-contract/applicationServiceResults.ts",
+    ),
+    "utf8",
+  );
+  const idempotentShape = source.match(
+    /interface AdvanceIdempotentSuccess[\s\S]*?\n}\n/,
+  )?.[0];
+  assert.ok(idempotentShape);
+  assert.equal(/\bworkflowStepExecution\b/.test(idempotentShape), false);
+  assert.equal(/\breplayExecution\b/.test(idempotentShape), true);
+  assert.equal(/\bpersistedAuthorityResult\b/.test(idempotentShape), true);
+});
+
+test("Workflow Step Execution remains derived, non-persisted, and unreplayed", () => {
+  const persistenceKinds = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/persistence-contract/evidenceKinds.ts",
+    ),
+    "utf8",
+  );
+  const replayContracts = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/replay-runtime/replayContracts.ts",
+    ),
+    "utf8",
+  );
+  const workflowRuntimePublicSurface = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/workflow-runtime/index.ts",
+    ),
+    "utf8",
+  );
+  assert.equal(
+    /["']workflow_step_execution["']/.test(persistenceKinds),
+    false,
+  );
+  assert.equal(
+    /reconstructedWorkflowStepExecution/.test(replayContracts),
+    false,
+  );
+  assert.equal(
+    /createWorkflowStepExecutionInternal/.test(workflowRuntimePublicSurface),
+    false,
+  );
 });
 
 test("Cross-layer conformance rejects infrastructure dependencies", () => {

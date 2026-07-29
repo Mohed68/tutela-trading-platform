@@ -77,12 +77,13 @@ test("identity lineage is complete, contiguous, required, and owner-explicit", (
       "workflow_execution_id",
       "persistence_stream_identity",
       "replay_execution_id",
+      "application_request_identity",
       "application_execution_id",
     ],
   );
   assert.deepEqual(
     lineage.map((entry) => entry.order),
-    [1, 2, 3, 4, 5, 6, 7, 8],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9],
   );
   for (let index = 0; index < lineage.length; index += 1) {
     const entry = lineage[index]!;
@@ -153,6 +154,47 @@ test("application fingerprint traces through Replay, Workflow, Persistence, and 
   ]) {
     assert.equal(reachable.has(expected), true);
   }
+});
+
+test("advance fingerprint lineage distinguishes fresh execution from idempotent retrieval", () => {
+  const bindings =
+    conformance.ORGANIZATION_VERIFICATION_ADVANCE_RESULT_FINGERPRINT_BINDINGS;
+  assert.equal(
+    bindings.advance_completed.workflowRuntimeExecutionOccurred,
+    true,
+  );
+  assert.equal(bindings.advance_completed.authorityExecutionOccurred, true);
+  assert.equal(
+    bindings.advance_completed.requiredEvidence.includes(
+      "workflow_step_execution_fingerprint",
+    ),
+    true,
+  );
+  assert.equal(
+    bindings.advance_idempotent.workflowRuntimeExecutionOccurred,
+    false,
+  );
+  assert.equal(bindings.advance_idempotent.authorityExecutionOccurred, false);
+  assert.equal(
+    bindings.advance_idempotent.requiredEvidence.includes(
+      "original_append_receipt_fingerprint",
+    ),
+    true,
+  );
+  assert.equal(
+    bindings.advance_idempotent.forbiddenEvidence.includes(
+      "workflow_step_execution_fingerprint",
+    ),
+    true,
+  );
+  assert.equal(
+    bindings.advance_completed.duplicateProofOwner,
+    "persistence_contract",
+  );
+  assert.equal(
+    bindings.advance_idempotent.duplicateProofOwner,
+    "persistence_contract",
+  );
 });
 
 test("conformance defines fingerprint relationships without a fingerprint calculator", async () => {
@@ -346,6 +388,7 @@ test("public conformance surface is inert data only", async () => {
   const publicSurface = await import("./index.js");
   const keys = Object.keys(publicSurface);
   assert.deepEqual(keys.sort(), [
+    "ORGANIZATION_VERIFICATION_ADVANCE_RESULT_FINGERPRINT_BINDINGS",
     "ORGANIZATION_VERIFICATION_APPLICATION_OWNED_FAILURES",
     "ORGANIZATION_VERIFICATION_FAILURE_LINEAGE",
     "ORGANIZATION_VERIFICATION_FINGERPRINT_LINEAGE",

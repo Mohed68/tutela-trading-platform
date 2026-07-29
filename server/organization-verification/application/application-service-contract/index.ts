@@ -62,6 +62,7 @@ export {
   type AdvanceOrganizationVerificationWorkflowResult,
   type LoadOrganizationVerificationStateResult,
   type OrganizationVerificationApplicationServiceResult,
+  type OrganizationVerificationPersistedWorkflowAuthorityResult,
   type OrganizationVerificationStateReadDiagnostics,
   type ReplayOrganizationVerificationHistoryResult,
   type StartOrganizationVerificationResult,

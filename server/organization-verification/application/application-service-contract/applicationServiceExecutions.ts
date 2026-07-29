@@ -33,6 +33,7 @@ export type OrganizationVerificationApplicationOutcome =
 export interface OrganizationVerificationApplicationExecution {
   readonly applicationExecutionId: string;
   readonly useCase: OrganizationVerificationApplicationUseCase;
+  readonly requestIdentity: string;
   readonly requestFingerprint: string;
   readonly outcome: OrganizationVerificationApplicationOutcome;
   readonly streamIdentityFingerprint: string;
@@ -63,6 +64,7 @@ export function createOrganizationVerificationApplicationExecutionInternal(
   if (
     !isExactApplicationIdentity(input.applicationExecutionId) ||
     !isOrganizationVerificationApplicationUseCase(input.useCase) ||
+    !isExactApplicationIdentity(input.requestIdentity) ||
     !ORGANIZATION_VERIFICATION_APPLICATION_OUTCOMES.some(
       (outcome) => outcome === input.outcome,
     ) ||

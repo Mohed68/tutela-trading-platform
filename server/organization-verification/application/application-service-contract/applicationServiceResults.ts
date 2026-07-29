@@ -5,6 +5,7 @@ import {
 import {
   isOrganizationVerificationEvidenceAppendReceipt,
   isOrganizationVerificationWorkflowStreamIdentity,
+  type OrganizationVerificationDurableEvidence,
   type OrganizationVerificationEvidenceAppendReceipt,
   type OrganizationVerificationWorkflowStreamIdentity,
 } from "../persistence-contract/index.js";
@@ -26,6 +27,21 @@ import {
   type OrganizationVerificationWorkflowAuthorityResult,
   type OrganizationVerificationWorkflowStepExecution,
 } from "../workflow-runtime/index.js";
+import {
+  isOrganizationVerificationDecisionTrustIntegrationExecution,
+} from "../../domain/decision-trust-integration/index.js";
+import {
+  isOrganizationVerificationPolicyEvaluationInput,
+} from "../../domain/evaluation-input/index.js";
+import {
+  isOrganizationVerificationEvaluationProjection,
+} from "../../domain/evaluation-projection/index.js";
+import {
+  isOrganizationVerificationEvidenceSnapshot,
+} from "../../domain/evidence-snapshot/index.js";
+import {
+  isOrganizationVerificationPolicyEvaluationExecution,
+} from "../../domain/policy-runtime/index.js";
 import {
   isApplicationResultAuthenticInternal,
   sealApplicationResultInternal,
@@ -55,25 +71,42 @@ export type StartOrganizationVerificationResult =
       failure: OrganizationVerificationApplicationFailure;
     }>;
 
-interface AdvanceSuccess {
+type PersistedAuthorityEvidence = Exclude<
+  OrganizationVerificationDurableEvidence,
+  | Readonly<{ evidenceKind: "workflow_genesis"; artifact: unknown }>
+  | Readonly<{ evidenceKind: "workflow_step_record"; artifact: unknown }>
+>;
+
+export type OrganizationVerificationPersistedWorkflowAuthorityResult =
+  PersistedAuthorityEvidence["artifact"];
+
+interface AdvanceSuccessBase {
   readonly applicationExecution: OrganizationVerificationApplicationExecution;
   readonly previousPersistenceStreamVersion: number;
   readonly resultingPersistenceStreamVersion: number;
   readonly previousWorkflowVersion: number;
   readonly resultingWorkflowVersion: number;
   readonly executedWorkflowStep: OrganizationVerificationWorkflowStep;
-  readonly authorityResult: OrganizationVerificationWorkflowAuthorityResult;
   readonly workflowStepRecord: OrganizationVerificationWorkflowStepRecord;
-  readonly workflowStepExecution: OrganizationVerificationWorkflowStepExecution;
   readonly appendReceipt: OrganizationVerificationEvidenceAppendReceipt;
   readonly currentWorkflowExecution: OrganizationVerificationWorkflowExecution;
   readonly currentLifecycleExecution: OrganizationVerificationAttemptLifecycleExecution;
   readonly terminalCoordinationReached: boolean;
 }
 
+interface AdvanceCompletedSuccess extends AdvanceSuccessBase {
+  readonly authorityResult: OrganizationVerificationWorkflowAuthorityResult;
+  readonly workflowStepExecution: OrganizationVerificationWorkflowStepExecution;
+}
+
+interface AdvanceIdempotentSuccess extends AdvanceSuccessBase {
+  readonly persistedAuthorityResult: OrganizationVerificationPersistedWorkflowAuthorityResult;
+  readonly replayExecution: OrganizationVerificationReplayExecution;
+}
+
 export type AdvanceOrganizationVerificationWorkflowResult =
-  | Readonly<AdvanceSuccess & { outcome: "advance_completed" }>
-  | Readonly<AdvanceSuccess & { outcome: "advance_idempotent" }>
+  | Readonly<AdvanceCompletedSuccess & { outcome: "advance_completed" }>
+  | Readonly<AdvanceIdempotentSuccess & { outcome: "advance_idempotent" }>
   | Readonly<{
       outcome: "advance_rejected";
       applicationExecution: OrganizationVerificationApplicationExecution;
@@ -174,47 +207,239 @@ export function createStartOrganizationVerificationSuccessInternal(
   return sealApplicationResultInternal({ outcome, ...value });
 }
 
-export function createAdvanceOrganizationVerificationSuccessInternal(
+function validAdvanceBase(
   outcome: "advance_completed" | "advance_idempotent",
-  value: AdvanceSuccess,
+  value: AdvanceSuccessBase,
+): boolean {
+  return (
+    authenticExecution(value.applicationExecution, outcome) &&
+    isOrganizationVerificationWorkflowStepRecord(value.workflowStepRecord) &&
+    isOrganizationVerificationWorkflowExecution(
+      value.currentWorkflowExecution,
+    ) &&
+    isOrganizationVerificationAttemptLifecycleExecution(
+      value.currentLifecycleExecution,
+    ) &&
+    isOrganizationVerificationEvidenceAppendReceipt(value.appendReceipt) &&
+    value.previousWorkflowVersion + 1 === value.resultingWorkflowVersion &&
+    value.workflowStepRecord.predecessorWorkflowExecutionVersion ===
+      value.previousWorkflowVersion &&
+    value.workflowStepRecord.nextWorkflowExecutionVersion ===
+      value.resultingWorkflowVersion &&
+    value.workflowStepRecord.requestedStep === value.executedWorkflowStep &&
+    value.previousPersistenceStreamVersion + 2 ===
+      value.resultingPersistenceStreamVersion &&
+    value.appendReceipt.previousStreamVersion ===
+      value.previousPersistenceStreamVersion &&
+    value.appendReceipt.resultingStreamVersion ===
+      value.resultingPersistenceStreamVersion &&
+    value.applicationExecution.requestIdentity.trim().length > 0 &&
+    value.applicationExecution.previousPersistenceStreamVersion ===
+      value.previousPersistenceStreamVersion &&
+    value.applicationExecution.resultingPersistenceStreamVersion ===
+      value.resultingPersistenceStreamVersion &&
+    value.applicationExecution.previousWorkflowVersion ===
+      value.previousWorkflowVersion &&
+    value.applicationExecution.resultingWorkflowVersion ===
+      value.resultingWorkflowVersion &&
+    value.applicationExecution.streamIdentityFingerprint ===
+      value.appendReceipt.streamIdentity.streamIdentityFingerprint &&
+    value.currentWorkflowExecution.lifecycleExecution ===
+      value.currentLifecycleExecution &&
+    value.terminalCoordinationReached ===
+      (value.currentWorkflowExecution.workflowStage === "completed")
+  );
+}
+
+function hasExactCanonicalFingerprintBinding(
+  execution: OrganizationVerificationApplicationExecution,
+  fingerprints: readonly string[],
+): boolean {
+  const expected = [...new Set(fingerprints)].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  return (
+    execution.lowerLayerFingerprints.length === expected.length &&
+    execution.lowerLayerFingerprints.every(
+      (fingerprint, index) => fingerprint === expected[index],
+    )
+  );
+}
+
+function hasExactEnumerableKeys(
+  value: object,
+  expectedKeys: readonly string[],
+): boolean {
+  const actual = Object.keys(value).sort((left, right) =>
+    left.localeCompare(right),
+  );
+  const expected = [...expectedKeys].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  return (
+    actual.length === expected.length &&
+    actual.every((key, index) => key === expected[index])
+  );
+}
+
+function persistedAuthorityFingerprint(
+  step: OrganizationVerificationWorkflowStep,
+  value: OrganizationVerificationPersistedWorkflowAuthorityResult,
+): string | undefined {
+  switch (step) {
+    case "attempt_transition":
+      return isOrganizationVerificationAttemptLifecycleExecution(value)
+        ? value.attemptLifecycleExecutionFingerprint
+        : undefined;
+    case "bind_snapshot":
+      return isOrganizationVerificationEvidenceSnapshot(value)
+        ? String(value.snapshotFingerprint)
+        : undefined;
+    case "bind_projection":
+      return isOrganizationVerificationEvaluationProjection(value)
+        ? String(value.projectionFingerprint)
+        : undefined;
+    case "bind_evaluation_input":
+      return isOrganizationVerificationPolicyEvaluationInput(value)
+        ? String(value.inputFingerprint)
+        : undefined;
+    case "complete_policy":
+      return isOrganizationVerificationPolicyEvaluationExecution(value)
+        ? String(value.executionFingerprint)
+        : undefined;
+    case "complete_decision_trust_integration":
+      return isOrganizationVerificationDecisionTrustIntegrationExecution(value)
+        ? String(value.executionFingerprint)
+        : undefined;
+  }
+}
+
+export function createAdvanceCompletedResultInternal(
+  value: AdvanceCompletedSuccess,
 ): AdvanceOrganizationVerificationWorkflowResult | undefined {
   const stepExecution = value.workflowStepExecution;
   if (
-    !authenticExecution(value.applicationExecution, outcome) ||
+    !hasExactEnumerableKeys(value, [
+      "applicationExecution",
+      "previousPersistenceStreamVersion",
+      "resultingPersistenceStreamVersion",
+      "previousWorkflowVersion",
+      "resultingWorkflowVersion",
+      "executedWorkflowStep",
+      "authorityResult",
+      "workflowStepRecord",
+      "workflowStepExecution",
+      "appendReceipt",
+      "currentWorkflowExecution",
+      "currentLifecycleExecution",
+      "terminalCoordinationReached",
+    ]) ||
+    !validAdvanceBase("advance_completed", value) ||
     !isOrganizationVerificationWorkflowStepExecution(stepExecution) ||
-    !isOrganizationVerificationWorkflowStepRecord(value.workflowStepRecord) ||
-    !isOrganizationVerificationWorkflowExecution(
-      value.currentWorkflowExecution,
-    ) ||
-    !isOrganizationVerificationAttemptLifecycleExecution(
-      value.currentLifecycleExecution,
-    ) ||
-    !isOrganizationVerificationEvidenceAppendReceipt(value.appendReceipt) ||
-    value.previousWorkflowVersion + 1 !== value.resultingWorkflowVersion ||
     value.resultingWorkflowVersion !==
       value.currentWorkflowExecution.workflowExecutionVersion ||
-    value.previousPersistenceStreamVersion + 2 !==
-      value.resultingPersistenceStreamVersion ||
-    value.appendReceipt.previousStreamVersion !==
-      value.previousPersistenceStreamVersion ||
-    value.appendReceipt.resultingStreamVersion !==
-      value.resultingPersistenceStreamVersion ||
     stepExecution.requestedStep !== value.executedWorkflowStep ||
     stepExecution.authorityResult !== value.authorityResult ||
     stepExecution.workflowStepRecord !== value.workflowStepRecord ||
     stepExecution.nextWorkflowExecution !== value.currentWorkflowExecution ||
-    value.currentWorkflowExecution.lifecycleExecution !==
-      value.currentLifecycleExecution ||
-    value.terminalCoordinationReached !==
-      (value.currentWorkflowExecution.workflowStage === "completed") ||
-    value.appendReceipt.outcome !==
-      (outcome === "advance_completed"
-        ? "appended"
-        : "duplicate_append_idempotent")
+    value.appendReceipt.outcome !== "appended" ||
+    value.appendReceipt.idempotentReplay !== false ||
+    !hasExactCanonicalFingerprintBinding(value.applicationExecution, [
+      stepExecution.workflowStepExecutionFingerprint,
+      value.workflowStepRecord.workflowStepBindingFingerprint,
+      value.appendReceipt.appendReceiptFingerprint,
+      value.currentWorkflowExecution.workflowExecutionFingerprint,
+      value.currentLifecycleExecution.attemptLifecycleExecutionFingerprint,
+    ])
   ) {
     return undefined;
   }
-  return sealApplicationResultInternal({ outcome, ...value });
+  return sealApplicationResultInternal({
+    outcome: "advance_completed" as const,
+    ...value,
+  });
+}
+
+export function createAdvanceIdempotentResultInternal(
+  value: AdvanceIdempotentSuccess,
+): AdvanceOrganizationVerificationWorkflowResult | undefined {
+  const replay = value.replayExecution;
+  const authorityFingerprint = persistedAuthorityFingerprint(
+    value.executedWorkflowStep,
+    value.persistedAuthorityResult,
+  );
+  const authorityBindings = isOrganizationVerificationReplayExecution(replay)
+    ? replay.authorityResultBindings.filter(
+        (binding) =>
+          binding.workflowStepId === value.workflowStepRecord.workflowStepId &&
+          binding.workflowStep === value.executedWorkflowStep &&
+          binding.resultingWorkflowVersion === value.resultingWorkflowVersion,
+      )
+    : [];
+  const authorityBinding = authorityBindings[0];
+  const appendedReferences = value.appendReceipt.appendedEvidenceReferences;
+  if (
+    !hasExactEnumerableKeys(value, [
+      "applicationExecution",
+      "previousPersistenceStreamVersion",
+      "resultingPersistenceStreamVersion",
+      "previousWorkflowVersion",
+      "resultingWorkflowVersion",
+      "executedWorkflowStep",
+      "persistedAuthorityResult",
+      "workflowStepRecord",
+      "appendReceipt",
+      "replayExecution",
+      "currentWorkflowExecution",
+      "currentLifecycleExecution",
+      "terminalCoordinationReached",
+    ]) ||
+    !validAdvanceBase("advance_idempotent", value) ||
+    authorityFingerprint === undefined ||
+    !isOrganizationVerificationReplayExecution(replay) ||
+    authorityBindings.length !== 1 ||
+    authorityBinding === undefined ||
+    authorityBinding.authorityResultFingerprint !== authorityFingerprint ||
+    authorityBinding.workflowStepRecordId !==
+      value.workflowStepRecord.workflowStepId ||
+    authorityBinding.workflowStepRecordFingerprint !==
+      value.workflowStepRecord.workflowStepBindingFingerprint ||
+    replay.workflowStepRecordBindings.filter(
+      (record) => record === value.workflowStepRecord,
+    ).length !== 1 ||
+    value.appendReceipt.outcome !== "duplicate_append_idempotent" ||
+    value.appendReceipt.idempotentReplay !== true ||
+    appendedReferences.length !== 2 ||
+    appendedReferences[0]?.streamPosition !==
+      authorityBinding.authorityResultPersistencePosition ||
+    appendedReferences[1]?.streamPosition !==
+      authorityBinding.workflowStepRecordPersistencePosition ||
+    replay.streamIdentity.streamIdentityFingerprint !==
+      value.appendReceipt.streamIdentity.streamIdentityFingerprint ||
+    replay.persistenceStreamVersion <
+      value.resultingPersistenceStreamVersion ||
+    replay.reconstructedWorkflowExecution !==
+      value.currentWorkflowExecution ||
+    replay.reconstructedAttemptLifecycleExecution !==
+      value.currentLifecycleExecution ||
+    value.currentWorkflowExecution.workflowExecutionVersion <
+      value.resultingWorkflowVersion ||
+    !hasExactCanonicalFingerprintBinding(value.applicationExecution, [
+      authorityFingerprint,
+      value.workflowStepRecord.workflowStepBindingFingerprint,
+      value.appendReceipt.appendReceiptFingerprint,
+      replay.replayFingerprint,
+      replay.sourceEvidenceStreamFingerprint,
+      value.currentWorkflowExecution.workflowExecutionFingerprint,
+      value.currentLifecycleExecution.attemptLifecycleExecutionFingerprint,
+    ])
+  ) {
+    return undefined;
+  }
+  return sealApplicationResultInternal({
+    outcome: "advance_idempotent" as const,
+    ...value,
+  });
 }
 
 export function createApplicationRejectedResultInternal(

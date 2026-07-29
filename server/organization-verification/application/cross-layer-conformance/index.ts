@@ -3,7 +3,9 @@ export {
   type OrganizationVerificationIdentityLineageEntry,
 } from "./identityLineage.js";
 export {
+  ORGANIZATION_VERIFICATION_ADVANCE_RESULT_FINGERPRINT_BINDINGS,
   ORGANIZATION_VERIFICATION_FINGERPRINT_LINEAGE,
+  type OrganizationVerificationAdvanceResultFingerprintBinding,
   type OrganizationVerificationFingerprintLineageEntry,
 } from "./fingerprintLineage.js";
 export {

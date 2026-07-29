@@ -156,11 +156,18 @@ The result union is:
 - `advance_idempotent`;
 - `advance_rejected`.
 
-A successful result binds one authentic Workflow Step Execution, its one
+`advance_completed` binds one authentic Workflow Step Execution, its one
 authority result, one Workflow Step Record, one append receipt, the resulting
 Workflow and Lifecycle state, exact before/after versions, and a coordination
 terminal indicator. Runtime success without persistence success cannot be an
 application success. No partial-success variant exists.
+
+`advance_idempotent` is structurally different. It contains no Workflow Step
+Execution and no fresh authority result. It binds the original persisted
+authority artifact, original Workflow Step Record, original duplicate append
+receipt, authentic Replay execution, Replay-reconstructed current Workflow and
+Lifecycle state, exact original before/after versions, and the current
+coordination terminal indicator.
 
 ## Stage-specific authority-input ownership
 
@@ -238,6 +245,7 @@ Phase 8D.0 introduces a minimal authentic
 only and binds:
 
 - application execution ID;
+- exact application request identity (`commandId` for command use cases);
 - exact use case and outcome;
 - request fingerprint;
 - stream identity fingerprint;
@@ -293,15 +301,18 @@ Persistence owns proof of exact append duplication. The application service
 owns interpretation of that proof.
 
 `commandId` and persistence `appendId` remain distinct explicit identities.
-The request fingerprint binds both. `appendId` plus the deterministic frozen
+The request fingerprint binds both, and application execution evidence carries
+the request identity explicitly. `appendId` plus the deterministic frozen
 append-batch semantics provides durable duplicate proof; `commandId` alone is
 never sufficient.
 
 The future service must determine exact duplication before invoking Workflow
 Runtime. It translates `duplicate_append_idempotent` to the corresponding
-successful application outcome and returns the original receipt and state.
-It must not rerun an authority, regenerate evidence, treat every stale version
-as idempotent, or return changed semantics.
+successful application outcome and returns the original durable authority
+artifact, original Workflow Step Record, original receipt, and
+Replay-reconstructed current state. It must not rerun Workflow Runtime or an
+authority, create a new Workflow Step Execution, regenerate evidence, treat
+every stale version as idempotent, or return changed semantics.
 
 ## Closed failure vocabulary
 
@@ -349,6 +360,13 @@ stream identity, expected versions/stage, requested step, authority-input
 fingerprint, explicit metadata, append identities, times, and references.
 Application execution fingerprints bind the request and lower-layer
 fingerprints without replacing them.
+
+For `advance_completed`, the lower-layer binding includes the authentic
+Workflow Step Execution. For `advance_idempotent`, the binding excludes any
+Workflow Step Execution and instead binds the persisted authority artifact,
+Workflow Step Record, original append receipt, Replay execution, persistence
+stream, and Replay-reconstructed current Workflow and Lifecycle state. The two
+outcomes therefore cannot share an application execution fingerprint.
 
 Canonicalization is property-order independent. Semantically unordered
 references are sorted; ordered evidence remains order-sensitive. Mutable
