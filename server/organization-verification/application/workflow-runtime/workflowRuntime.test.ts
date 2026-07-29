@@ -747,7 +747,7 @@ function executeStep(
   );
 }
 
-function buildRuntimeFixture() {
+export function buildRuntimeFixture() {
   const snapshotInput = snapshotAuthorityInput();
   const preparation = preparationInputs(snapshotInput);
   const chain = buildInitialChain(preparation.evidenceSnapshot);

@@ -35,6 +35,7 @@
     "test:organization-verification-attempt-lifecycle-runtime": "tsx --test server/organization-verification/application/attempt-lifecycle-runtime/attemptLifecycleRuntime.test.ts",
     "test:organization-verification-workflow-contract": "tsx --test server/organization-verification/application/workflow-contract/workflowContract.test.ts",
     "test:organization-verification-workflow-runtime": "tsx --test server/organization-verification/application/workflow-runtime/workflowRuntime.test.ts",
+    "test:organization-verification-persistence-contract": "tsx --test server/organization-verification/application/persistence-contract/persistenceContract.test.ts",
     "test:organization-verification-decision-domain": "tsx --test server/organization-verification/domain/decision/decision.test.ts",
     "test:organization-verification-trust-status-domain": "tsx --test server/organization-verification/domain/trust-status/trustStatus.test.ts",
     "test:organization-verification-policy-domain": "tsx --test server/organization-verification/domain/policy/policy.test.ts",

@@ -98,6 +98,11 @@ type ArchitectureViolationCode =
   | "WORKFLOW_CONTRACT_FORBIDDEN_AUTHORITY"
   | "WORKFLOW_CONTRACT_PUBLIC_EXPORT_LEAK"
   | "WORKFLOW_CONTRACT_EXTERNAL_WIRING"
+  | "PERSISTENCE_CONTRACT_FORBIDDEN_DEPENDENCY"
+  | "PERSISTENCE_CONTRACT_FORBIDDEN_AUTHORITY"
+  | "PERSISTENCE_CONTRACT_PUBLIC_EXPORT_LEAK"
+  | "PERSISTENCE_CONTRACT_IMPLEMENTATION"
+  | "PERSISTENCE_CONTRACT_EXTERNAL_WIRING"
   | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
@@ -260,6 +265,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isWorkflowRuntime = lowerFile.startsWith(
     "server/organization-verification/application/workflow-runtime/",
   );
+  const isPersistenceContract = lowerFile.startsWith(
+    "server/organization-verification/application/persistence-contract/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
@@ -316,6 +324,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isWorkflowRuntimePublicIndex = lowerFile.endsWith(
     "server/organization-verification/application/workflow-runtime/index.ts",
+  );
+  const isPersistenceContractPublicIndex = lowerFile.endsWith(
+    "server/organization-verification/application/persistence-contract/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -1123,6 +1134,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPolicyRuntimeDomain &&
     !isWorkflowContract &&
     !isWorkflowRuntime &&
+    !isPersistenceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1180,6 +1192,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isEvaluationInputDomain &&
     !isWorkflowContract &&
     !isWorkflowRuntime &&
+    !isPersistenceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1232,6 +1245,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isEvaluationProjectionDomain &&
     !isWorkflowContract &&
     !isWorkflowRuntime &&
+    !isPersistenceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1874,6 +1888,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isAttemptLifecycleRuntime &&
     !isWorkflowContract &&
     !isWorkflowRuntime &&
+    !isPersistenceContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)attempt-lifecycle-runtime(?:\/|$)/i.test(specifier),
     )
@@ -1892,6 +1907,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isAttemptLifecycleRuntime &&
     !isWorkflowContract &&
     !isWorkflowRuntime &&
+    !isPersistenceContract &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)attempt-lifecycle-contract(?:\/|$)/i.test(specifier),
@@ -1962,6 +1978,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     isOrganizationVerification &&
     !isWorkflowContract &&
     !isWorkflowRuntime &&
+    !isPersistenceContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)workflow-contract(?:\/|$)/i.test(specifier),
     )
@@ -2070,6 +2087,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     isOrganizationVerification &&
     !isWorkflowRuntime &&
+    !isPersistenceContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)workflow-runtime(?:\/|$)/i.test(specifier),
     )
@@ -2079,6 +2097,103 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "WORKFLOW_RUNTIME_EXTERNAL_WIRING",
       file,
       "Pure Workflow runtime must remain unwired before persistence or API integration",
+    );
+  }
+
+  if (isPersistenceContract) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "node:crypto" ||
+        specifier === "../attempt-lifecycle-contract/index.js" ||
+        specifier === "../workflow-contract/index.js" ||
+        specifier === "../../domain/evidence-snapshot/index.js" ||
+        specifier === "../../domain/evaluation-projection/index.js" ||
+        specifier === "../../domain/evaluation-input/index.js" ||
+        specifier === "../../domain/policy-runtime/index.js" ||
+        specifier ===
+          "../../domain/decision-trust-integration/index.js";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:db|database|schema|migrations?|storage|repositories?|routes?|controllers?|frontend|client|providers?|services?|startup|workers?|queues?|notifications?|permissions?|eligibility|unit-of-work|transactions?|infrastructure)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:node:fs|node:http|node:https|node:net|node:tls|node:dns)$/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "PERSISTENCE_CONTRACT_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:executeOrganizationVerificationWorkflowStep|executeOrganizationVerificationAttemptTransition|buildOrganizationVerificationEvidenceSnapshot|buildOrganizationVerificationEvaluationProjection|buildOrganizationVerificationPolicyEvaluationInput|executeOrganizationVerificationPolicyEvaluation|executeOrganizationVerificationDecisionTrustIntegration|transitionAttemptProcess|decideOrganizationVerification|deriveOrganizationVerificationTrustStatus)\s*\(/.test(
+        input.source,
+      ) ||
+      /\b(?:createOrganizationVerificationEvidenceSnapshotInternal|createOrganizationVerificationEvaluationProjectionInternal|createOrganizationVerificationPolicyEvaluationInputInternal|createOrganizationVerificationPolicyEvaluationExecutionInternal|createDecisionInternal|createTrustStatusInternal|createOrganizationVerificationDecisionTrustIntegrationExecutionInternal)\s*\(/.test(
+        input.source,
+      ) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bMath\.random\s*\(|\bas\s+unknown\s+as\b|\bas\s+never\b/.test(
+        input.source,
+      ) ||
+      /\b(?:ReplayEngine|WorkflowEngine|WorkflowCoordinator|UnitOfWork|ParticipationEligibility|PublicationEligibility)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "PERSISTENCE_CONTRACT_FORBIDDEN_AUTHORITY",
+        file,
+        "Persistence contracts attempted execution, replay, hidden input, or downstream authority",
+      );
+    }
+    if (
+      /\b(?:drizzle|sequelize|typeorm|prisma|knex|postgres|pgPool|sql\s*`|fetch\s*\(|readFile|writeFile|createConnection)\b/i.test(
+        input.source,
+      ) ||
+      /\bclass\s+\w*(?:Repository|Adapter|Store)\b/.test(input.source) ||
+      /\bnew\s+(?:Map|WeakMap|WeakSet)\s*</.test(input.source)
+    ) {
+      addViolation(
+        violations,
+        "PERSISTENCE_CONTRACT_IMPLEMENTATION",
+        file,
+        "Persistence boundary contains technology, storage, or repository implementation",
+      );
+    }
+  }
+
+  if (
+    isPersistenceContractPublicIndex &&
+    /\b(?:storedEvidenceSeal|appendBatchSeal|appendReceiptSeal|evidenceStreamSeal|streamIdentitySeal|authenticStoredEvidence|authenticAppendBatches|authenticAppendReceipts|authenticEvidenceStreams|authenticStreamIdentities|fingerprintPersistenceContract|expectedStoredEvidenceFingerprint|persistenceSuccess|persistenceFailure)\b/.test(
+      input.source,
+    )
+  ) {
+    addViolation(
+      violations,
+      "PERSISTENCE_CONTRACT_PUBLIC_EXPORT_LEAK",
+      file,
+      "Persistence contract exposes a seal, authenticity registry, canonical fingerprint helper, or result constructor",
+    );
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isPersistenceContract &&
+    !lowerFile.endsWith("/organization-verification/index.ts") &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)persistence-contract(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "PERSISTENCE_CONTRACT_EXTERNAL_WIRING",
+      file,
+      "Pure persistence ports remain unwired until an explicitly authorized application integration phase",
     );
   }
 
@@ -2108,6 +2223,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isDecisionTrustIntegrationDomain &&
     !isWorkflowContract &&
     !isWorkflowRuntime &&
+    !isPersistenceContract &&
     !isDomainPublicIndex &&
     specifiers.some((specifier) =>
       /(?:^|\/)policy-runtime(?:\/|$)/i.test(specifier),
@@ -2144,6 +2260,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isDecisionTrustIntegrationDomain &&
     !isWorkflowContract &&
     !isWorkflowRuntime &&
+    !isPersistenceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -3785,5 +3902,67 @@ test("Workflow runtime protects private execution evidence and remains unwired",
   expectFixtureViolation("WORKFLOW_RUNTIME_EXTERNAL_WIRING", {
     file: "server/organization-verification/application/api.ts",
     source: 'import { runtime } from "./workflow-runtime/index.js";',
+  });
+});
+
+test("Persistence contracts reject technology and infrastructure dependencies", () => {
+  for (const source of [
+    'import { db } from "../../../db.js";',
+    'import { sql } from "drizzle-orm";',
+    'import fs from "node:fs";',
+    'import { adapter } from "../../../infrastructure/persistence.js";',
+    'import { provider } from "../../../providers/evidence.js";',
+  ]) {
+    expectFixtureViolation("PERSISTENCE_CONTRACT_FORBIDDEN_DEPENDENCY", {
+      file:
+        "server/organization-verification/application/persistence-contract/forbidden.ts",
+      source,
+    });
+  }
+});
+
+test("Persistence contracts reject execution, replay, and hidden authority", () => {
+  for (const source of [
+    "executeOrganizationVerificationWorkflowStep(input);",
+    "executeOrganizationVerificationPolicyEvaluation(input);",
+    "const now = Date.now();",
+    "const secret = process.env.DATABASE_URL;",
+    "const engine: ReplayEngine = input;",
+  ]) {
+    expectFixtureViolation("PERSISTENCE_CONTRACT_FORBIDDEN_AUTHORITY", {
+      file:
+        "server/organization-verification/application/persistence-contract/bypass.ts",
+      source,
+    });
+  }
+});
+
+test("Persistence contracts reject repository and storage implementations", () => {
+  for (const source of [
+    "class PostgresRepository {}",
+    "const sql = db.sql`select 1`;",
+    "const records = new Map<string, unknown>();",
+  ]) {
+    expectFixtureViolation("PERSISTENCE_CONTRACT_IMPLEMENTATION", {
+      file:
+        "server/organization-verification/application/persistence-contract/implementation.ts",
+      source,
+    });
+  }
+});
+
+test("Persistence contract public surface protects seals and canonical helpers", () => {
+  expectFixtureViolation("PERSISTENCE_CONTRACT_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/application/persistence-contract/index.ts",
+    source:
+      'export { storedEvidenceSeal, fingerprintPersistenceContract } from "./internal.js";',
+  });
+});
+
+test("Persistence ports remain unwired before an adapter phase", () => {
+  expectFixtureViolation("PERSISTENCE_CONTRACT_EXTERNAL_WIRING", {
+    file: "server/organization-verification/application/api.ts",
+    source: 'import { repository } from "./persistence-contract/index.js";',
   });
 });
