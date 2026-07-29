@@ -90,6 +90,10 @@ type ArchitectureViolationCode =
   | "ATTEMPT_LIFECYCLE_CONTRACT_FORBIDDEN_AUTHORITY"
   | "ATTEMPT_LIFECYCLE_CONTRACT_PUBLIC_EXPORT_LEAK"
   | "ATTEMPT_LIFECYCLE_CONTRACT_EXTERNAL_WIRING"
+  | "ATTEMPT_LIFECYCLE_RUNTIME_FORBIDDEN_DEPENDENCY"
+  | "ATTEMPT_LIFECYCLE_RUNTIME_FORBIDDEN_AUTHORITY"
+  | "ATTEMPT_LIFECYCLE_RUNTIME_PUBLIC_EXPORT_LEAK"
+  | "ATTEMPT_LIFECYCLE_RUNTIME_EXTERNAL_WIRING"
   | "TRUST_STATUS_GUARD_UNAUTHORIZED_CONSUMER";
 
 interface ArchitectureViolation {
@@ -243,6 +247,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isAttemptLifecycleContract = lowerFile.startsWith(
     "server/organization-verification/application/attempt-lifecycle-contract/",
   );
+  const isAttemptLifecycleRuntime = lowerFile.startsWith(
+    "server/organization-verification/application/attempt-lifecycle-runtime/",
+  );
   const isOrganizationVerificationCoreDomain =
     lowerFile.startsWith("server/organization-verification/domain/") &&
     !isDecisionDomain &&
@@ -290,6 +297,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isAttemptLifecycleContractPublicIndex = lowerFile.endsWith(
     "server/organization-verification/application/attempt-lifecycle-contract/index.ts",
+  );
+  const isAttemptLifecycleRuntimePublicIndex = lowerFile.endsWith(
+    "server/organization-verification/application/attempt-lifecycle-runtime/index.ts",
   );
   const isArchitectureMarker =
     lowerFile.endsWith("/architecture.ts") ||
@@ -372,6 +382,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     const isApprovedLifecycleContract =
       lowerFile.startsWith(
         "server/organization-verification/application/attempt-lifecycle-contract/",
+      ) ||
+      lowerFile.startsWith(
+        "server/organization-verification/application/attempt-lifecycle-runtime/",
       );
     if (
       new RegExp(`\\b${authority.symbol}\\b`).test(input.source) &&
@@ -519,6 +532,21 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "ATTEMPT_LIFECYCLE_CONTRACT_PUBLIC_EXPORT_LEAK",
       file,
       "Attempt Lifecycle contract exposes a seal, constructor helper, canonicalization, or result internal",
+    );
+  }
+
+  if (
+    isAttemptLifecycleRuntimePublicIndex &&
+    (/\b(?:runtimeExecutionSeal|authenticRuntimeExecutions|createAttemptLifecycleTransitionExecutionInternal|fingerprintAttemptLifecycleRuntime|runtimeSuccess|runtimeFailure)\b/.test(
+      input.source,
+    ) ||
+      /export\s+\*\s+from\s+["']/.test(input.source))
+  ) {
+    addViolation(
+      violations,
+      "ATTEMPT_LIFECYCLE_RUNTIME_PUBLIC_EXPORT_LEAK",
+      file,
+      "Attempt Lifecycle runtime exposes a seal, constructor, fingerprint, or result internal",
     );
   }
 
@@ -1754,9 +1782,75 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     }
   }
 
+  if (isAttemptLifecycleRuntime) {
+    const isExecutor = lowerFile.endsWith(
+      "/application/attempt-lifecycle-runtime/executeattempttransition.ts",
+    );
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "node:crypto" ||
+        specifier === "../../domain/attempt.js" ||
+        specifier === "../../domain/ids.js" ||
+        specifier === "../../domain/errors.js" ||
+        specifier === "../attempt-lifecycle-contract/index.js";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:snapshot|projection|evaluation|policy|decision|trust|eligibility|workflow|marketplace|db|database|schema|migrations?|storage|repository|routes?|controllers?|workers?|queues?|providers?|services?|startup|frontend|client)(?:\/|\.|$)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "ATTEMPT_LIFECYCLE_RUNTIME_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      (!isExecutor && /\btransitionAttemptProcess\s*\(/.test(input.source)) ||
+      /\b(?:createAttemptForRevision|createOrganizationVerificationRecord|submitDraftToRevision)\s*\(/.test(
+        input.source,
+      ) ||
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bMath\.random\s*\(|\bas\s+unknown\s+as\b/.test(
+        input.source,
+      ) ||
+      /\b(?:ParticipationEligibility|WorkflowCoordinator|AttemptRepository)\b/.test(
+        input.source,
+      ) ||
+      /["'](?:failed|cancelled|retrying|expired|timed_out|restarted|lease_expired)["']/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "ATTEMPT_LIFECYCLE_RUNTIME_FORBIDDEN_AUTHORITY",
+        file,
+        "Attempt Lifecycle runtime attempted authority outside its sole executor, hidden input, construction, or excluded semantics",
+      );
+    }
+  }
+
+  if (
+    isOrganizationVerification &&
+    !isAttemptLifecycleRuntime &&
+    specifiers.some((specifier) =>
+      /(?:^|\/)attempt-lifecycle-runtime(?:\/|$)/i.test(specifier),
+    )
+  ) {
+    addViolation(
+      violations,
+      "ATTEMPT_LIFECYCLE_RUNTIME_EXTERNAL_WIRING",
+      file,
+      "Pure Attempt Lifecycle runtime must remain unwired before Phase 8B",
+    );
+  }
+
   if (
     isOrganizationVerification &&
     !isAttemptLifecycleContract &&
+    !isAttemptLifecycleRuntime &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)attempt-lifecycle-contract(?:\/|$)/i.test(specifier),
@@ -3311,5 +3405,58 @@ test("Attempt Lifecycle contract remains unwired before Phase 8A runtime", () =>
     file: "server/organization-verification/application/runtime.ts",
     source:
       'import { execution } from "./attempt-lifecycle-contract/index.js";',
+  });
+});
+
+test("Attempt Lifecycle runtime rejects infrastructure and downstream imports", () => {
+  for (const source of [
+    'import { db } from "../../../db.js";',
+    'import { policy } from "../../domain/policy/index.js";',
+    'import { workflow } from "../../../workflow/index.js";',
+    'import { repository } from "../../../repositories/attempt.js";',
+  ]) {
+    expectFixtureViolation(
+      "ATTEMPT_LIFECYCLE_RUNTIME_FORBIDDEN_DEPENDENCY",
+      {
+        file:
+          "server/organization-verification/application/attempt-lifecycle-runtime/forbidden.ts",
+        source,
+      },
+    );
+  }
+});
+
+test("Attempt Lifecycle runtime restricts transition authority to its sole executor", () => {
+  for (const source of [
+    "transitionAttemptProcess(attempt, input);",
+    "createAttemptForRevision(record, revision, input);",
+    "const now = Date.now();",
+    "const value = process.env.RUNTIME;",
+    'const state = "retrying";',
+  ]) {
+    expectFixtureViolation(
+      "ATTEMPT_LIFECYCLE_RUNTIME_FORBIDDEN_AUTHORITY",
+      {
+        file:
+          "server/organization-verification/application/attempt-lifecycle-runtime/bypass.ts",
+        source,
+      },
+    );
+  }
+});
+
+test("Attempt Lifecycle runtime protects private execution internals", () => {
+  expectFixtureViolation("ATTEMPT_LIFECYCLE_RUNTIME_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/application/attempt-lifecycle-runtime/index.ts",
+    source:
+      'export { runtimeExecutionSeal, createAttemptLifecycleTransitionExecutionInternal } from "./internal.js";',
+  });
+});
+
+test("Attempt Lifecycle runtime remains unwired before Phase 8B", () => {
+  expectFixtureViolation("ATTEMPT_LIFECYCLE_RUNTIME_EXTERNAL_WIRING", {
+    file: "server/organization-verification/application/workflow.ts",
+    source: 'import { runtime } from "./attempt-lifecycle-runtime/index.js";',
   });
 });
