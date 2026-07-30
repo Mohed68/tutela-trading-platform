@@ -52,7 +52,17 @@ export function assertRecoveryModeIsLocal(
 export function shouldRunStartupSeeding(
   environment: RecoveryEnvironment = process.env,
 ): boolean {
-  return !isRecoveryMode(environment);
+  return (
+    !isRecoveryMode(environment) &&
+    environment.NODE_ENV !== "production" &&
+    environment.RENDER === undefined
+  );
+}
+
+export function shouldRegisterDemoDataAdministration(
+  environment: RecoveryEnvironment = process.env,
+): boolean {
+  return shouldRunStartupSeeding(environment);
 }
 
 export function shouldInitializeExternalMonitoring(

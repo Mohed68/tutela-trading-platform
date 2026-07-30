@@ -5,6 +5,7 @@ import {
   isRecoveryMode,
   isSafeRecoveryRequest,
   shouldInitializeExternalMonitoring,
+  shouldRegisterDemoDataAdministration,
   shouldRunStartupSeeding,
 } from "./recoveryMode.js";
 import { safeErrorMessage } from "./safeErrors.js";
@@ -12,6 +13,10 @@ import { safeErrorMessage } from "./safeErrors.js";
 test("recovery mode is opt-in and preserves normal defaults", () => {
   assert.equal(isRecoveryMode({ NODE_ENV: "development" }), false);
   assert.equal(shouldRunStartupSeeding({ NODE_ENV: "development" }), true);
+  assert.equal(
+    shouldRegisterDemoDataAdministration({ NODE_ENV: "development" }),
+    true,
+  );
   assert.equal(
     shouldInitializeExternalMonitoring({ NODE_ENV: "development" }),
     true,
@@ -25,8 +30,19 @@ test("recovery mode disables startup seed and external monitoring", () => {
   };
   assert.equal(isRecoveryMode(environment), true);
   assert.equal(shouldRunStartupSeeding(environment), false);
+  assert.equal(shouldRegisterDemoDataAdministration(environment), false);
   assert.equal(shouldInitializeExternalMonitoring(environment), false);
   assert.doesNotThrow(() => assertRecoveryModeIsLocal(environment));
+});
+
+test("production and Render disable every demo-data mutation entry point", () => {
+  for (const environment of [
+    { NODE_ENV: "production" },
+    { NODE_ENV: "development", RENDER: "true" },
+  ]) {
+    assert.equal(shouldRunStartupSeeding(environment), false);
+    assert.equal(shouldRegisterDemoDataAdministration(environment), false);
+  }
 });
 
 test("recovery mode rejects production and Render environments", () => {

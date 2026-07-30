@@ -30,7 +30,10 @@ import {
 } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { resolveFilters } from "./filters/publicOffers";
-import { shouldRunStartupSeeding } from "./recoveryMode";
+import {
+  shouldRegisterDemoDataAdministration,
+  shouldRunStartupSeeding,
+} from "./recoveryMode";
 import { safeErrorMessage } from "./safeErrors";
 import { canon } from "@shared/constants/units";
 import {
@@ -998,8 +1001,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin routes for demo data management
-  app.post('/api/admin/seed-demo-data', async (req, res) => {
+  // Demo-data administration is local-only and requires authenticated admin
+  // authority. These destructive routes are not registered in production.
+  if (shouldRegisterDemoDataAdministration()) {
+    app.use('/api/admin', (req: any, _res, next) => {
+      req.storage = storage;
+      next();
+    });
+
+  app.post(
+    '/api/admin/seed-demo-data',
+    isAuthenticated,
+    requireAdminAuth,
+    requirePermission("settings:update"),
+    async (req, res) => {
     try {
       await seedDemoData();
       res.json({ 
@@ -1017,10 +1032,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: error.message 
       });
     }
-  });
+    },
+  );
 
   // Force production seeding endpoint (GET for easy browser access)
-  app.get('/api/admin/force-seed-production', async (req, res) => {
+  app.get(
+    '/api/admin/force-seed-production',
+    isAuthenticated,
+    requireAdminAuth,
+    requirePermission("settings:update"),
+    async (req, res) => {
     try {
       console.log("🔄 FORCE SEEDING: Clearing all existing data...");
       await clearDemoData();
@@ -1051,9 +1072,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: error.message 
       });
     }
-  });
+    },
+  );
 
-  app.delete('/api/admin/clear-demo-data', async (req, res) => {
+  app.delete(
+    '/api/admin/clear-demo-data',
+    isAuthenticated,
+    requireAdminAuth,
+    requirePermission("settings:update"),
+    async (req, res) => {
     try {
       await clearDemoData();
       res.json({ 
@@ -1068,7 +1095,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: error.message 
       });
     }
-  });
+    },
+  );
+  }
 
   // Public object serving endpoint
   app.get("/public-objects/:filePath(*)", async (req, res) => {
@@ -1400,7 +1429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }, 1000);
   } else {
-    console.warn("Controlled recovery mode: startup demo-data mutation disabled");
+    console.warn("Environment policy: startup demo-data mutation disabled");
   }
   
   return httpServer;
