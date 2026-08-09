@@ -338,6 +338,14 @@ async function diagnose(client: Client): Promise<void> {
         [JSON.stringify(EXPECTED_LEGACY_USERS)],
       )
     ).rows.map((row) => row.record);
+    const currentRows = (
+      await client.query<{ record: Record<string, unknown> }>(`
+        SELECT to_jsonb(source) AS record
+        FROM public.users AS source
+        WHERE source.recovery_provenance IS NULL
+        ORDER BY source.id
+      `)
+    ).rows.map((row) => row.record);
     const currentSnapshotHash = crypto
       .createHash("sha256")
       .update(JSON.stringify(currentRows))
@@ -352,14 +360,6 @@ async function diagnose(client: Client): Promise<void> {
     const emailVerificationStateSafe = currentRows.every(
       (row) => row.email_verified_at == null,
     );
-    const currentRows = (
-      await client.query<{ record: Record<string, unknown> }>(`
-        SELECT to_jsonb(source) AS record
-        FROM public.users AS source
-        WHERE source.recovery_provenance IS NULL
-        ORDER BY source.id
-      `)
-    ).rows.map((row) => row.record);
     if (
       currentRows.length !== referenceRows.length ||
       currentRows.some(
