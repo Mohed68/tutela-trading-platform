@@ -25,6 +25,24 @@ that repository SQL created pre-existing objects and does not modify protected
 or business data. Migration `0011` remains the only SQL execution authorized
 after the baseline is recorded.
 
+### Production execution result
+
+The guarded Render deployment completed successfully on 2026-08-10:
+
+- the read-only preflight matched the documented schema, protected-user, and
+  hardening fingerprints;
+- 11 provenance records were added to the previously empty migration journal;
+- all pre-existing records were marked as observed or verified without
+  claiming repository SQL execution;
+- migration `0011_self_service_registration` was applied and verified;
+- the application returned HTTP 200 from `/api/health` after a clean restart;
+- the permanent Render start command was restored to `npm run start`.
+
+Production smoke tests confirmed that `/demo` opens its browser-local
+dashboard without a 404, `/register` renders the registration form, malformed
+registration is rejected without creating an account, and the strict public
+marketplace continues to publish zero legacy offers.
+
 ## Production boundaries
 
 - Production startup never clears or seeds business data.
