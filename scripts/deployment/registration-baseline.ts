@@ -17,6 +17,89 @@ const EXPECTED_LEGACY_USER_HASH =
 const EXPECTED_LEGACY_OFFER_HASH =
   "b9492303d4d3bb157941fd3ed609438761eb85396e83861af4cfb5f77664c2fc";
 
+const EXPECTED_LEGACY_USERS = [
+  {
+    id: "demo-user-1",
+    email: "trader1@petromax.com",
+    first_name: "Sarah",
+    last_name: "Chen",
+    profile_image_url: null,
+    company_name: "PetroMax Energy Trading",
+    role: "senior_trader",
+    financial_rating: 8.5,
+    credit_rating: "AA-",
+    verified: true,
+    created_at: "2025-11-21T08:31:17.116Z",
+    updated_at: "2025-11-21T08:31:17.116Z",
+    password_hash: null,
+    auth_provider: null,
+    last_login_at: null,
+    login_enabled: null,
+    credential_status: null,
+    recovery_provenance: null,
+  },
+  {
+    id: "demo-user-2",
+    email: "manager@globalmetals.com",
+    first_name: "Marcus",
+    last_name: "Rodriguez",
+    profile_image_url: null,
+    company_name: "Global Metals Corp",
+    role: "commodity_manager",
+    financial_rating: 9.2,
+    credit_rating: "AAA",
+    verified: true,
+    created_at: "2025-11-21T08:31:17.333Z",
+    updated_at: "2025-11-21T08:31:17.333Z",
+    password_hash: null,
+    auth_provider: null,
+    last_login_at: null,
+    login_enabled: null,
+    credential_status: null,
+    recovery_provenance: null,
+  },
+  {
+    id: "demo-user-3",
+    email: "director@agrilink.com",
+    first_name: "Emma",
+    last_name: "Thompson",
+    profile_image_url: null,
+    company_name: "AgriLink International",
+    role: "trading_director",
+    financial_rating: 7.8,
+    credit_rating: "A+",
+    verified: true,
+    created_at: "2025-11-21T08:31:17.529Z",
+    updated_at: "2025-11-21T08:31:17.529Z",
+    password_hash: null,
+    auth_provider: null,
+    last_login_at: null,
+    login_enabled: null,
+    credential_status: null,
+    recovery_provenance: null,
+  },
+  {
+    id: "local-admin",
+    email: "admin@tutela.local",
+    first_name: "Local",
+    last_name: "Admin",
+    profile_image_url: null,
+    company_name: "Demo Company",
+    role: "admin",
+    financial_rating: 0,
+    credit_rating: "unrated",
+    verified: false,
+    created_at: "2025-11-26T11:22:46.731Z",
+    updated_at: "2025-11-26T11:22:46.731Z",
+    password_hash: null,
+    auth_provider: null,
+    last_login_at: null,
+    login_enabled: null,
+    credential_status: null,
+    recovery_provenance: null,
+  },
+] as const;
+
 const EXPECTED_ROW_COUNTS = new Map([
   ["neon_auth.users_sync", 1],
   ["public.activity_logs", 0],
@@ -239,6 +322,75 @@ async function inspect(client: Client): Promise<void> {
   }
 }
 
+async function diagnose(client: Client): Promise<void> {
+  await client.query("BEGIN READ ONLY");
+  try {
+    const referenceRows = (
+      await client.query<{ record: Record<string, unknown> }>(
+        `
+          SELECT to_jsonb(reference_user) AS record
+          FROM jsonb_populate_recordset(
+            null::public.users,
+            $1::jsonb
+          ) AS reference_user
+          ORDER BY reference_user.id
+        `,
+        [JSON.stringify(EXPECTED_LEGACY_USERS)],
+      )
+    ).rows.map((row) => row.record);
+    const referenceHash = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(referenceRows))
+      .digest("hex");
+    if (referenceHash !== EXPECTED_LEGACY_USER_HASH) {
+      throw new Error("DIAGNOSTIC_REFERENCE_PROFILE_MISMATCH");
+    }
+
+    const currentRows = (
+      await client.query<{ record: Record<string, unknown> }>(`
+        SELECT to_jsonb(source) AS record
+        FROM public.users AS source
+        WHERE source.recovery_provenance IS NULL
+        ORDER BY source.id
+      `)
+    ).rows.map((row) => row.record);
+    const expectedById = new Map(referenceRows.map((row) => [String(row.id), row]));
+    const differences = currentRows.map((current) => {
+      const id = String(current.id);
+      const expected = expectedById.get(id);
+      if (!expected) return { id, changedFields: ["unexpected_record"] };
+      const fields = new Set([...Object.keys(expected), ...Object.keys(current)]);
+      const changedFields = [...fields]
+        .filter(
+          (field) =>
+            JSON.stringify(current[field] ?? null) !==
+            JSON.stringify(expected[field] ?? null),
+        )
+        .sort();
+      return { id, changedFields };
+    });
+    for (const id of expectedById.keys()) {
+      if (!currentRows.some((row) => String(row.id) === id)) {
+        differences.push({ id, changedFields: ["missing_record"] });
+      }
+    }
+
+    await client.query("ROLLBACK");
+    console.log(
+      JSON.stringify({
+        mode: "read_only_legacy_user_diagnosis",
+        referenceProfileAuthenticated: true,
+        rowCount: currentRows.length,
+        differences,
+        writesPerformed: false,
+      }),
+    );
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  }
+}
+
 async function execute(client: Client): Promise<void> {
   await client.query("BEGIN");
   try {
@@ -297,7 +449,7 @@ async function execute(client: Client): Promise<void> {
 }
 
 const command = process.argv[2];
-if (!command || !["inspect", "execute"].includes(command)) {
+if (!command || !["inspect", "diagnose", "execute"].includes(command)) {
   console.error("REGISTRATION_BASELINE_COMMAND_REQUIRED");
   process.exit(1);
 }
@@ -310,6 +462,7 @@ const client = new Client({
 try {
   await client.connect();
   if (command === "inspect") await inspect(client);
+  if (command === "diagnose") await diagnose(client);
   if (command === "execute") await execute(client);
 } catch (error) {
   console.error(
