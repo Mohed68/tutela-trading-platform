@@ -399,6 +399,22 @@ async function diagnose(client: Client): Promise<void> {
       }
     }
     if (matchingMask === undefined) {
+      const candidateDifferences = currentRows.map((row, rowIndex) => ({
+        id: String(row.id),
+        candidateFields: candidateCells
+          .filter((cell) => cell.rowIndex === rowIndex)
+          .map((cell) => cell.field)
+          .sort(),
+      }));
+      console.log(
+        JSON.stringify({
+          mode: "read_only_legacy_user_diagnosis",
+          baselineReconstructedFromApprovedFingerprint: false,
+          candidateDifferences,
+          authoritativeClassification: false,
+          writesPerformed: false,
+        }),
+      );
       throw new Error("DIAGNOSTIC_BASELINE_NOT_RECONSTRUCTED");
     }
 
