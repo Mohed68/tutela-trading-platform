@@ -63,6 +63,8 @@
     "db:migrate:auth": "node scripts/run-auth-migration.mjs",
     "db:migrate:registration": "node scripts/run-registration-migration.mjs",
     "db:inspect:registration": "node scripts/run-registration-migration.mjs --inspect",
+    "db:inspect:registration-baseline": "node --import tsx scripts/deployment/registration-baseline.ts inspect",
+    "db:baseline:registration": "node --import tsx scripts/deployment/registration-baseline.ts execute",
     "verify": "npm run check && npm run build",
     "user:set-password": "node scripts/set-local-password.mjs"
   },

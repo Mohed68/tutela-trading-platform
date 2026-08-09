@@ -57,16 +57,33 @@ async function assertPrerequisites(client) {
 
   const predecessor = await client.query(
     `
-      SELECT execution_status
+      SELECT checksum, execution_status, sql_executed
       FROM public.tutela_migration_journal
       WHERE migration_identifier = '0010_verification_immutability'
     `,
   );
-  if (
-    predecessor.rowCount !== 1 ||
-    predecessor.rows[0].execution_status !== "succeeded"
-  ) {
+  if (predecessor.rowCount !== 1) {
     throw new Error("REGISTRATION_MIGRATION_PREDECESSOR_NOT_VERIFIED");
+  }
+  const predecessorEntry = predecessor.rows[0];
+  const predecessorSql = await readFile(
+    path.join(root, "migrations", "0010_verification_immutability.sql"),
+    "utf8",
+  );
+  const predecessorChecksum = crypto
+    .createHash("sha256")
+    .update(predecessorSql)
+    .digest("hex");
+  const predecessorStateValid =
+    (predecessorEntry.execution_status === "verified" &&
+      predecessorEntry.sql_executed === false) ||
+    (predecessorEntry.execution_status === "succeeded" &&
+      predecessorEntry.sql_executed === true);
+  if (
+    predecessorEntry.checksum !== predecessorChecksum ||
+    !predecessorStateValid
+  ) {
+    throw new Error("REGISTRATION_MIGRATION_PREDECESSOR_INVALID");
   }
 }
 
