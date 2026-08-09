@@ -38,3 +38,9 @@ values must be configured only in the deployment environment.
 email-verification token table and does not rewrite an existing user. Apply it
 only after the approved legacy and verification migrations have been verified
 on the intended disposable or production database.
+
+For a controlled existing-database upgrade, run
+`npm run db:migrate:registration`. The runner requires the verified 0010
+predecessor journal entry, records 0011 in the migration journal, verifies the
+new schema, and confirms that user, offer, and contract row counts did not
+change.

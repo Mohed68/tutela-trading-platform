@@ -61,6 +61,7 @@
     "migration:rehearsal": "node --env-file=.env --import tsx scripts/migration-rehearsal.ts",
     "db:push": "drizzle-kit push",
     "db:migrate:auth": "node scripts/run-auth-migration.mjs",
+    "db:migrate:registration": "node scripts/run-registration-migration.mjs",
     "verify": "npm run check && npm run build",
     "user:set-password": "node scripts/set-local-password.mjs"
   },
