@@ -338,14 +338,6 @@ async function diagnose(client: Client): Promise<void> {
         [JSON.stringify(EXPECTED_LEGACY_USERS)],
       )
     ).rows.map((row) => row.record);
-    const referenceHash = crypto
-      .createHash("sha256")
-      .update(JSON.stringify(referenceRows))
-      .digest("hex");
-    if (referenceHash !== EXPECTED_LEGACY_USER_HASH) {
-      throw new Error("DIAGNOSTIC_REFERENCE_PROFILE_MISMATCH");
-    }
-
     const currentRows = (
       await client.query<{ record: Record<string, unknown> }>(`
         SELECT to_jsonb(source) AS record
@@ -354,32 +346,80 @@ async function diagnose(client: Client): Promise<void> {
         ORDER BY source.id
       `)
     ).rows.map((row) => row.record);
-    const expectedById = new Map(referenceRows.map((row) => [String(row.id), row]));
-    const differences = currentRows.map((current) => {
-      const id = String(current.id);
-      const expected = expectedById.get(id);
-      if (!expected) return { id, changedFields: ["unexpected_record"] };
-      const fields = new Set([...Object.keys(expected), ...Object.keys(current)]);
-      const changedFields = [...fields]
-        .filter(
-          (field) =>
-            JSON.stringify(current[field] ?? null) !==
-            JSON.stringify(expected[field] ?? null),
-        )
-        .sort();
-      return { id, changedFields };
-    });
-    for (const id of expectedById.keys()) {
-      if (!currentRows.some((row) => String(row.id) === id)) {
-        differences.push({ id, changedFields: ["missing_record"] });
+    if (
+      currentRows.length !== referenceRows.length ||
+      currentRows.some(
+        (row, index) => String(row.id) !== String(referenceRows[index]?.id),
+      )
+    ) {
+      throw new Error("DIAGNOSTIC_USER_ID_SET_MISMATCH");
+    }
+
+    const candidateCells: Array<{
+      rowIndex: number;
+      field: string;
+      candidateValue: unknown;
+    }> = [];
+    for (const [rowIndex, current] of currentRows.entries()) {
+      const reference = referenceRows[rowIndex];
+      const fields = new Set([...Object.keys(reference), ...Object.keys(current)]);
+      for (const field of fields) {
+        if (
+          JSON.stringify(current[field] ?? null) !==
+          JSON.stringify(reference[field] ?? null)
+        ) {
+          candidateCells.push({
+            rowIndex,
+            field,
+            candidateValue: reference[field] ?? null,
+          });
+        }
       }
     }
+    if (candidateCells.length > 22) {
+      throw new Error("DIAGNOSTIC_SEARCH_SPACE_TOO_LARGE");
+    }
+
+    let matchingMask: number | undefined;
+    const combinations = 2 ** candidateCells.length;
+    for (let mask = 0; mask < combinations; mask += 1) {
+      const candidateRows = currentRows.map((row) => ({ ...row }));
+      for (const [cellIndex, cell] of candidateCells.entries()) {
+        if ((mask & 2 ** cellIndex) !== 0) {
+          candidateRows[cell.rowIndex][cell.field] = cell.candidateValue;
+        }
+      }
+      const hash = crypto
+        .createHash("sha256")
+        .update(JSON.stringify(candidateRows))
+        .digest("hex");
+      if (hash === EXPECTED_LEGACY_USER_HASH) {
+        matchingMask = mask;
+        break;
+      }
+    }
+    if (matchingMask === undefined) {
+      throw new Error("DIAGNOSTIC_BASELINE_NOT_RECONSTRUCTED");
+    }
+
+    const changedById = new Map<string, string[]>();
+    for (const [cellIndex, cell] of candidateCells.entries()) {
+      if ((matchingMask & 2 ** cellIndex) === 0) continue;
+      const id = String(currentRows[cell.rowIndex].id);
+      const fields = changedById.get(id) ?? [];
+      fields.push(cell.field);
+      changedById.set(id, fields);
+    }
+    const differences = currentRows.map((row) => ({
+      id: String(row.id),
+      changedFields: (changedById.get(String(row.id)) ?? []).sort(),
+    }));
 
     await client.query("ROLLBACK");
     console.log(
       JSON.stringify({
         mode: "read_only_legacy_user_diagnosis",
-        referenceProfileAuthenticated: true,
+        baselineReconstructedFromApprovedFingerprint: true,
         rowCount: currentRows.length,
         differences,
         writesPerformed: false,
