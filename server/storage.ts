@@ -1,5 +1,6 @@
 import {
   users,
+  emailVerificationTokens,
   commodities,
   offers,
   offerVerifications,
@@ -34,12 +35,21 @@ import {
   type TemporaryDocumentLink,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, like, sql } from "drizzle-orm";
+import { eq, desc, and, or, like, sql, isNull } from "drizzle-orm";
 import type { AuthenticationIdentity } from "@shared/auth";
 
 type UpsertUser = Partial<NewUser> & { id: string };
 type InsertOrder = typeof orders.$inferInsert;
 type PartnerRelationStatus = NonNullable<PartnerRelation["status"]>;
+
+export interface PendingLocalRegistration {
+  firstName: string;
+  lastName: string;
+  email: string;
+  passwordHash: string;
+  tokenDigest: string;
+  tokenExpiresAt: Date;
+}
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
@@ -49,6 +59,18 @@ export interface IStorage {
   getAuthenticationUserByEmail(email: string): Promise<AuthenticationIdentity | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateLastLogin(userId: string): Promise<void>;
+  createPendingLocalRegistration(
+    registration: PendingLocalRegistration,
+  ): Promise<{ id: string; email: string; createdNew: boolean } | null>;
+  activateLocalRegistration(
+    tokenDigest: string,
+    verifiedAt: Date,
+  ): Promise<AuthenticationIdentity | undefined>;
+  discardPendingLocalRegistrationAttempt(input: {
+    userId: string;
+    tokenDigest: string;
+    removeAccount: boolean;
+  }): Promise<void>;
   updateUserPreferences(userId: string, preferences: {
     language?: string;
     timezone?: string;
@@ -178,6 +200,10 @@ export class DatabaseStorage implements IStorage {
       credentialStatus: users.credentialStatus,
       recoveryProvenance: users.recoveryProvenance,
       role: users.role,
+      emailVerifiedAt: users.emailVerifiedAt,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      companyName: users.companyName,
     };
   }
 
@@ -203,6 +229,139 @@ export class DatabaseStorage implements IStorage {
 
   async updateLastLogin(userId: string): Promise<void> {
     await db.update(users).set({ lastLoginAt: new Date(), updatedAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  async createPendingLocalRegistration(
+    registration: PendingLocalRegistration,
+  ): Promise<{ id: string; email: string; createdNew: boolean } | null> {
+    return db.transaction(async (transaction) => {
+      const [created] = await transaction
+        .insert(users)
+        .values({
+          email: registration.email,
+          firstName: registration.firstName,
+          lastName: registration.lastName,
+          passwordHash: registration.passwordHash,
+          authProvider: "local",
+          emailVerifiedAt: null,
+          loginEnabled: false,
+          credentialStatus: "active",
+          recoveryProvenance: null,
+          role: "trader",
+          verified: false,
+        })
+        .onConflictDoNothing({ target: users.email })
+        .returning({ id: users.id, email: users.email });
+
+      if (!created?.email) {
+        const [pending] = await transaction
+          .select({ id: users.id, email: users.email })
+          .from(users)
+          .where(
+            and(
+              eq(users.email, registration.email),
+              eq(users.authProvider, "local"),
+              eq(users.loginEnabled, false),
+              eq(users.credentialStatus, "active"),
+              isNull(users.emailVerifiedAt),
+              isNull(users.recoveryProvenance),
+            ),
+          )
+          .limit(1);
+        if (!pending?.email) return null;
+
+        await transaction.insert(emailVerificationTokens).values({
+          userId: pending.id,
+          tokenDigest: registration.tokenDigest,
+          expiresAt: registration.tokenExpiresAt,
+        });
+        return { id: pending.id, email: pending.email, createdNew: false };
+      }
+
+      await transaction.insert(emailVerificationTokens).values({
+        userId: created.id,
+        tokenDigest: registration.tokenDigest,
+        expiresAt: registration.tokenExpiresAt,
+      });
+
+      return { id: created.id, email: created.email, createdNew: true };
+    });
+  }
+
+  async activateLocalRegistration(
+    tokenDigest: string,
+    verifiedAt: Date,
+  ): Promise<AuthenticationIdentity | undefined> {
+    return db.transaction(async (transaction) => {
+      const [token] = await transaction
+        .select({
+          id: emailVerificationTokens.id,
+          userId: emailVerificationTokens.userId,
+          expiresAt: emailVerificationTokens.expiresAt,
+        })
+        .from(emailVerificationTokens)
+        .where(
+          and(
+            eq(emailVerificationTokens.tokenDigest, tokenDigest),
+            isNull(emailVerificationTokens.consumedAt),
+          ),
+        )
+        .limit(1)
+        .for("update");
+
+      if (!token || token.expiresAt.getTime() <= verifiedAt.getTime()) {
+        return undefined;
+      }
+
+      await transaction
+        .update(emailVerificationTokens)
+        .set({ consumedAt: verifiedAt })
+        .where(
+          and(
+            eq(emailVerificationTokens.userId, token.userId),
+            isNull(emailVerificationTokens.consumedAt),
+          ),
+        );
+      await transaction
+        .update(users)
+        .set({
+          emailVerifiedAt: verifiedAt,
+          loginEnabled: true,
+          credentialStatus: "active",
+          updatedAt: verifiedAt,
+        })
+        .where(eq(users.id, token.userId));
+
+      const [identity] = await transaction
+        .select(this.authenticationProjection())
+        .from(users)
+        .where(eq(users.id, token.userId));
+      return identity;
+    });
+  }
+
+  async discardPendingLocalRegistrationAttempt(input: {
+    userId: string;
+    tokenDigest: string;
+    removeAccount: boolean;
+  }): Promise<void> {
+    await db.transaction(async (transaction) => {
+      await transaction
+        .delete(emailVerificationTokens)
+        .where(eq(emailVerificationTokens.tokenDigest, input.tokenDigest));
+      if (!input.removeAccount) return;
+
+      await transaction
+        .delete(users)
+        .where(
+          and(
+            eq(users.id, input.userId),
+            eq(users.loginEnabled, false),
+            isNull(users.emailVerifiedAt),
+            isNull(users.recoveryProvenance),
+          ),
+        );
+    });
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {

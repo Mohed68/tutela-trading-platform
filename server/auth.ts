@@ -11,6 +11,15 @@ import { storage } from "./storage";
 import { hashPassword, verifyPassword } from "./password";
 import { isRecoveryMode } from "./recoveryMode";
 import {
+  activateLocalAccount,
+  registerLocalAccount,
+  registrationSchema,
+} from "./registration";
+import {
+  createResendVerificationEmailSender,
+  getVerificationEmailConfiguration,
+} from "./verificationEmail";
+import {
   ACTIVE_CREDENTIAL_STATUS,
   LOCAL_AUTH_PROVIDER,
   RECOVERY_PROVENANCE,
@@ -68,14 +77,17 @@ function toPassportUser(user: AuthenticationIdentity): Express.User {
 export function isLocallyAuthenticatable(
   user: AuthenticationIdentity | undefined,
 ): user is AuthenticationIdentity & { passwordHash: string } {
+  if (!user) return false;
+  const hasApprovedAuthority =
+    user.recoveryProvenance === RECOVERY_PROVENANCE ||
+    (user.recoveryProvenance === null && user.emailVerifiedAt instanceof Date);
   return Boolean(
-    user &&
       user.authProvider === LOCAL_AUTH_PROVIDER &&
       user.loginEnabled === true &&
       user.credentialStatus === ACTIVE_CREDENTIAL_STATUS &&
       user.passwordHash &&
       user.role === "trader" &&
-      user.recoveryProvenance === RECOVERY_PROVENANCE,
+      hasApprovedAuthority,
   );
 }
 
@@ -85,14 +97,18 @@ export function toCurrentUserDto(
   if (!isLocallyAuthenticatable(user)) {
     throw new Error("AUTHENTICATION_AUTHORITY_REQUIRED");
   }
+  const recoveryAccount = user.recoveryProvenance === RECOVERY_PROVENANCE;
+  const displayName = recoveryAccount
+    ? "Recovery trader"
+    : [user.firstName, user.lastName].filter(Boolean).join(" ") || null;
   return {
     id: user.id,
-    displayName: "Recovery trader",
+    displayName,
     role: "trader",
     authenticated: true,
     accountState: "active",
-    organizationDisplayName: null,
-    emailVerified: "unknown",
+    organizationDisplayName: user.companyName ?? null,
+    emailVerified: recoveryAccount ? "unknown" : "verified",
     userVerified: "unknown",
     kybState: "unknown",
     organizationVerification: "unknown",
@@ -141,6 +157,16 @@ const authLimiter = rateLimit({
   message: { message: "Too many authentication attempts. Please try again later." },
 });
 
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Too many registration attempts. Please try again later.",
+  },
+});
+
 const loginSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
   password: z.string().min(1),
@@ -182,8 +208,67 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/login", (_req, res) => res.redirect("/login"));
 
-  app.post("/api/auth/register", (_req, res) => {
-    res.status(403).json({ message: "Registration is unavailable." });
+  app.post("/api/auth/register", registrationLimiter, async (req, res, next) => {
+    const parsed = registrationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        message:
+          "Enter a valid name, email, and a 12-character password containing uppercase, lowercase, and numeric characters.",
+      });
+    }
+
+    const configuration = getVerificationEmailConfiguration();
+    if (!configuration) {
+      return res.status(503).json({
+        message: "Account registration is temporarily unavailable.",
+      });
+    }
+
+    try {
+      await registerLocalAccount(parsed.data, {
+        storage,
+        sender: createResendVerificationEmailSender(configuration),
+        applicationBaseUrl: configuration.applicationBaseUrl,
+      });
+      return res.status(202).json({
+        message:
+          "If the address can be registered, a verification email will arrive shortly.",
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "EMAIL_VERIFICATION_DELIVERY_FAILED"
+      ) {
+        return res.status(503).json({
+          message: "Account registration is temporarily unavailable.",
+        });
+      }
+      return next(error);
+    }
+  });
+
+  app.post("/api/auth/verify-email", authLimiter, async (req, res, next) => {
+    try {
+      const identity = await activateLocalAccount(req.body?.token, { storage });
+      if (!identity || !isLocallyAuthenticatable(identity)) {
+        return res.status(400).json({
+          message: "This verification link is invalid or has expired.",
+        });
+      }
+
+      const passportUser = toPassportUser(identity);
+      req.login(passportUser, (error) => {
+        if (error) return next(error);
+        return res.json(toCurrentUserDto(identity));
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "This verification link is invalid or has expired.",
+        });
+      }
+      return next(error);
+    }
   });
 
   app.post("/api/auth/login", authLimiter, (req, res, next) => {

@@ -14,6 +14,7 @@ const REQUIRED_USER_COLUMNS = [
 const REQUIRED_TABLES = [
   "users",
   "sessions",
+  "email_verification_tokens",
   "offer_submission_revisions",
   "offer_verification_attempts",
   "offer_verification_findings",

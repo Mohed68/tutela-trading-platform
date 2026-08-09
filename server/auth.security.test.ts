@@ -50,6 +50,27 @@ test("local authentication requires every approved authority predicate", () => {
   }
 });
 
+test("verified self-registered traders authenticate without recovery authority", () => {
+  assert.equal(
+    isLocallyAuthenticatable(
+      recoveryIdentity({
+        recoveryProvenance: null,
+        emailVerifiedAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    isLocallyAuthenticatable(
+      recoveryIdentity({
+        recoveryProvenance: null,
+        emailVerifiedAt: null,
+      }),
+    ),
+    false,
+  );
+});
+
 test("current-user DTO is an explicit minimal allow-list", () => {
   const dto = toCurrentUserDto(
     recoveryIdentity() as AuthenticationIdentity & { passwordHash: string },
@@ -102,7 +123,7 @@ test("session cookie defaults stay secure by environment", () => {
   });
 });
 
-test("public registration remains disabled outside the recovery guard", async () => {
+test("public registration rejects invalid account input before persistence", async () => {
   const app = express();
   app.use(express.json());
   await setupAuth(app);
@@ -122,9 +143,10 @@ test("public registration remains disabled outside the recovery guard", async ()
         }),
       },
     );
-    assert.equal(response.status, 403);
+    assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), {
-      message: "Registration is unavailable.",
+      message:
+        "Enter a valid name, email, and a 12-character password containing uppercase, lowercase, and numeric characters.",
     });
   } finally {
     await new Promise<void>((resolve, reject) => {

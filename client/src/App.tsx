@@ -22,6 +22,8 @@ import FAQ from "@/pages/faq";
 import Demo from "@/pages/demo";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
+import RegistrationPending from "@/pages/registration-pending";
+import VerifyEmail from "@/pages/verify-email";
 
 // App Pages  
 import Landing from "@/pages/landing";
@@ -55,6 +57,12 @@ function Router() {
       </Route>
       <Route path="/register">
         <PublicLayout><Register /></PublicLayout>
+      </Route>
+      <Route path="/registration-pending">
+        <PublicLayout><RegistrationPending /></PublicLayout>
+      </Route>
+      <Route path="/verify-email">
+        <PublicLayout><VerifyEmail /></PublicLayout>
       </Route>
 
       {/* Public Marketing Pages */}

@@ -85,6 +85,30 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const emailVerificationTokens = pgTable(
+  "email_verification_tokens",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenDigest: varchar("token_digest", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("email_verification_tokens_digest_unique").on(
+      table.tokenDigest,
+    ),
+    index("email_verification_tokens_user_idx").on(table.userId),
+    check(
+      "email_verification_tokens_digest_check",
+      sql`${table.tokenDigest} ~ '^[a-f0-9]{64}$'`,
+    ),
+  ],
+);
+
 export const commodityTypeEnum = pgEnum("commodity_type", [
   "fuel_hydrocarbons",
   "metals_precious",

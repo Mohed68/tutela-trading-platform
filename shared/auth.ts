@@ -12,6 +12,10 @@ export interface AuthenticationIdentity {
   credentialStatus: string | null;
   recoveryProvenance: string | null;
   role: string | null;
+  emailVerifiedAt?: Date | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  companyName?: string | null;
 }
 
 export interface CurrentUserDto {
@@ -20,10 +24,9 @@ export interface CurrentUserDto {
   role: "trader";
   authenticated: true;
   accountState: "active";
-  organizationDisplayName: null;
-  emailVerified: "unknown";
+  organizationDisplayName: string | null;
+  emailVerified: "verified" | "unknown";
   userVerified: "unknown";
   kybState: "unknown";
   organizationVerification: "unknown";
 }
-

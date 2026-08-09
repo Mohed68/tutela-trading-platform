@@ -1,4 +1,9 @@
 // Demo mode functionality
+import type {
+  PublicMarketplaceOffer,
+  PublicMarketplaceSummary,
+} from "@shared/marketplace";
+
 export type DemoMode = "verified" | "pending";
 
 const DEMO_OFFERS = [
@@ -481,4 +486,101 @@ export function getDemoData(key: string): any {
 // Helper to get demo offers directly
 export function getDemoOffers() {
   return DEMO_OFFERS;
+}
+
+const DEMO_COMMODITIES: Record<
+  string,
+  { name: string; category: string }
+> = {
+  c1: { name: "Crude Oil", category: "fuel_hydrocarbons" },
+  c2: { name: "Gold", category: "metals_precious" },
+  c3: { name: "Wheat", category: "agricultural" },
+  c4: { name: "Brent Crude Oil", category: "fuel_hydrocarbons" },
+  c5: { name: "Gasoline", category: "fuel_hydrocarbons" },
+  c6: { name: "Diesel", category: "fuel_hydrocarbons" },
+  c7: { name: "Silver", category: "metals_precious" },
+  c8: { name: "Copper", category: "metals_precious" },
+  c9: { name: "Aluminum", category: "metals_precious" },
+  c10: { name: "Corn", category: "agricultural" },
+  c11: { name: "Soybeans", category: "agricultural" },
+  c12: { name: "Sugar", category: "agricultural" },
+};
+
+export function getDemoMarketplaceOffers(): PublicMarketplaceOffer[] {
+  return DEMO_OFFERS.map((offer) => {
+    const commodity = DEMO_COMMODITIES[offer.commodityId] ?? {
+      name: "Demo Commodity",
+      category: "agricultural",
+    };
+
+    return {
+      id: offer.id,
+      offerType: offer.type as "buy" | "sell",
+      commodity: {
+        id: offer.commodityId,
+        name: commodity.name,
+        category: commodity.category,
+      },
+      quantity: {
+        value: String(offer.quantity),
+        unit: offer.unit,
+      },
+      pricing: {
+        amountPerUnit: String(offer.price),
+        currency: offer.currency,
+      },
+      location: offer.location,
+      terms: {
+        minimumQuantity: String(offer.minOrderQty),
+        delivery: offer.deliveryTerms,
+        payment: "Demo terms",
+        validUntil: offer.validUntil,
+      },
+      status: "active",
+      trust: {
+        offerVerification: { state: "verified" },
+        sellerOrganizationVerification: { state: "verified" },
+      },
+      visibility: { state: "published" },
+      seller: { displayName: offer.seller },
+      normalization: {
+        targetUnit: null,
+        quantity: null,
+        amountPerUnit: null,
+        converted: false,
+        convertible: false,
+      },
+      createdAt: null,
+      updatedAt: null,
+    };
+  });
+}
+
+export function getDemoMarketplaceSummary(): PublicMarketplaceSummary {
+  const offers = getDemoMarketplaceOffers();
+  const prices = offers.map((offer) => Number(offer.pricing.amountPerUnit));
+  const marketValueUsd = offers.reduce(
+    (total, offer) =>
+      total +
+      Number(offer.quantity.value) * Number(offer.pricing.amountPerUnit),
+    0,
+  );
+  const sorted = [...prices].sort((left, right) => left - right);
+  const percentile = (ratio: number) =>
+    sorted[Math.floor((sorted.length - 1) * ratio)] ?? null;
+
+  return {
+    activeOffers: offers.length,
+    publishedOffers: offers.length,
+    marketValueUsd,
+    avgPrice:
+      prices.length > 0
+        ? prices.reduce((total, price) => total + price, 0) / prices.length
+        : null,
+    avgPriceCount: prices.length,
+    avgPriceCoverage: { used: prices.length, skipped: 0 },
+    median: percentile(0.5),
+    p25: percentile(0.25),
+    p75: percentile(0.75),
+  };
 }

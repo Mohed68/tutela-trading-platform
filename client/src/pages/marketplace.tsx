@@ -15,8 +15,14 @@ import type {
   PublicMarketplaceOffersResponse,
   PublicMarketplaceSummary,
 } from "@shared/marketplace";
+import {
+  getDemoMarketplaceOffers,
+  getDemoMarketplaceSummary,
+  isDemo,
+} from "@/lib/demo";
 
 export default function Marketplace() {
+  const demoMode = isDemo();
   // URL state management
   const [location, navigate] = useLocation();
   const urlParams = new URLSearchParams(location.split('?')[1] || '');
@@ -72,9 +78,11 @@ export default function Marketplace() {
       return response.json();
     },
     retry: false,
+    enabled: !demoMode,
   });
 
-  const offers = offersResponse?.offers ?? [];
+  const demoOffers = demoMode ? getDemoMarketplaceOffers() : [];
+  const offers = demoMode ? demoOffers : (offersResponse?.offers ?? []);
 
   // Fetch enhanced summary with VWAP data
   const { data: summary } = useQuery<PublicMarketplaceSummary>({
@@ -96,7 +104,9 @@ export default function Marketplace() {
       if (!response.ok) throw new Error('Failed to fetch summary');
       return response.json();
     },
+    enabled: !demoMode,
   });
+  const displayedSummary = demoMode ? getDemoMarketplaceSummary() : summary;
 
   // Handle filter changes
   const handleFilterChange = (filters: { category?: string; commodityKey?: string; unit?: string }) => {
@@ -132,6 +142,14 @@ export default function Marketplace() {
         title: "Authentication Required", 
         description: "Please log in to save offers",
         variant: "destructive",
+      });
+      return;
+    }
+
+    if (demoMode) {
+      toast({
+        title: isCurrentlyInterested ? "Removed from demo list" : "Saved in demo",
+        description: "This demo action stays only in your browser.",
       });
       return;
     }
@@ -210,15 +228,15 @@ export default function Marketplace() {
             />
             
             {/* VWAP tile renders independently based on summary response */}
-            {showVWAP && summary && (
+            {showVWAP && displayedSummary && (
               <VWAPTile
-                avgPrice={summary.avgPrice!}
-                avgPriceUnit={summary.avgPriceUnit!}
-                avgPriceCount={summary.avgPriceCount!}
-                avgPriceCoverage={summary.avgPriceCoverage}
-                median={summary.median}
-                p25={summary.p25}
-                p75={summary.p75}
+                avgPrice={displayedSummary.avgPrice!}
+                avgPriceUnit={displayedSummary.avgPriceUnit!}
+                avgPriceCount={displayedSummary.avgPriceCount!}
+                avgPriceCoverage={displayedSummary.avgPriceCoverage}
+                median={displayedSummary.median}
+                p25={displayedSummary.p25}
+                p75={displayedSummary.p75}
                 variant={layoutState}
               />
             )}
