@@ -338,6 +338,20 @@ async function diagnose(client: Client): Promise<void> {
         [JSON.stringify(EXPECTED_LEGACY_USERS)],
       )
     ).rows.map((row) => row.record);
+    const currentSnapshotHash = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(currentRows))
+      .digest("hex");
+    const legacyAuthenticationDisabled = currentRows.every(
+      (row) =>
+        row.password_hash == null &&
+        row.login_enabled !== true &&
+        row.credential_status !== "active" &&
+        row.recovery_provenance == null,
+    );
+    const emailVerificationStateSafe = currentRows.every(
+      (row) => row.email_verified_at == null,
+    );
     const currentRows = (
       await client.query<{ record: Record<string, unknown> }>(`
         SELECT to_jsonb(source) AS record
@@ -411,6 +425,11 @@ async function diagnose(client: Client): Promise<void> {
           mode: "read_only_legacy_user_diagnosis",
           baselineReconstructedFromApprovedFingerprint: false,
           candidateDifferences,
+          currentSnapshotHash,
+          currentSchemaFingerprint: await applicationSchemaFingerprint(client),
+          currentHardeningFingerprint: await hardeningFingerprint(client),
+          legacyAuthenticationDisabled,
+          emailVerificationStateSafe,
           authoritativeClassification: false,
           writesPerformed: false,
         }),
