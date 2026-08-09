@@ -422,6 +422,15 @@ async function diagnose(client: Client): Promise<void> {
       }));
       console.log(
         JSON.stringify({
+          mode: "read_only_protected_user_snapshot",
+          currentSnapshotHash,
+          legacyAuthenticationDisabled,
+          emailVerificationStateSafe,
+          writesPerformed: false,
+        }),
+      );
+      console.log(
+        JSON.stringify({
           mode: "read_only_legacy_user_diagnosis",
           baselineReconstructedFromApprovedFingerprint: false,
           candidateDifferences,
