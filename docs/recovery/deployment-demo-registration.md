@@ -1,5 +1,30 @@
 # Deployment, Demo, and Self-Service Registration
 
+## Render production baseline for registration migration
+
+Before migration `0011`, the deployed Render database was inspected in a
+read-only transaction. The accepted production baseline records exact hashes
+for the application schema and the four complete protected legacy user rows.
+The verification hardening fingerprint remains identical to the approved
+recovery baseline.
+
+Safety assertions established before baselining:
+
+- all expected business-table row counts remain unchanged;
+- the migration journal exists and is empty;
+- `email_verification_tokens` is absent;
+- all four legacy users remain unable to authenticate locally because they
+  have no password hash, no enabled login, no active credential status, and no
+  recovery provenance;
+- all four legacy users have no prior email-verification timestamp;
+- no user, offer, session, or other business record was written during the
+  inspection.
+
+The baseline operation records migration provenance only. It does not claim
+that repository SQL created pre-existing objects and does not modify protected
+or business data. Migration `0011` remains the only SQL execution authorized
+after the baseline is recorded.
+
 ## Production boundaries
 
 - Production startup never clears or seeds business data.
