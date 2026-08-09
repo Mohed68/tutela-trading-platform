@@ -162,79 +162,108 @@ const client = new Client({
 
 try {
   await client.connect();
-  await client.query("BEGIN");
-  await assertPrerequisites(client);
-
-  const journal = await client.query(
-    `
-      SELECT checksum, execution_status, sql_executed
-      FROM public.tutela_migration_journal
-      WHERE migration_identifier = $1
-    `,
-    [MIGRATION_IDENTIFIER],
-  );
-
-  if (journal.rowCount === 1) {
-    const entry = journal.rows[0];
-    if (
-      entry.checksum !== checksum ||
-      entry.execution_status !== "succeeded" ||
-      entry.sql_executed !== true ||
-      !(await tableExists(client))
-    ) {
-      throw new Error("REGISTRATION_MIGRATION_EXISTING_STATE_INVALID");
-    }
-    await assertRegistrationSchema(client);
-    await client.query("COMMIT");
-    console.log("Registration migration already applied and verified.");
-  } else {
-    if (journal.rowCount !== 0 || (await tableExists(client))) {
-      throw new Error("REGISTRATION_MIGRATION_STATE_COLLISION");
-    }
-
-    const before = await businessCounts(client);
-    await client.query(
-      `
-        INSERT INTO public.tutela_migration_journal (
-          migration_identifier,
-          migration_filename,
-          checksum,
-          provenance,
-          execution_path,
-          git_revision,
-          execution_status,
-          sql_executed,
-          included_in_bootstrap,
-          notes
-        )
-        VALUES (
-          $1, $2, $3, 'additive_migration',
-          'existing_database_upgrade', $4, 'running', false, false,
-          'Additive self-service registration email verification storage.'
-        )
-      `,
-      [MIGRATION_IDENTIFIER, MIGRATION_FILENAME, checksum, gitRevision()],
+  if (process.argv.includes("--inspect")) {
+    await client.query("BEGIN READ ONLY");
+    const objects = await client.query(`
+      SELECT
+        to_regclass('public.users') IS NOT NULL AS users_exists,
+        to_regclass('public.tutela_migration_journal') IS NOT NULL AS journal_exists,
+        to_regclass('public.email_verification_tokens') IS NOT NULL AS registration_table_exists,
+        to_regclass('public.offer_verification_attempts') IS NOT NULL AS verification_attempts_exists,
+        to_regclass('public.offer_verification_findings') IS NOT NULL AS verification_findings_exists,
+        to_regclass('public.offer_verification_events') IS NOT NULL AS verification_events_exists,
+        to_regclass('public.offer_verification_commands') IS NOT NULL AS verification_commands_exists
+    `);
+    const journalRows = objects.rows[0].journal_exists
+      ? await client.query(`
+          SELECT migration_identifier, execution_status, sql_executed
+          FROM public.tutela_migration_journal
+          ORDER BY migration_identifier
+        `)
+      : { rows: [] };
+    await client.query("ROLLBACK");
+    console.log(
+      JSON.stringify({
+        mode: "read_only_inspection",
+        objects: objects.rows[0],
+        migrations: journalRows.rows,
+      }),
     );
-    await client.query(sql);
-    await assertRegistrationSchema(client);
-    const after = await businessCounts(client);
-    if (JSON.stringify(before) !== JSON.stringify(after)) {
-      throw new Error("REGISTRATION_MIGRATION_BUSINESS_DATA_CHANGED");
-    }
+  } else {
+    await client.query("BEGIN");
+    await assertPrerequisites(client);
 
-    await client.query(
+    const journal = await client.query(
       `
-        UPDATE public.tutela_migration_journal
-        SET
-          execution_timestamp = now(),
-          execution_status = 'succeeded',
-          sql_executed = true
+        SELECT checksum, execution_status, sql_executed
+        FROM public.tutela_migration_journal
         WHERE migration_identifier = $1
       `,
       [MIGRATION_IDENTIFIER],
     );
-    await client.query("COMMIT");
-    console.log("Registration migration applied and verified successfully.");
+
+    if (journal.rowCount === 1) {
+      const entry = journal.rows[0];
+      if (
+        entry.checksum !== checksum ||
+        entry.execution_status !== "succeeded" ||
+        entry.sql_executed !== true ||
+        !(await tableExists(client))
+      ) {
+        throw new Error("REGISTRATION_MIGRATION_EXISTING_STATE_INVALID");
+      }
+      await assertRegistrationSchema(client);
+      await client.query("COMMIT");
+      console.log("Registration migration already applied and verified.");
+    } else {
+      if (journal.rowCount !== 0 || (await tableExists(client))) {
+        throw new Error("REGISTRATION_MIGRATION_STATE_COLLISION");
+      }
+
+      const before = await businessCounts(client);
+      await client.query(
+        `
+          INSERT INTO public.tutela_migration_journal (
+            migration_identifier,
+            migration_filename,
+            checksum,
+            provenance,
+            execution_path,
+            git_revision,
+            execution_status,
+            sql_executed,
+            included_in_bootstrap,
+            notes
+          )
+          VALUES (
+            $1, $2, $3, 'additive_migration',
+            'existing_database_upgrade', $4, 'running', false, false,
+            'Additive self-service registration email verification storage.'
+          )
+        `,
+        [MIGRATION_IDENTIFIER, MIGRATION_FILENAME, checksum, gitRevision()],
+      );
+      await client.query(sql);
+      await assertRegistrationSchema(client);
+      const after = await businessCounts(client);
+      if (JSON.stringify(before) !== JSON.stringify(after)) {
+        throw new Error("REGISTRATION_MIGRATION_BUSINESS_DATA_CHANGED");
+      }
+
+      await client.query(
+        `
+          UPDATE public.tutela_migration_journal
+          SET
+            execution_timestamp = now(),
+            execution_status = 'succeeded',
+            sql_executed = true
+          WHERE migration_identifier = $1
+        `,
+        [MIGRATION_IDENTIFIER],
+      );
+      await client.query("COMMIT");
+      console.log("Registration migration applied and verified successfully.");
+    }
   }
 } catch (error) {
   await client.query("ROLLBACK").catch(() => undefined);

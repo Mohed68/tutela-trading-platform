@@ -62,6 +62,7 @@
     "db:push": "drizzle-kit push",
     "db:migrate:auth": "node scripts/run-auth-migration.mjs",
     "db:migrate:registration": "node scripts/run-registration-migration.mjs",
+    "db:inspect:registration": "node scripts/run-registration-migration.mjs --inspect",
     "verify": "npm run check && npm run build",
     "user:set-password": "node scripts/set-local-password.mjs"
   },
