@@ -24,6 +24,8 @@ import { DeliveryTermsSummary } from "./DeliveryTermsSummary";
 import { OfferStateBar } from "./OfferStateBar";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { isDemo } from "@/lib/demo";
+import { useLocation } from "wouter";
 import { extractOfferNumbers, fmtMoney, fmtMoneyCompact } from "@/lib/offerUtils";
 import CommodityIcon, { CommodityIcon as NewCommodityIcon } from "@/components/ui/CommodityIcon";
 
@@ -41,11 +43,23 @@ export default function OfferDetailModal({ offer, isOpen, onClose }: OfferDetail
   
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const demoMode = isDemo();
 
   if (!offer) return null;
 
   // Extract numbers safely using shared utilities
   const numbers = extractOfferNumbers(offer);
+  const demoActionOffer = {
+    ...offer,
+    commodity: offer.commodity?.name || offer.title || "Commodity",
+    price: String(numbers.price),
+    currency: numbers.currency,
+    unit: numbers.unit,
+    quantity: String(numbers.quantity),
+    minOrderQty: numbers.minOrderQty,
+    seller: "Verified demo seller",
+  };
   
   // Guard against invalid data
   if (!numbers.isValid) {
@@ -73,12 +87,16 @@ export default function OfferDetailModal({ offer, isOpen, onClose }: OfferDetail
           <OfferStateBar 
             offerId={offer.id || offer.offerId || ""} 
             buyerId={(user as any)?.id}
-            onProceedToContracting={() => {
+            onProceedToContracting={(reservationId) => {
+              if (demoMode && reservationId) {
+                onClose();
+                navigate(`/demo/contracts/${reservationId}`);
+                return;
+              }
               toast({
-                title: "Contracting",
-                description: "Redirecting to contracting workflow...",
+                title: "Contract preview unavailable",
+                description: "Create an active demo reservation before opening its preview.",
               });
-              onClose();
             }}
           />
 
@@ -250,7 +268,7 @@ export default function OfferDetailModal({ offer, isOpen, onClose }: OfferDetail
           )}
 
           {/* Instant Trading Actions */}
-          <div className="space-y-3 pt-4 border-t">
+          {demoMode ? <div className="space-y-3 pt-4 border-t">
             <div className="flex gap-3">
               <Button 
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" 
@@ -278,7 +296,13 @@ export default function OfferDetailModal({ offer, isOpen, onClose }: OfferDetail
               <MessageCircle className="mr-2 h-4 w-4" />
               Ask Seller
             </Button>
-          </div>
+          </div> : (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+              Live trading actions remain unavailable until the server-authoritative
+              reservation and contracting workflow is completed. You can explore
+              these interactions safely in Demo mode.
+            </div>
+          )}
         </div>
 
         {/* Place Order Modal */}
@@ -289,10 +313,10 @@ export default function OfferDetailModal({ offer, isOpen, onClose }: OfferDetail
         />
 
         {/* Instant Trading Modals */}
-        <AcceptNowDialog
+        {demoMode && <AcceptNowDialog
           isOpen={isAcceptNowOpen}
           onClose={() => setIsAcceptNowOpen(false)}
-          offer={offer}
+          offer={demoActionOffer}
           buyerId={(user as any)?.id}
           onSuccess={(reservation) => {
             toast({
@@ -300,13 +324,15 @@ export default function OfferDetailModal({ offer, isOpen, onClose }: OfferDetail
               description: `Successfully reserved ${reservation.qty.toLocaleString()} ${offer.unit}`,
             });
             setIsAcceptNowOpen(false);
+            onClose();
+            navigate(`/demo/contracts/${reservation.id}`);
           }}
-        />
+        />}
 
-        <SmartCounterModal
+        {demoMode && <SmartCounterModal
           isOpen={isSmartCounterOpen}
           onClose={() => setIsSmartCounterOpen(false)}
-          offer={offer}
+          offer={demoActionOffer}
           buyerId={(user as any)?.id}
           onSuccess={(result) => {
             if (result.type === 'auto-accepted') {
@@ -322,14 +348,14 @@ export default function OfferDetailModal({ offer, isOpen, onClose }: OfferDetail
             }
             setIsSmartCounterOpen(false);
           }}
-        />
+        />}
 
-        <AskSellerSheet
+        {demoMode && <AskSellerSheet
           isOpen={isAskSellerOpen}
           onClose={() => setIsAskSellerOpen(false)}
-          offer={offer}
+          offer={demoActionOffer}
           buyerId={(user as any)?.id}
-        />
+        />}
       </DialogContent>
     </Dialog>
   );

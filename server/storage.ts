@@ -235,23 +235,40 @@ export class DatabaseStorage implements IStorage {
     registration: PendingLocalRegistration,
   ): Promise<{ id: string; email: string; createdNew: boolean } | null> {
     return db.transaction(async (transaction) => {
-      const [created] = await transaction
-        .insert(users)
-        .values({
-          email: registration.email,
-          firstName: registration.firstName,
-          lastName: registration.lastName,
-          passwordHash: registration.passwordHash,
-          authProvider: "local",
-          emailVerifiedAt: null,
-          loginEnabled: false,
-          credentialStatus: "active",
-          recoveryProvenance: null,
-          role: "trader",
-          verified: false,
-        })
-        .onConflictDoNothing({ target: users.email })
-        .returning({ id: users.id, email: users.email });
+      // Registration intentionally targets only the recovered authentication
+      // columns that exist in the legacy production baseline. A schema-derived
+      // insert would include unrelated modeled defaults (for example KYB fields)
+      // that are not part of registration and are absent from that baseline.
+      const createdRows = await transaction.execute<{ id: string; email: string | null }>(sql`
+        INSERT INTO public.users (
+          email,
+          first_name,
+          last_name,
+          password_hash,
+          auth_provider,
+          email_verified_at,
+          login_enabled,
+          credential_status,
+          recovery_provenance,
+          role,
+          verified
+        ) VALUES (
+          ${registration.email},
+          ${registration.firstName},
+          ${registration.lastName},
+          ${registration.passwordHash},
+          'local',
+          NULL,
+          false,
+          'active',
+          NULL,
+          'trader',
+          false
+        )
+        ON CONFLICT (email) DO NOTHING
+        RETURNING id, email
+      `);
+      const created = createdRows.rows[0];
 
       if (!created?.email) {
         const [pending] = await transaction

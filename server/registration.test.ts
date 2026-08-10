@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import {
   activateLocalAccount,
@@ -174,4 +176,40 @@ test("verification URL preserves only the opaque token", () => {
   );
   assert.equal(url.pathname, "/verify-email");
   assert.equal(url.searchParams.get("token"), "opaque-token");
+});
+
+test("production registration inserts only the recovered authentication columns", () => {
+  const storageSource = fs.readFileSync(
+    path.join(process.cwd(), "server/storage.ts"),
+    "utf8",
+  );
+  const method = storageSource.slice(
+    storageSource.indexOf("async createPendingLocalRegistration("),
+    storageSource.indexOf("async activateLocalRegistration("),
+  );
+
+  assert.ok(!method.includes("transaction.insert(users)"));
+  for (const column of [
+    "email",
+    "first_name",
+    "last_name",
+    "password_hash",
+    "auth_provider",
+    "email_verified_at",
+    "login_enabled",
+    "credential_status",
+    "recovery_provenance",
+    "role",
+    "verified",
+  ]) {
+    assert.ok(method.includes(column), `missing explicit ${column} column`);
+  }
+  for (const unrelatedColumn of [
+    "kyb_status",
+    "subscription_plan",
+    "trading_preferences",
+    "company_name",
+  ]) {
+    assert.ok(!method.includes(unrelatedColumn));
+  }
 });

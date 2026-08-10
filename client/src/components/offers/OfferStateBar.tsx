@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 interface OfferStateBarProps {
   offerId: string;
   buyerId?: string;
-  onProceedToContracting?: () => void;
+  onProceedToContracting?: (reservationId?: string) => void;
 }
 
 export function OfferStateBar({ offerId, buyerId, onProceedToContracting }: OfferStateBarProps) {
@@ -79,7 +79,7 @@ export function OfferStateBar({ offerId, buyerId, onProceedToContracting }: Offe
           </div>
           {onProceedToContracting && (
             <Button 
-              onClick={onProceedToContracting}
+              onClick={() => onProceedToContracting()}
               className="bg-green-600 hover:bg-green-700 text-white"
             >
               Proceed to Contracting
@@ -106,7 +106,7 @@ export function OfferStateBar({ offerId, buyerId, onProceedToContracting }: Offe
           </div>
           {onProceedToContracting && (
             <Button 
-              onClick={onProceedToContracting}
+              onClick={() => onProceedToContracting(reservation.id)}
               className="bg-orange-600 hover:bg-orange-700 text-white"
             >
               Complete Contracting

@@ -3,8 +3,34 @@ import type {
   PublicMarketplaceOffer,
   PublicMarketplaceSummary,
 } from "@shared/marketplace";
+import type { Reservation } from "./marketStore";
 
 export type DemoMode = "verified" | "pending";
+
+export interface DemoStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export interface DemoContractPreview {
+  id: string;
+  reservationId: string;
+  offerId: string;
+  status: "draft_preview";
+  simulation: true;
+  buyerDisplayName: "Demo Trader";
+  sellerDisplayName: string;
+  commodityName: string;
+  quantity: number;
+  unit: string;
+  amountPerUnit: number;
+  currency: string;
+  totalAmount: number;
+  deliveryTerms: string;
+  paymentTerms: "Demo terms";
+  reservationExpiresAt: string;
+}
 
 const DEMO_OFFERS = [
   // FUEL & HYDROCARBONS - Higher values
@@ -403,29 +429,38 @@ const DEMO_METRICS = {
   verifiedPartners: 47
 };
 
+export function initializeDemoSession(
+  storage: DemoStorage,
+  mode: DemoMode = "verified",
+): void {
+  storage.removeItem("tutela_demo_disabled");
+  storage.setItem("tutela_demo", "1");
+  storage.setItem("tutela_demo_mode", mode);
+  storage.setItem(
+    "tutela_kyb_state",
+    mode === "verified" ? "verified" : "pending",
+  );
+  storage.setItem("tutela_user_role", "buyer");
+  storage.setItem("tutela_demo_offers", JSON.stringify(DEMO_OFFERS));
+  storage.setItem("tutela_demo_deals", JSON.stringify(DEMO_DEALS));
+  storage.setItem("tutela_demo_metrics", JSON.stringify(DEMO_METRICS));
+
+  // Every explicit demo start is a fresh, isolated browser simulation.
+  storage.removeItem("t_res");
+  storage.removeItem("t_neg");
+}
+
 export function enableDemo(mode: DemoMode = "verified"): void {
-  // Set demo flag
-  localStorage.setItem("tutela_demo", "1");
-  localStorage.setItem("tutela_demo_mode", mode);
+  initializeDemoSession(localStorage, mode);
   
   // Set verification state
   if (mode === "verified") {
-    localStorage.setItem("tutela_kyb_state", "verified");
     document.body.classList.remove("state-unverified", "state-pending");
     document.body.classList.add("state-verified");
   } else {
-    localStorage.setItem("tutela_kyb_state", "pending");
     document.body.classList.remove("state-unverified", "state-verified");
     document.body.classList.add("state-pending");
   }
-  
-  // Set mock user role
-  localStorage.setItem("tutela_user_role", "buyer");
-  
-  // Seed demo data
-  localStorage.setItem("tutela_demo_offers", JSON.stringify(DEMO_OFFERS));
-  localStorage.setItem("tutela_demo_deals", JSON.stringify(DEMO_DEALS));
-  localStorage.setItem("tutela_demo_metrics", JSON.stringify(DEMO_METRICS));
   
   // Navigate to dashboard
   window.location.href = "/dashboard";
@@ -442,6 +477,8 @@ export function disableDemo(): void {
   localStorage.removeItem("tutela_demo_deals");
   localStorage.removeItem("tutela_demo_metrics");
   localStorage.removeItem("tutela_user_role");
+  localStorage.removeItem("t_res");
+  localStorage.removeItem("t_neg");
   
   // Reset verification state
   localStorage.removeItem("tutela_kyb_state");
@@ -554,6 +591,43 @@ export function getDemoMarketplaceOffers(): PublicMarketplaceOffer[] {
       updatedAt: null,
     };
   });
+}
+
+export function buildDemoContractPreview(
+  reservation: Reservation,
+  evaluatedAt: Date,
+): DemoContractPreview | undefined {
+  const offer = DEMO_OFFERS.find((candidate) => candidate.id === reservation.offerId);
+  if (
+    !offer ||
+    reservation.status !== "active" ||
+    new Date(reservation.expiresAt).getTime() <= evaluatedAt.getTime()
+  ) {
+    return undefined;
+  }
+
+  const commodity = DEMO_COMMODITIES[offer.commodityId] ?? {
+    name: "Demo Commodity",
+  };
+
+  return {
+    id: `demo-contract-${reservation.id}`,
+    reservationId: reservation.id,
+    offerId: reservation.offerId,
+    status: "draft_preview",
+    simulation: true,
+    buyerDisplayName: "Demo Trader",
+    sellerDisplayName: offer.seller,
+    commodityName: commodity.name,
+    quantity: reservation.qty,
+    unit: offer.unit,
+    amountPerUnit: offer.price,
+    currency: offer.currency,
+    totalAmount: reservation.qty * offer.price,
+    deliveryTerms: offer.deliveryTerms,
+    paymentTerms: "Demo terms",
+    reservationExpiresAt: reservation.expiresAt,
+  };
 }
 
 export function getDemoMarketplaceSummary(): PublicMarketplaceSummary {

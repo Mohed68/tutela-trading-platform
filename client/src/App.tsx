@@ -38,6 +38,7 @@ import Verification from "@/pages/verification";
 import Insights from "@/pages/insights";
 import Checkout from "@/pages/checkout";
 import MyDrafts from "@/pages/MyDrafts";
+import DemoContractPreview from "@/pages/demo-contract-preview";
 import CheckoutSuccess from "@/pages/checkout-success";
 import AdminDashboard from "@/pages/AdminDashboard";
 import { AnimationShowcase } from "@/components/demo/AnimationShowcase";
@@ -137,6 +138,13 @@ function Router() {
           <Route path="/marketplace">
             <AppLayout>
               <Marketplace />
+            </AppLayout>
+          </Route>
+
+          {/* Browser-local simulation; never backed by the real contracts API. */}
+          <Route path="/demo/contracts/:reservationId">
+            <AppLayout>
+              <DemoContractPreview />
             </AppLayout>
           </Route>
           
