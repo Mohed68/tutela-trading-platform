@@ -1,6 +1,10 @@
 export const LOCAL_AUTH_PROVIDER = "local" as const;
 export const ACTIVE_CREDENTIAL_STATUS = "active" as const;
 export const RECOVERY_PROVENANCE = "tutela-recovery-test" as const;
+// Temporary, explicit authority for accounts created while email delivery is
+// unavailable. This is not evidence that the address has been verified.
+export const TEMPORARY_DIRECT_REGISTRATION_PROVENANCE =
+  "tutela-temporary-direct-registration" as const;
 
 export interface AuthenticationIdentity {
   id: string;

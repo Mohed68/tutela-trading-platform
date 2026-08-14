@@ -13,8 +13,10 @@ import { isRecoveryMode } from "./recoveryMode";
 import {
   activateLocalAccount,
   registerLocalAccount,
+  registerTemporaryDirectLocalAccount,
   registrationSchema,
 } from "./registration";
+import { getRegistrationActivationMode } from "./registrationPolicy";
 import {
   createResendVerificationEmailSender,
   getVerificationEmailConfiguration,
@@ -23,6 +25,7 @@ import {
   ACTIVE_CREDENTIAL_STATUS,
   LOCAL_AUTH_PROVIDER,
   RECOVERY_PROVENANCE,
+  TEMPORARY_DIRECT_REGISTRATION_PROVENANCE,
   type AuthenticationIdentity,
   type CurrentUserDto,
 } from "@shared/auth";
@@ -80,6 +83,7 @@ export function isLocallyAuthenticatable(
   if (!user) return false;
   const hasApprovedAuthority =
     user.recoveryProvenance === RECOVERY_PROVENANCE ||
+    user.recoveryProvenance === TEMPORARY_DIRECT_REGISTRATION_PROVENANCE ||
     (user.recoveryProvenance === null && user.emailVerifiedAt instanceof Date);
   return Boolean(
       user.authProvider === LOCAL_AUTH_PROVIDER &&
@@ -98,6 +102,8 @@ export function toCurrentUserDto(
     throw new Error("AUTHENTICATION_AUTHORITY_REQUIRED");
   }
   const recoveryAccount = user.recoveryProvenance === RECOVERY_PROVENANCE;
+  const temporaryDirectAccount =
+    user.recoveryProvenance === TEMPORARY_DIRECT_REGISTRATION_PROVENANCE;
   const displayName = recoveryAccount
     ? "Recovery trader"
     : [user.firstName, user.lastName].filter(Boolean).join(" ") || null;
@@ -108,7 +114,7 @@ export function toCurrentUserDto(
     authenticated: true,
     accountState: "active",
     organizationDisplayName: user.companyName ?? null,
-    emailVerified: recoveryAccount ? "unknown" : "verified",
+    emailVerified: recoveryAccount || temporaryDirectAccount ? "unknown" : "verified",
     userVerified: "unknown",
     kybState: "unknown",
     organizationVerification: "unknown",
@@ -214,6 +220,15 @@ export async function setupAuth(app: Express) {
       return res.status(400).json({
         message:
           "Enter a valid name, email, and a 12-character password containing uppercase, lowercase, and numeric characters.",
+      });
+    }
+
+    const activationMode = getRegistrationActivationMode();
+    if (activationMode === "temporary_direct") {
+      await registerTemporaryDirectLocalAccount(parsed.data, { storage });
+      return res.status(201).json({
+        activation: "direct",
+        message: "Your account is ready to sign in.",
       });
     }
 

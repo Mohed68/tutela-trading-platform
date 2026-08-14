@@ -7,8 +7,10 @@ import {
   buildEmailVerificationUrl,
   digestEmailVerificationToken,
   registerLocalAccount,
+  registerTemporaryDirectLocalAccount,
   registrationSchema,
 } from "./registration.js";
+import { getRegistrationActivationMode } from "./registrationPolicy.js";
 import { getVerificationEmailConfiguration } from "./verificationEmail.js";
 
 const validInput = {
@@ -178,6 +180,34 @@ test("verification URL preserves only the opaque token", () => {
   assert.equal(url.searchParams.get("token"), "opaque-token");
 });
 
+test("temporary direct registration stays opt-in and email verification remains default", () => {
+  assert.equal(getRegistrationActivationMode({}), "email_verification");
+  assert.equal(
+    getRegistrationActivationMode({ TUTELA_REGISTRATION_ACTIVATION: "temporary_direct" }),
+    "temporary_direct",
+  );
+  assert.equal(
+    getRegistrationActivationMode({ TUTELA_REGISTRATION_ACTIVATION: "anything_else" }),
+    "email_verification",
+  );
+});
+
+test("temporary direct registration creates no token and does not send email", async () => {
+  let stored: { email: string; passwordHash: string } | undefined;
+  const result = await registerTemporaryDirectLocalAccount(validInput, {
+    storage: {
+      async createTemporaryDirectLocalRegistration(input) {
+        stored = input;
+      },
+    },
+  });
+
+  assert.deepEqual(result, { accepted: true });
+  assert.equal(stored?.email, "ada@example.com");
+  assert.equal(stored?.passwordHash.startsWith("scrypt-v1$"), true);
+  assert.equal("tokenDigest" in (stored ?? {}), false);
+});
+
 test("production registration inserts only the recovered authentication columns", () => {
   const storageSource = fs.readFileSync(
     path.join(process.cwd(), "server/storage.ts"),
@@ -212,4 +242,20 @@ test("production registration inserts only the recovered authentication columns"
   ]) {
     assert.ok(!method.includes(unrelatedColumn));
   }
+});
+
+test("temporary direct registration is explicitly marked and never marks email verified", () => {
+  const storageSource = fs.readFileSync(
+    path.join(process.cwd(), "server/storage.ts"),
+    "utf8",
+  );
+  const method = storageSource.slice(
+    storageSource.indexOf("async createTemporaryDirectLocalRegistration("),
+    storageSource.indexOf("async activateLocalRegistration("),
+  );
+
+  assert.match(method, /login_enabled[\s\S]*true/);
+  assert.match(method, /email_verified_at[\s\S]*NULL/);
+  assert.match(method, /TEMPORARY_DIRECT_REGISTRATION_PROVENANCE/);
+  assert.ok(!method.includes("emailVerificationTokens"));
 });

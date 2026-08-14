@@ -101,6 +101,23 @@ export async function registerLocalAccount(
   return { accepted: true };
 }
 
+export async function registerTemporaryDirectLocalAccount(
+  input: z.infer<typeof registrationSchema>,
+  dependencies: {
+    storage: Pick<IStorage, "createTemporaryDirectLocalRegistration">;
+  },
+): Promise<RegistrationResult> {
+  const parsed = registrationSchema.parse(input);
+  await dependencies.storage.createTemporaryDirectLocalRegistration({
+    firstName: parsed.firstName,
+    lastName: parsed.lastName,
+    email: parsed.email,
+    passwordHash: await hashPassword(parsed.password),
+  });
+  // Deliberately do not reveal whether the email was already registered.
+  return { accepted: true };
+}
+
 export async function activateLocalAccount(
   token: string,
   dependencies: {

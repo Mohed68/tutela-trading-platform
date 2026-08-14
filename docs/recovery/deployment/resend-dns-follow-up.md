@@ -41,12 +41,13 @@ contract, verification, or authentication business rules.
    the project owner's control. Verify receipt of the message and complete the
    verification link.
 
-## Current safe alternative
+## Current temporary alternative
 
-Keep public registration unavailable until the verified sender is ready. The
-Demo flow and existing authenticated accounts remain available. Do not weaken
-registration by auto-activating accounts, exposing verification links, or
-using SMTP credentials in the application.
+The opt-in `temporary_direct` registration mode may be enabled while DNS
+access is unavailable. It creates a local account with email verification
+remaining unknown; it does not use SMTP credentials, expose verification
+links, or claim that the email address is owned. Disable the mode and return
+to email verification after the sender domain is verified.
 
 ## Security notes
 

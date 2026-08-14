@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import test from "node:test";
 import express from "express";
 import type { AuthenticationIdentity } from "@shared/auth";
+import { TEMPORARY_DIRECT_REGISTRATION_PROVENANCE } from "@shared/auth";
 import {
   getSessionCookieSettings,
   isLocallyAuthenticatable,
@@ -68,6 +69,21 @@ test("verified self-registered traders authenticate without recovery authority",
       }),
     ),
     false,
+  );
+});
+
+test("temporary direct registration is authenticatable but remains email-unknown", () => {
+  const directIdentity = recoveryIdentity({
+    recoveryProvenance: TEMPORARY_DIRECT_REGISTRATION_PROVENANCE,
+    emailVerifiedAt: null,
+  });
+
+  assert.equal(isLocallyAuthenticatable(directIdentity), true);
+  assert.equal(
+    toCurrentUserDto(
+      directIdentity as AuthenticationIdentity & { passwordHash: string },
+    ).emailVerified,
+    "unknown",
   );
 });
 

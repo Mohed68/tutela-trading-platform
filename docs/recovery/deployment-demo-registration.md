@@ -75,6 +75,25 @@ Registration requires `APP_BASE_URL`, `RESEND_API_KEY`, and `EMAIL_FROM`.
 Production registration fails closed when delivery is unavailable. Secret
 values must be configured only in the deployment environment.
 
+### Temporary direct-registration fallback
+
+When `TUTELA_REGISTRATION_ACTIVATION=temporary_direct` is explicitly set in
+the deployment environment, registration creates a locally authenticatable
+trader account without sending a verification email. This is an operational
+fallback while the Resend sending domain is unavailable, not proof of email
+ownership:
+
+- `email_verified_at` remains null;
+- an explicit temporary provenance marker records the authority source;
+- the account's public DTO reports email verification as `unknown`;
+- passwords remain salted, versioned scrypt hashes;
+- the default mode remains email verification; removing the environment value
+  stops new direct registrations without rewriting existing data.
+
+Do not represent the fallback as permanent email verification. The pending
+Resend DNS follow-up remains documented in
+`docs/recovery/deployment/resend-dns-follow-up.md`.
+
 ## Database migration
 
 `migrations/0011_self_service_registration.sql` is additive. It creates the

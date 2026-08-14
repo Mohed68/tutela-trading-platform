@@ -12,6 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const registeredWithoutEmail = new URLSearchParams(window.location.search).get("registered") === "1";
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setError(""); setLoading(true);
     try {
@@ -20,5 +21,5 @@ export default function Login() {
       navigate("/");
     } catch (e) { setError(e instanceof Error ? e.message.replace(/^\d+:\s*/, "") : "Login failed."); } finally { setLoading(false); }
   }
-  return <div className="min-h-[70vh] flex items-center justify-center px-4"><Card className="w-full max-w-md"><CardHeader><CardTitle>Sign in to TUTELA</CardTitle><CardDescription>Use your business account credentials.</CardDescription></CardHeader><CardContent><form onSubmit={submit} className="space-y-4"><div><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required /></div><div><Label htmlFor="password">Password</Label><Input id="password" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required /></div>{error && <p className="text-sm text-destructive" role="alert">{error}</p>}<Button className="w-full" type="submit" disabled={loading}>{loading ? "Signing in..." : "Sign in"}</Button><p className="text-sm text-center">No account? <Link href="/register" className="underline">Create one</Link></p></form></CardContent></Card></div>;
+  return <div className="min-h-[70vh] flex items-center justify-center px-4"><Card className="w-full max-w-md"><CardHeader><CardTitle>Sign in to TUTELA</CardTitle><CardDescription>Use your business account credentials.</CardDescription></CardHeader><CardContent><form onSubmit={submit} className="space-y-4">{registeredWithoutEmail && <p className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-900" role="status">Your account is ready. Sign in with the password you just created.</p>}<div><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required /></div><div><Label htmlFor="password">Password</Label><Input id="password" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required /></div>{error && <p className="text-sm text-destructive" role="alert">{error}</p>}<Button className="w-full" type="submit" disabled={loading}>{loading ? "Signing in..." : "Sign in"}</Button><p className="text-sm text-center">No account? <Link href="/register" className="underline">Create one</Link></p></form></CardContent></Card></div>;
 }

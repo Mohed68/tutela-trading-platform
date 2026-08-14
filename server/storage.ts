@@ -36,7 +36,10 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql, isNull } from "drizzle-orm";
-import type { AuthenticationIdentity } from "@shared/auth";
+import {
+  TEMPORARY_DIRECT_REGISTRATION_PROVENANCE,
+  type AuthenticationIdentity,
+} from "@shared/auth";
 
 type UpsertUser = Partial<NewUser> & { id: string };
 type InsertOrder = typeof orders.$inferInsert;
@@ -51,6 +54,13 @@ export interface PendingLocalRegistration {
   tokenExpiresAt: Date;
 }
 
+export interface TemporaryDirectLocalRegistration {
+  firstName: string;
+  lastName: string;
+  email: string;
+  passwordHash: string;
+}
+
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
@@ -62,6 +72,9 @@ export interface IStorage {
   createPendingLocalRegistration(
     registration: PendingLocalRegistration,
   ): Promise<{ id: string; email: string; createdNew: boolean } | null>;
+  createTemporaryDirectLocalRegistration(
+    registration: TemporaryDirectLocalRegistration,
+  ): Promise<void>;
   activateLocalRegistration(
     tokenDigest: string,
     verifiedAt: Date,
@@ -303,6 +316,42 @@ export class DatabaseStorage implements IStorage {
 
       return { id: created.id, email: created.email, createdNew: true };
     });
+  }
+
+  async createTemporaryDirectLocalRegistration(
+    registration: TemporaryDirectLocalRegistration,
+  ): Promise<void> {
+    // This explicit column list preserves compatibility with the recovered
+    // production baseline and does not infer any KYB or email-verification
+    // state. The provenance is the sole marker for the temporary policy.
+    await db.execute(sql`
+      INSERT INTO public.users (
+        email,
+        first_name,
+        last_name,
+        password_hash,
+        auth_provider,
+        email_verified_at,
+        login_enabled,
+        credential_status,
+        recovery_provenance,
+        role,
+        verified
+      ) VALUES (
+        ${registration.email},
+        ${registration.firstName},
+        ${registration.lastName},
+        ${registration.passwordHash},
+        'local',
+        NULL,
+        true,
+        'active',
+        ${TEMPORARY_DIRECT_REGISTRATION_PROVENANCE},
+        'trader',
+        false
+      )
+      ON CONFLICT (email) DO NOTHING
+    `);
   }
 
   async activateLocalRegistration(
