@@ -372,6 +372,181 @@ export const performanceInsightsReports = pgTable("performance_insights_reports"
   index("performance_insights_user_generated_idx").on(table.userId, table.generatedAt),
 ]);
 
+export const organizationVerificationPersistenceStreams = pgTable(
+  "organization_verification_persistence_streams",
+  {
+    streamIdentityFingerprint: varchar("stream_identity_fingerprint").primaryKey(),
+    workflowExecutionId: varchar("workflow_execution_id").notNull(),
+    organizationId: varchar("organization_id").notNull(),
+    recordId: varchar("record_id").notNull(),
+    revisionId: varchar("revision_id").notNull(),
+    attemptId: varchar("attempt_id").notNull(),
+    currentStreamVersion: integer("current_stream_version").notNull().default(0),
+    headEvidenceEntryId: varchar("head_evidence_entry_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+    creationFingerprint: varchar("creation_fingerprint").notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_verification_stream_workflow_unique").on(
+      table.workflowExecutionId,
+    ),
+    check(
+      "organization_verification_stream_version_check",
+      sql`${table.currentStreamVersion} >= 0`,
+    ),
+    check(
+      "organization_verification_stream_head_check",
+      sql`(${table.currentStreamVersion} = 0 AND ${table.headEvidenceEntryId} IS NULL) OR (${table.currentStreamVersion} > 0 AND ${table.headEvidenceEntryId} IS NOT NULL)`,
+    ),
+    check(
+      "organization_verification_stream_fingerprint_check",
+      sql`${table.streamIdentityFingerprint} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    check(
+      "organization_verification_stream_creation_fingerprint_check",
+      sql`${table.creationFingerprint} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
+export const organizationVerificationPersistenceAppends = pgTable(
+  "organization_verification_persistence_appends",
+  {
+    appendId: varchar("append_id").primaryKey(),
+    streamIdentityFingerprint: varchar("stream_identity_fingerprint")
+      .notNull()
+      .references(
+        () => organizationVerificationPersistenceStreams.streamIdentityFingerprint,
+        { onDelete: "restrict" },
+      ),
+    appendBatchFingerprint: varchar("append_batch_fingerprint").notNull(),
+    expectedStreamVersion: integer("expected_stream_version").notNull(),
+    resultingStreamVersion: integer("resulting_stream_version").notNull(),
+    expectedHeadEvidenceEntryId: varchar("expected_head_evidence_entry_id"),
+    resultingHeadEvidenceEntryId: varchar("resulting_head_evidence_entry_id").notNull(),
+    appendedAt: timestamp("appended_at", { withTimezone: true, mode: "string" }).notNull(),
+    appendedAtValue: text("appended_at_value").notNull(),
+    provenanceReferences: jsonb("provenance_references").$type<string[]>().notNull(),
+    integrityReferences: jsonb("integrity_references").$type<string[]>().notNull(),
+    appendReceiptFingerprint: varchar("append_receipt_fingerprint").notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_verification_append_stream_version_unique").on(
+      table.streamIdentityFingerprint,
+      table.resultingStreamVersion,
+    ),
+    index("organization_verification_appends_stream_idx").on(
+      table.streamIdentityFingerprint,
+      table.resultingStreamVersion,
+    ),
+    check(
+      "organization_verification_append_versions_check",
+      sql`${table.expectedStreamVersion} >= 0 AND ${table.resultingStreamVersion} > ${table.expectedStreamVersion}`,
+    ),
+    check(
+      "organization_verification_append_expected_head_check",
+      sql`(${table.expectedStreamVersion} = 0 AND ${table.expectedHeadEvidenceEntryId} IS NULL) OR (${table.expectedStreamVersion} > 0 AND ${table.expectedHeadEvidenceEntryId} IS NOT NULL)`,
+    ),
+    check(
+      "organization_verification_append_batch_fingerprint_check",
+      sql`${table.appendBatchFingerprint} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    check(
+      "organization_verification_append_timestamp_value_check",
+      sql`length(${table.appendedAtValue}) > 0`,
+    ),
+    check(
+      "organization_verification_append_receipt_fingerprint_check",
+      sql`${table.appendReceiptFingerprint} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
+export const organizationVerificationDurableEvidence = pgTable(
+  "organization_verification_durable_evidence",
+  {
+    evidenceEntryId: varchar("evidence_entry_id").primaryKey(),
+    streamIdentityFingerprint: varchar("stream_identity_fingerprint")
+      .notNull()
+      .references(
+        () => organizationVerificationPersistenceStreams.streamIdentityFingerprint,
+        { onDelete: "restrict" },
+      ),
+    streamPosition: integer("stream_position").notNull(),
+    predecessorEvidenceEntryId: varchar("predecessor_evidence_entry_id"),
+    appendId: varchar("append_id")
+      .notNull()
+      .references(() => organizationVerificationPersistenceAppends.appendId, {
+        onDelete: "restrict",
+      }),
+    evidenceKind: varchar("evidence_kind").notNull(),
+    semanticArtifactIdentity: varchar("semantic_artifact_identity").notNull(),
+    artifactVersionKind: varchar("artifact_version_kind", {
+      enum: ["number", "string"],
+    }).notNull(),
+    artifactVersionOrSequence: varchar("artifact_version_or_sequence").notNull(),
+    artifactFingerprint: varchar("artifact_fingerprint").notNull(),
+    artifactOccurredAt: timestamp("artifact_occurred_at", { withTimezone: true, mode: "string" }).notNull(),
+    appendedAt: timestamp("appended_at", { withTimezone: true, mode: "string" }).notNull(),
+    provenanceReferences: jsonb("provenance_references").$type<string[]>().notNull(),
+    integrityReferences: jsonb("integrity_references").$type<string[]>().notNull(),
+    storedEvidenceFingerprint: varchar("stored_evidence_fingerprint").notNull(),
+    durableContractVersion: varchar("durable_contract_version").notNull(),
+    durablePayloadFingerprint: varchar("durable_payload_fingerprint").notNull(),
+    canonicalDurableEnvelope: text("canonical_durable_envelope").notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_verification_evidence_stream_position_unique").on(
+      table.streamIdentityFingerprint,
+      table.streamPosition,
+    ),
+    uniqueIndex("organization_verification_evidence_semantic_unique").on(
+      table.streamIdentityFingerprint,
+      table.evidenceKind,
+      table.semanticArtifactIdentity,
+      table.artifactVersionKind,
+      table.artifactVersionOrSequence,
+    ),
+    index("organization_verification_evidence_stream_order_idx").on(
+      table.streamIdentityFingerprint,
+      table.streamPosition,
+    ),
+    index("organization_verification_evidence_append_idx").on(table.appendId),
+    check(
+      "organization_verification_evidence_position_check",
+      sql`${table.streamPosition} > 0`,
+    ),
+    check(
+      "organization_verification_evidence_predecessor_check",
+      sql`(${table.streamPosition} = 1 AND ${table.predecessorEvidenceEntryId} IS NULL) OR (${table.streamPosition} > 1 AND ${table.predecessorEvidenceEntryId} IS NOT NULL)`,
+    ),
+    check(
+      "organization_verification_evidence_kind_check",
+      sql`${table.evidenceKind} IN ('workflow_genesis', 'attempt_lifecycle_execution', 'evidence_snapshot', 'evaluation_projection', 'policy_evaluation_input', 'policy_runtime_execution', 'decision_trust_integration_execution', 'workflow_step_record')`,
+    ),
+    check(
+      "organization_verification_evidence_version_kind_check",
+      sql`${table.artifactVersionKind} IN ('number', 'string')`,
+    ),
+    check(
+      "organization_verification_evidence_contract_check",
+      sql`${table.durableContractVersion} = 'organization-verification-durable-evidence/v1'`,
+    ),
+    check(
+      "organization_verification_evidence_artifact_fingerprint_check",
+      sql`${table.artifactFingerprint} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    check(
+      "organization_verification_evidence_stored_fingerprint_check",
+      sql`${table.storedEvidenceFingerprint} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    check(
+      "organization_verification_evidence_payload_fingerprint_check",
+      sql`${table.durablePayloadFingerprint} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,

@@ -32,7 +32,7 @@ function must<T>(result: Readonly<{ ok: true; value: T }> | Readonly<{ ok: false
   return result.value;
 }
 
-function buildRequests() {
+export function buildRequests() {
   const fixture = buildRuntimeFixture();
   const initial = fixture.chain.workflowExecution;
   const streamIdentity = must(

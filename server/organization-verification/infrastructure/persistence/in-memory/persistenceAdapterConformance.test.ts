@@ -26,7 +26,7 @@ function must<T>(
   return result.value;
 }
 
-function buildEvidenceChain() {
+export function buildEvidenceChain() {
   const fixture = buildRuntimeFixture();
   const genesis = fixture.chain.workflowExecution;
   const streamIdentity = must(
@@ -147,7 +147,7 @@ function buildEvidenceChain() {
   return { fixture, streamIdentity, durableEvidence, entries };
 }
 
-function genesisBatch(
+export function genesisBatch(
   chain: ReturnType<typeof buildEvidenceChain>,
   appendId = "in-memory-append-genesis",
   appendedAt = "2026-09-01T00:31:00.000Z",
@@ -167,7 +167,7 @@ function genesisBatch(
   );
 }
 
-function pairBatch(
+export function pairBatch(
   chain: ReturnType<typeof buildEvidenceChain>,
   pairIndex: number,
   appendId: string,
@@ -192,7 +192,7 @@ function pairBatch(
   );
 }
 
-function appendRequest(
+export function appendRequest(
   batch: OrganizationVerificationEvidenceAppendBatch,
 ): AppendOrganizationVerificationEvidenceRequest {
   return Object.freeze({
@@ -254,7 +254,10 @@ export function runOrganizationVerificationPersistenceAdapterConformance(
     assert.equal(loaded.status, "found");
     if (loaded.status !== "found") return;
     assert.equal(loaded.stream.streamVersion, 1);
-    assert.equal(loaded.stream.entries[0], chain.entries[0]);
+    assert.equal(
+      loaded.stream.entries[0]?.storedEvidenceFingerprint,
+      chain.entries[0]?.storedEvidenceFingerprint,
+    );
     assert.equal(loaded.stream.entries[0]?.evidenceKind, "workflow_genesis");
     assert.equal(loaded.stream.headEvidenceReference.streamPosition, 1);
   });

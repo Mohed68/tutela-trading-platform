@@ -40,6 +40,7 @@
     "test:organization-verification-persistence-contract": "tsx --test server/organization-verification/application/persistence-contract/persistenceContract.test.ts",
     "test:organization-verification-durable-evidence": "tsx --test server/organization-verification/application/durable-evidence-contract/durableEvidence.test.ts",
     "test:organization-verification-persistence-in-memory": "tsx --test server/organization-verification/infrastructure/persistence/in-memory/inMemoryOrganizationVerificationEvidenceRepository.test.ts",
+    "test:organization-verification-persistence-postgres": "tsx --test server/organization-verification/infrastructure/persistence/postgres/postgresOrganizationVerificationEvidenceRepository.test.ts",
     "test:organization-verification-replay-runtime": "tsx --test server/organization-verification/application/replay-runtime/replayRuntime.test.ts",
     "test:organization-verification-application-service-contract": "tsx --test server/organization-verification/application/application-service-contract/applicationServiceContract.test.ts",
     "test:organization-verification-application-service": "tsx --test server/organization-verification/application/application-service/applicationService.test.ts",

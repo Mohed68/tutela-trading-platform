@@ -107,6 +107,9 @@ type ArchitectureViolationCode =
   | "PERSISTENCE_IN_MEMORY_FORBIDDEN_AUTHORITY"
   | "PERSISTENCE_IN_MEMORY_PUBLIC_EXPORT_LEAK"
   | "PERSISTENCE_IN_MEMORY_EXTERNAL_WIRING"
+  | "PERSISTENCE_POSTGRES_FORBIDDEN_DEPENDENCY"
+  | "PERSISTENCE_POSTGRES_FORBIDDEN_AUTHORITY"
+  | "PERSISTENCE_POSTGRES_PUBLIC_EXPORT_LEAK"
   | "REPLAY_RUNTIME_FORBIDDEN_DEPENDENCY"
   | "REPLAY_RUNTIME_FORBIDDEN_AUTHORITY"
   | "REPLAY_RUNTIME_PERSISTENCE_WRITE"
@@ -294,6 +297,11 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isInMemoryPersistenceAdapter = lowerFile.startsWith(
     "server/organization-verification/infrastructure/persistence/in-memory/",
   );
+  const isPostgresPersistenceAdapter = lowerFile.startsWith(
+    "server/organization-verification/infrastructure/persistence/postgres/",
+  );
+  const isPostgresPersistenceProduction =
+    isPostgresPersistenceAdapter && !/\.test\.ts$/i.test(lowerFile);
   const isReplayRuntime = lowerFile.startsWith(
     "server/organization-verification/application/replay-runtime/",
   );
@@ -775,7 +783,8 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         ) ||
         /@shared\/schema/i.test(specifier) ||
         /(?:^|\/)(?:db|database|storage)(?:\.js)?$/i.test(specifier) ||
-        /^(?:drizzle-orm|pg|@neondatabase\/)/i.test(specifier)
+        (/^(?:drizzle-orm|pg|@neondatabase\/)/i.test(specifier) &&
+          !isPostgresPersistenceProduction)
       ) {
         addViolation(
           violations,
@@ -2262,6 +2271,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     isOrganizationVerification &&
     !isPersistenceContract &&
     !isInMemoryPersistenceAdapter &&
+    !isPostgresPersistenceAdapter &&
     !isReplayRuntime &&
     !isApplicationServiceContract &&
     !isApplicationServiceRuntime &&
@@ -2277,6 +2287,61 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       file,
       "Pure persistence ports remain unwired until an explicitly authorized application integration phase",
     );
+  }
+
+  if (isPostgresPersistenceProduction) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "pg" ||
+        specifier ===
+          "../../../application/persistence-contract/index.js" ||
+        specifier ===
+          "../../../application/durable-evidence-contract/index.js";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:application-service|replay-runtime|workflow-runtime|attempt-lifecycle-runtime|routes?|controllers?|frontend|client|startup|workers?|queues?|notifications?|eligibility)(?:\/|\.|$)/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "PERSISTENCE_POSTGRES_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:process\.env|DATABASE_URL|WorkflowStepExecution|decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|executeOrganizationVerificationPolicyEvaluation|executeOrganizationVerificationWorkflowStep|executeOrganizationVerificationAttemptTransition)\b/.test(
+        input.source,
+      ) ||
+      /\b(?:decisionSeal|trustStatusSeal|workflowStepSeal|lifecycleExecutionSeal|createDecisionInternal|createTrustStatusInternal)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "PERSISTENCE_POSTGRES_FORBIDDEN_AUTHORITY",
+        file,
+        "PostgreSQL persistence must not own secrets, runtime evidence, private authenticity, Replay, or business authority",
+      );
+    }
+    if (
+      lowerFile.endsWith(
+        "/infrastructure/persistence/postgres/index.ts",
+      ) &&
+      /\b(?:seal|constructor|canonicalize|rehydrateOrganizationVerification\w*|parseOrganizationVerificationDurableEvidence)\b/i.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "PERSISTENCE_POSTGRES_PUBLIC_EXPORT_LEAK",
+        file,
+        "PostgreSQL persistence public surface exposes private or domain-owned reconstruction authority",
+      );
+    }
   }
 
   if (isInMemoryPersistenceAdapter) {
@@ -4985,4 +5050,53 @@ test("Phase 8E.0a uses explicit per-stream rehydration sessions and no global re
   assert.match(source, /const policyExecutions = new Map/);
   assert.equal(/^(?:export\s+)?const\s+policyExecutions\s*=/m.test(source), false);
   assert.equal(/(?:latest|current|default)PolicyExecution/.test(source), false);
+});
+
+test("Phase 8E.0 PostgreSQL persistence rejects orchestration and runtime dependencies", () => {
+  expectFixtureViolation("PERSISTENCE_POSTGRES_FORBIDDEN_DEPENDENCY", {
+    file:
+      "server/organization-verification/infrastructure/persistence/postgres/forbidden.ts",
+    source:
+      'import { replayOrganizationVerificationWorkflow } from "../../../application/replay-runtime/index.js";',
+  });
+  expectFixtureViolation("PERSISTENCE_POSTGRES_FORBIDDEN_AUTHORITY", {
+    file:
+      "server/organization-verification/infrastructure/persistence/postgres/forbidden.ts",
+    source: "executeOrganizationVerificationWorkflowStep(input);",
+  });
+});
+
+test("Phase 8E.0 PostgreSQL persistence public surface protects rehydration authority", () => {
+  expectFixtureViolation("PERSISTENCE_POSTGRES_PUBLIC_EXPORT_LEAK", {
+    file:
+      "server/organization-verification/infrastructure/persistence/postgres/index.ts",
+    source:
+      'export { rehydrateOrganizationVerificationDurableEvidence } from "./internal.js";',
+  });
+});
+
+test("Phase 8E.0 PostgreSQL adapter uses database concurrency and parameterized durable storage", () => {
+  const adapter = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/infrastructure/persistence/postgres/postgresOrganizationVerificationEvidenceRepository.ts",
+    ),
+    "utf8",
+  );
+  const database = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/infrastructure/persistence/postgres/postgresDatabase.ts",
+    ),
+    "utf8",
+  );
+  assert.match(adapter, /FOR UPDATE/);
+  assert.match(adapter, /current_stream_version = \$4/);
+  assert.match(adapter, /canonical_durable_envelope/);
+  assert.match(adapter, /createOrganizationVerificationDurableEvidenceEnvelope/);
+  assert.match(adapter, /createOrganizationVerificationDurableEvidenceRehydrationSession/);
+  assert.match(database, /BEGIN/);
+  assert.match(database, /COMMIT/);
+  assert.match(database, /ROLLBACK/);
+  assert.equal(/process\.env|DATABASE_URL|WorkflowStepExecution/.test(`${adapter}\n${database}`), false);
 });
