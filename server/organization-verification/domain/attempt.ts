@@ -22,6 +22,13 @@ import {
   validateAttemptProcessTransition,
   type AttemptProcessState,
 } from "./process.js";
+import {
+  hasExactDurableKeys,
+  isDurableIdentity,
+  isDurablePlainObject,
+  isDurablePositiveVersion,
+  isDurableTimestamp,
+} from "./durableRehydrationValidation.js";
 
 export interface OrganizationVerificationAttempt {
   readonly attemptId: OrganizationVerificationAttemptId;
@@ -82,6 +89,25 @@ export function isOrganizationVerificationAttempt(
       true &&
     Object.isFrozen(value)
   );
+}
+
+function isDurableAttempt(value: unknown): value is OrganizationVerificationAttempt {
+  if (!isDurablePlainObject(value)) return false;
+  const required = ["attemptId", "recordId", "revisionId", "sequence", "processState", "createdAt", "correlationId"];
+  const optional = ["snapshotId", "snapshotFingerprint", "queuedAt", "startedAt", "completedAt", "completionReference"];
+  if (!hasExactDurableKeys(value, required, optional)) return false;
+  return ["attemptId", "recordId", "revisionId", "correlationId", "snapshotId", "snapshotFingerprint", "completionReference"]
+    .every((key) => value[key] === undefined || isDurableIdentity(value[key])) &&
+    isDurablePositiveVersion(value.sequence) &&
+    ["not_started", "queued", "running", "completed"].includes(String(value.processState)) &&
+    ["createdAt", "queuedAt", "startedAt", "completedAt"].every((key) => value[key] === undefined || isDurableTimestamp(value[key]));
+}
+
+export function rehydrateOrganizationVerificationAttempt(
+  durableData: unknown,
+): CoreDomainResult<OrganizationVerificationAttempt> {
+  if (!isDurableAttempt(durableData)) return domainFailure("mutable_input_rejected");
+  return domainSuccess(sealOrganizationVerificationAttempt({ ...durableData }));
 }
 
 export function createAttemptForRevision(

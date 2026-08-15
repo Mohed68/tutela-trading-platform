@@ -1,0 +1,10 @@
+export {
+  ORGANIZATION_VERIFICATION_DURABLE_EVIDENCE_CONTRACT_VERSION,
+  createOrganizationVerificationDurableEvidenceEnvelope,
+  createOrganizationVerificationDurableEvidenceRehydrationSession,
+  parseOrganizationVerificationDurableEvidence,
+  rehydrateOrganizationVerificationDurableEvidence,
+  serializeOrganizationVerificationDurableEvidence,
+  type OrganizationVerificationDurableEvidenceEnvelope,
+  type OrganizationVerificationDurableEvidenceRehydrationSession,
+} from "./durableEvidence.js";

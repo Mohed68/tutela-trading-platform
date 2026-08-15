@@ -13,6 +13,13 @@ import type {
   VerificationAttemptSequence,
   VerificationRevisionSequence,
 } from "./ids.js";
+import {
+  hasExactDurableKeys,
+  isDurableIdentity,
+  isDurablePlainObject,
+  isDurablePositiveVersion,
+  isDurableTimestamp,
+} from "./durableRehydrationValidation.js";
 
 export interface VerificationRevisionReference {
   readonly revisionId: OrganizationVerificationRevisionId;
@@ -98,6 +105,41 @@ export function createOrganizationVerificationRecord(
       updatedAt: input.createdAt,
     }),
   );
+}
+
+function isDurableRecord(value: unknown): value is OrganizationVerificationRecord {
+  if (!isDurablePlainObject(value)) return false;
+  if (!hasExactDurableKeys(value, [
+    "recordId", "organizationId", "revisions", "attempts", "concurrencyVersion",
+    "createdAt", "updatedAt",
+  ], ["currentDraftId"])) return false;
+  if (
+    !isDurableIdentity(value.recordId) || !isDurableIdentity(value.organizationId) ||
+    (value.currentDraftId !== undefined && !isDurableIdentity(value.currentDraftId)) ||
+    !isDurablePositiveVersion(value.concurrencyVersion) ||
+    !isDurableTimestamp(value.createdAt) || !isDurableTimestamp(value.updatedAt) ||
+    Date.parse(value.updatedAt) < Date.parse(value.createdAt) ||
+    !Array.isArray(value.revisions) || !Array.isArray(value.attempts)
+  ) return false;
+  return value.revisions.every((entry, index) =>
+    isDurablePlainObject(entry) && hasExactDurableKeys(entry, ["revisionId", "sequence"]) &&
+    isDurableIdentity(entry.revisionId) && Number(entry.sequence) === index + 1,
+  ) && value.attempts.every((entry, index) =>
+    isDurablePlainObject(entry) && hasExactDurableKeys(entry, ["attemptId", "revisionId", "sequence"]) &&
+    isDurableIdentity(entry.attemptId) && isDurableIdentity(entry.revisionId) &&
+    Number(entry.sequence) === index + 1,
+  );
+}
+
+export function rehydrateOrganizationVerificationRecord(
+  durableData: unknown,
+): CoreDomainResult<OrganizationVerificationRecord> {
+  if (!isDurableRecord(durableData)) return domainFailure("mutable_input_rejected");
+  return domainSuccess(sealOrganizationVerificationRecord({
+    ...durableData,
+    revisions: Object.freeze(durableData.revisions.map((entry) => Object.freeze({ ...entry }))),
+    attempts: Object.freeze(durableData.attempts.map((entry) => Object.freeze({ ...entry }))),
+  }));
 }
 
 export function attachDraftToRecord(

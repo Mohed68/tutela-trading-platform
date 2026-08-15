@@ -288,6 +288,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isPersistenceContract = lowerFile.startsWith(
     "server/organization-verification/application/persistence-contract/",
   );
+  const isDurableEvidenceContract = lowerFile.startsWith(
+    "server/organization-verification/application/durable-evidence-contract/",
+  );
   const isInMemoryPersistenceAdapter = lowerFile.startsWith(
     "server/organization-verification/infrastructure/persistence/in-memory/",
   );
@@ -969,6 +972,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       const allowed =
         /^\.\/[A-Za-z0-9]+\.js$/.test(specifier) ||
         specifier === "../index.js" ||
+        specifier === "../durableRehydrationValidation.js" ||
         specifier === "../../../organization-registry/index.js" ||
         specifier === "node:crypto";
       if (
@@ -1010,6 +1014,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       const allowed =
         /^\.\/[A-Za-z0-9]+\.js$/.test(specifier) ||
         specifier === "../evidence-snapshot/index.js" ||
+        specifier === "../durableRehydrationValidation.js" ||
         specifier === "node:crypto";
       if (
         !allowed ||
@@ -1067,6 +1072,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         /^\.\/[A-Za-z0-9]+\.js$/.test(specifier) ||
         specifier === "../evaluation-projection/index.js" ||
         specifier === "../policy/index.js" ||
+        specifier === "../durableRehydrationValidation.js" ||
         specifier === "node:crypto";
       if (
         !allowed ||
@@ -1179,6 +1185,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isDurableEvidenceContract &&
     !isApplicationServiceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
@@ -1238,6 +1245,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isDurableEvidenceContract &&
     !isApplicationServiceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
@@ -1292,6 +1300,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowContract &&
     !isWorkflowRuntime &&
     !isPersistenceContract &&
+    !isDurableEvidenceContract &&
     !isApplicationServiceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
@@ -1326,6 +1335,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       if (
         !/^\.\/[A-Za-z0-9]+\.js$/.test(specifier) &&
         !/^\.\.\/(?:attempt|ids|record|revision)\.js$/.test(specifier) &&
+        specifier !== "../durableRehydrationValidation.js" &&
         specifier !== "../../../organization-registry/index.js"
       ) {
         addViolation(
@@ -1549,6 +1559,8 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       const isApprovedExecutionContractSurface =
         specifier === "../policy-runtime-contract/index.js";
       const isApprovedCoreSurface = specifier === "../index.js";
+      const isApprovedDurableValidation =
+        specifier === "../durableRehydrationValidation.js";
       const isApprovedHashingPrimitive = specifier === "node:crypto";
       if (
         !isLocalRuntimeModule &&
@@ -1556,6 +1568,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         !isApprovedPolicySurface &&
         !isApprovedExecutionContractSurface &&
         !isApprovedCoreSurface &&
+        !isApprovedDurableValidation &&
         !isApprovedHashingPrimitive
       ) {
         addViolation(
@@ -1694,6 +1707,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     const isExecutor = lowerFile.endsWith(
       "/domain/decision-trust-integration/executedecisiontrustintegration.ts",
     );
+    const isDurableExecutionRehydrator = lowerFile.endsWith(
+      "/domain/decision-trust-integration/decisiontrustintegrationexecution.ts",
+    );
     const isTrustDerivationBoundary = lowerFile.endsWith(
       "/domain/decision-trust-integration/trustderivation.ts",
     );
@@ -1706,6 +1722,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         specifier === "../decision/index.js" ||
         specifier === "../trust-status/index.js" ||
         specifier === "../decision-trust-integration-contract/index.js" ||
+        specifier === "../durableRehydrationValidation.js" ||
         specifier === "node:crypto";
       if (
         !allowed ||
@@ -1750,6 +1767,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
 
     if (
       !isExecutor &&
+      !isDurableExecutionRehydrator &&
       /\b(?:adaptPolicyEvaluationCompletionToNormalizedEvaluation|decideOrganizationVerification|createOrganizationVerificationDecisionTrustIntegrationInputBinding|createOrganizationVerificationDecisionTrustIntegrationBinding)\s*\(/.test(
         input.source,
       )
@@ -1837,7 +1855,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
         specifier === "node:crypto" ||
         specifier === "../../../organization-registry/index.js" ||
-        /^\.\.\/\.\.\/domain\/(?:attempt|ids|process|record|revision|submission)\.js$/.test(
+        /^\.\.\/\.\.\/domain\/(?:attempt|ids|process|record|revision|submission|durableRehydrationValidation)\.js$/.test(
           specifier,
         );
       if (
@@ -1959,6 +1977,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isReplayRuntime &&
     !isApplicationServiceContract &&
     !isApplicationServiceRuntime &&
+    !isDurableEvidenceContract &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)attempt-lifecycle-contract(?:\/|$)/i.test(specifier),
@@ -1983,6 +2002,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         specifier === "../../domain/evaluation-projection/index.js" ||
         specifier === "../../domain/evaluation-input/index.js" ||
         specifier === "../../domain/policy-runtime/index.js" ||
+        specifier === "../../domain/durableRehydrationValidation.js" ||
         specifier ===
           "../../domain/decision-trust-integration/index.js";
       if (
@@ -2033,6 +2053,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isReplayRuntime &&
     !isApplicationServiceContract &&
     !isApplicationServiceRuntime &&
+    !isDurableEvidenceContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)workflow-contract(?:\/|$)/i.test(specifier),
     )
@@ -2244,6 +2265,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isReplayRuntime &&
     !isApplicationServiceContract &&
     !isApplicationServiceRuntime &&
+    !isDurableEvidenceContract &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)persistence-contract(?:\/|$)/i.test(specifier),
@@ -2710,6 +2732,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowRuntime &&
     !isPersistenceContract &&
     !isApplicationServiceContract &&
+    !isDurableEvidenceContract &&
     !isDomainPublicIndex &&
     specifiers.some((specifier) =>
       /(?:^|\/)policy-runtime(?:\/|$)/i.test(specifier),
@@ -2748,6 +2771,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowRuntime &&
     !isPersistenceContract &&
     !isApplicationServiceContract &&
+    !isDurableEvidenceContract &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -2809,6 +2833,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     isOrganizationVerification &&
     !isDecisionDomain &&
+    !isDurableEvidenceContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)decision\/decisionEngine(?:\.js)?$/i.test(specifier),
     )
@@ -2867,6 +2892,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         !/^\.\/[A-Za-z0-9]+\.js$/.test(specifier) &&
         specifier !== "../decision/index.js" &&
         specifier !== "../ids.js" &&
+        specifier !== "../durableRehydrationValidation.js" &&
         specifier !== "../../../organization-registry/index.js"
       ) {
         addViolation(
@@ -2944,6 +2970,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     isOrganizationVerification &&
     !isTrustStatusDomain &&
+    !isDurableEvidenceContract &&
     specifiers.some((specifier) =>
       /(?:^|\/)trust-status\/trustStatusDeriver(?:\.js)?$/i.test(specifier),
     )
@@ -4917,4 +4944,45 @@ test("Cross-layer conformance public surface remains inert", () => {
     source:
       'export { executeConformance, createConformanceRuntime } from "./runtime.js";',
   });
+});
+
+test("Phase 8E.0a durable boundary cannot access seals, private constructors, or business authorities", () => {
+  const durableBoundary = fs.readFileSync(
+    path.join(REPOSITORY_ROOT, "server/organization-verification/application/durable-evidence-contract/durableEvidence.ts"),
+    "utf8",
+  );
+  for (const forbidden of [
+    /\b(?:decisionSeal|trustStatusSeal|workflowStepSeal|lifecycleExecutionSeal)\b/,
+    /\b(?:createDecisionInternal|createTrustStatusInternal|createOrganizationVerificationDecisionTrustIntegrationExecutionInternal)\b/,
+    /\b(?:decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|executeOrganizationVerificationPolicyEvaluation|executeOrganizationVerificationWorkflowStep)\s*\(/,
+    /WorkflowStepExecution/,
+  ]) assert.equal(forbidden.test(durableBoundary), false);
+});
+
+test("Phase 8E.0a domain rehydration is not leaked through frozen public domain surfaces", () => {
+  for (const relative of [
+    "server/organization-verification/domain/decision/index.ts",
+    "server/organization-verification/domain/trust-status/index.ts",
+    "server/organization-verification/domain/evidence-snapshot/index.ts",
+    "server/organization-verification/domain/evaluation-projection/index.ts",
+    "server/organization-verification/domain/evaluation-input/index.ts",
+    "server/organization-verification/domain/policy-runtime/index.ts",
+    "server/organization-verification/domain/decision-trust-integration/index.ts",
+    "server/organization-verification/application/workflow-contract/index.ts",
+    "server/organization-verification/application/attempt-lifecycle-contract/index.ts",
+  ]) {
+    const source = fs.readFileSync(path.join(REPOSITORY_ROOT, relative), "utf8");
+    assert.equal(/rehydrateOrganizationVerification/.test(source), false, relative);
+  }
+});
+
+test("Phase 8E.0a uses explicit per-stream rehydration sessions and no global registry", () => {
+  const source = fs.readFileSync(
+    path.join(REPOSITORY_ROOT, "server/organization-verification/application/durable-evidence-contract/durableEvidence.ts"),
+    "utf8",
+  );
+  assert.match(source, /createOrganizationVerificationDurableEvidenceRehydrationSession/);
+  assert.match(source, /const policyExecutions = new Map/);
+  assert.equal(/^(?:export\s+)?const\s+policyExecutions\s*=/m.test(source), false);
+  assert.equal(/(?:latest|current|default)PolicyExecution/.test(source), false);
 });

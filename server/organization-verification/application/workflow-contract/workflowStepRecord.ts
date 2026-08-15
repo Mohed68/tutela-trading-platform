@@ -35,10 +35,20 @@ import { fingerprintWorkflowValue } from "./workflowFingerprint.js";
 import {
   workflowAuthorityForStep,
 } from "./workflowAuthorityMatrix.js";
-import type {
+import {
+  ORGANIZATION_VERIFICATION_WORKFLOW_STAGES,
+  ORGANIZATION_VERIFICATION_WORKFLOW_STEPS,
   OrganizationVerificationWorkflowStage,
   OrganizationVerificationWorkflowStep,
 } from "./workflowStages.js";
+import {
+  hasExactDurableKeys,
+  isDurableIdentity,
+  isDurablePlainObject,
+  isDurablePositiveVersion,
+  isDurableStringArray,
+  isDurableTimestamp,
+} from "../../domain/durableRehydrationValidation.js";
 
 type LifecycleExecution = OrganizationVerificationAttemptLifecycleExecution;
 
@@ -595,4 +605,58 @@ export function createOrganizationVerificationWorkflowStepRecord(
     }
   }
   return workflowSuccess(record);
+}
+
+function isDurableWorkflowArtifactFingerprints(value: unknown): value is readonly OrganizationVerificationWorkflowArtifactFingerprint[] {
+  return Array.isArray(value) && value.every((entry) =>
+    isDurablePlainObject(entry) && hasExactDurableKeys(entry, ["artifactType", "fingerprint"]) &&
+    isDurableIdentity(entry.artifactType) && isDurableIdentity(entry.fingerprint),
+  );
+}
+
+function isDurableWorkflowStepRecord(value: unknown): value is OrganizationVerificationWorkflowStepRecord {
+  if (!isDurablePlainObject(value)) return false;
+  const required = [
+    "workflowStepId", "workflowExecutionId", "predecessorWorkflowExecutionVersion",
+    "nextWorkflowExecutionVersion", "predecessorStage", "requestedStep", "resultingStage",
+    "organizationId", "recordId", "revisionId", "attemptId", "occurredAt",
+    "inputArtifactFingerprints", "outputArtifactFingerprints", "provenanceReferences",
+    "integrityReferences", "workflowStepBindingFingerprint",
+  ];
+  const optional = ["correlationId", "causationId", "reasonReference"];
+  if (!hasExactDurableKeys(value, required, optional)) return false;
+  return ["workflowStepId", "workflowExecutionId", "organizationId", "recordId", "revisionId", "attemptId", "workflowStepBindingFingerprint", ...optional]
+    .every((key) => value[key] === undefined || isDurableIdentity(value[key])) &&
+    isDurablePositiveVersion(value.predecessorWorkflowExecutionVersion) &&
+    value.nextWorkflowExecutionVersion === Number(value.predecessorWorkflowExecutionVersion) + 1 &&
+    ORGANIZATION_VERIFICATION_WORKFLOW_STAGES.some((stage) => stage === value.predecessorStage) &&
+    ORGANIZATION_VERIFICATION_WORKFLOW_STAGES.some((stage) => stage === value.resultingStage) &&
+    ORGANIZATION_VERIFICATION_WORKFLOW_STEPS.some((step) => step === value.requestedStep) &&
+    isDurableTimestamp(value.occurredAt) &&
+    isDurableWorkflowArtifactFingerprints(value.inputArtifactFingerprints) &&
+    isDurableWorkflowArtifactFingerprints(value.outputArtifactFingerprints) &&
+    isDurableStringArray(value.provenanceReferences) && isDurableStringArray(value.integrityReferences);
+}
+
+export function rehydrateOrganizationVerificationWorkflowStepRecord(
+  durableData: unknown,
+): OrganizationVerificationWorkflowContractResult<OrganizationVerificationWorkflowStepRecord> {
+  if (!isDurableWorkflowStepRecord(durableData)) return workflowFailure("invalid_evidence");
+  const data = {
+    ...durableData,
+    inputArtifactFingerprints: Object.freeze(durableData.inputArtifactFingerprints.map((entry) => Object.freeze({ ...entry }))),
+    outputArtifactFingerprints: Object.freeze(durableData.outputArtifactFingerprints.map((entry) => Object.freeze({ ...entry }))),
+    provenanceReferences: Object.freeze([...durableData.provenanceReferences]),
+    integrityReferences: Object.freeze([...durableData.integrityReferences]),
+  };
+  const { workflowStepBindingFingerprint: _storedFingerprint, ...semantic } = data;
+  const expected = fingerprintWorkflowValue({
+    scope: "organization_verification_workflow_step_binding",
+    ...semantic,
+  });
+  if (expected !== durableData.workflowStepBindingFingerprint) return workflowFailure("artifact_fingerprint_mismatch");
+  const candidate = { ...data };
+  Object.defineProperty(candidate, workflowStepSeal, { value: true, enumerable: false, configurable: false, writable: false });
+  authenticWorkflowStepRecords.add(candidate);
+  return workflowSuccess(Object.freeze(candidate));
 }

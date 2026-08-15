@@ -13,6 +13,14 @@ import {
   contractSuccess,
   type AttemptLifecycleContractResult,
 } from "./attemptLifecycleErrors.js";
+import {
+  hasExactDurableKeys,
+  isDurableIdentity,
+  isDurablePlainObject,
+  isDurablePositiveVersion,
+  isDurableStringArray,
+  isDurableTimestamp,
+} from "../../domain/durableRehydrationValidation.js";
 
 export type AttemptLifecycleRequestedTransition =
   | "queued"
@@ -145,6 +153,42 @@ export function createOrganizationVerificationAttemptLifecycleTransitionRecord(
         }),
     }),
   );
+}
+
+function isDurableTransitionRecord(
+  value: unknown,
+): value is OrganizationVerificationAttemptLifecycleTransitionRecord {
+  if (!isDurablePlainObject(value)) return false;
+  const required = [
+    "transitionId", "lifecycleExecutionId", "predecessorLifecycleExecutionVersion",
+    "nextLifecycleExecutionVersion", "attemptId", "predecessorAttemptState",
+    "requestedTransition", "resultingAttemptState", "occurredAt",
+    "provenanceReferences", "integrityReferences",
+    "attemptLifecycleTransitionBindingFingerprint",
+  ];
+  const optional = ["correlationId", "causationId", "reasonReference"];
+  if (!hasExactDurableKeys(value, required, optional)) return false;
+  return ["transitionId", "lifecycleExecutionId", "attemptId", "attemptLifecycleTransitionBindingFingerprint", ...optional]
+    .every((key) => value[key] === undefined || isDurableIdentity(value[key])) &&
+    isDurablePositiveVersion(value.predecessorLifecycleExecutionVersion) &&
+    value.nextLifecycleExecutionVersion === Number(value.predecessorLifecycleExecutionVersion) + 1 &&
+    ["not_started", "queued", "running", "completed"].includes(String(value.predecessorAttemptState)) &&
+    ["queued", "running", "completed"].includes(String(value.requestedTransition)) &&
+    value.requestedTransition === value.resultingAttemptState &&
+    isDurableTimestamp(value.occurredAt) && isDurableStringArray(value.provenanceReferences) &&
+    isDurableStringArray(value.integrityReferences);
+}
+
+export function rehydrateOrganizationVerificationAttemptLifecycleTransitionRecord(
+  durableData: unknown,
+): AttemptLifecycleContractResult<OrganizationVerificationAttemptLifecycleTransitionRecord> {
+  if (!isDurableTransitionRecord(durableData)) return contractFailure("invalid_artifacts");
+  const result = createOrganizationVerificationAttemptLifecycleTransitionRecord(durableData);
+  if (!result.ok) return result;
+  return result.value.attemptLifecycleTransitionBindingFingerprint ===
+    durableData.attemptLifecycleTransitionBindingFingerprint
+    ? result
+    : contractFailure("invalid_artifacts");
 }
 
 export function compareOrganizationVerificationAttemptLifecycleTransitionRecords(

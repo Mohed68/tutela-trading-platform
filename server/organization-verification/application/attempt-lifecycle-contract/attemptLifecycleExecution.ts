@@ -1,6 +1,7 @@
 import type { OrganizationId } from "../../../organization-registry/index.js";
 import {
   isOrganizationVerificationAttempt,
+  rehydrateOrganizationVerificationAttempt,
   type OrganizationVerificationAttempt,
 } from "../../domain/attempt.js";
 import type {
@@ -11,10 +12,11 @@ import type {
 } from "../../domain/ids.js";
 import {
   isOrganizationVerificationRecord,
+  rehydrateOrganizationVerificationRecord,
   type OrganizationVerificationRecord,
 } from "../../domain/record.js";
 import type { OrganizationVerificationRevision } from "../../domain/revision.js";
-import { isOrganizationVerificationRevision } from "../../domain/submission.js";
+import { isOrganizationVerificationRevision, rehydrateOrganizationVerificationRevision } from "../../domain/submission.js";
 import {
   normalizeAttemptLifecycleEvidenceArtifacts,
   validAttemptLifecycleIdentity,
@@ -32,7 +34,16 @@ import {
   compareOrganizationVerificationAttemptLifecycleTransitionRecords,
   isOrganizationVerificationAttemptLifecycleTransitionRecord,
   type OrganizationVerificationAttemptLifecycleTransitionRecord,
+  rehydrateOrganizationVerificationAttemptLifecycleTransitionRecord,
 } from "./attemptLifecycleTransitionRecord.js";
+import {
+  hasExactDurableKeys,
+  isDurableIdentity,
+  isDurablePlainObject,
+  isDurablePositiveVersion,
+  isDurableStringArray,
+  isDurableTimestamp,
+} from "../../domain/durableRehydrationValidation.js";
 
 export interface CreateAttemptLifecycleExecutionInput
   extends AttemptLifecycleEvidenceArtifacts {
@@ -308,4 +319,50 @@ export function createOrganizationVerificationAttemptLifecycleExecution(
       }),
     }),
   );
+}
+
+function isDurableLifecycleExecution(
+  value: unknown,
+): value is OrganizationVerificationAttemptLifecycleExecution {
+  if (!isDurablePlainObject(value)) return false;
+  const required = [
+    "lifecycleExecutionId", "lifecycleExecutionVersion", "organizationId", "recordId",
+    "revisionId", "attemptId", "attemptSequence", "record", "revision", "attempt",
+    "transitionRecords", "createdAt", "provenanceReferences", "integrityReferences",
+    "attemptLifecycleExecutionFingerprint",
+  ];
+  if (!hasExactDurableKeys(value, required, ["lastTransitionAt"])) return false;
+  return ["lifecycleExecutionId", "organizationId", "recordId", "revisionId", "attemptId", "attemptLifecycleExecutionFingerprint"]
+    .every((key) => isDurableIdentity(value[key])) &&
+    isDurablePositiveVersion(value.lifecycleExecutionVersion) && isDurablePositiveVersion(value.attemptSequence) &&
+    Array.isArray(value.transitionRecords) && isDurableTimestamp(value.createdAt) &&
+    (value.lastTransitionAt === undefined || isDurableTimestamp(value.lastTransitionAt)) &&
+    isDurableStringArray(value.provenanceReferences) && isDurableStringArray(value.integrityReferences);
+}
+
+export function rehydrateOrganizationVerificationAttemptLifecycleExecution(
+  durableData: unknown,
+): AttemptLifecycleContractResult<OrganizationVerificationAttemptLifecycleExecution> {
+  if (!isDurableLifecycleExecution(durableData)) return contractFailure("invalid_artifacts");
+  const record = rehydrateOrganizationVerificationRecord(durableData.record);
+  const revision = rehydrateOrganizationVerificationRevision(durableData.revision);
+  const attempt = rehydrateOrganizationVerificationAttempt(durableData.attempt);
+  if (!record.ok || !revision.ok || !attempt.ok) return contractFailure("invalid_artifacts");
+  const transitions: OrganizationVerificationAttemptLifecycleTransitionRecord[] = [];
+  for (const stored of durableData.transitionRecords) {
+    const transition = rehydrateOrganizationVerificationAttemptLifecycleTransitionRecord(stored);
+    if (!transition.ok) return transition;
+    transitions.push(transition.value);
+  }
+  const result = createOrganizationVerificationAttemptLifecycleExecution({
+    ...durableData,
+    record: record.value,
+    revision: revision.value,
+    attempt: attempt.value,
+    transitionRecords: Object.freeze(transitions),
+  });
+  if (!result.ok) return result;
+  return result.value.attemptLifecycleExecutionFingerprint === durableData.attemptLifecycleExecutionFingerprint
+    ? result
+    : contractFailure("invalid_artifacts");
 }

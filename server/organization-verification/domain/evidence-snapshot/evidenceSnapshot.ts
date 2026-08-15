@@ -26,6 +26,9 @@ import type {
   EvidenceSnapshotVersion,
 } from "./ids.js";
 import type { OrganizationVerificationEvidenceSnapshotSourceManifest } from "./sourceManifest.js";
+import { evidenceSnapshotFailure, evidenceSnapshotSuccess, type EvidenceSnapshotDomainResult } from "./errors.js";
+import { computeEvidenceSnapshotFingerprintInternal } from "./snapshotCanonicalization.js";
+import { deepFreezeDurableValue, hasExactDurableKeys, isDurableIdentity, isDurableJsonValue, isDurablePlainObject, isDurablePositiveVersion, isDurableTimestamp } from "../durableRehydrationValidation.js";
 
 const evidenceSnapshotSeal = Symbol(
   "organization-verification-evidence-snapshot",
@@ -82,6 +85,25 @@ export function createOrganizationVerificationEvidenceSnapshotInternal(
     writable: false,
   });
   return Object.freeze(snapshot);
+}
+
+function isDurableEvidenceSnapshotData(value: unknown): value is OrganizationVerificationEvidenceSnapshotData {
+  if (!isDurablePlainObject(value) || !isDurableJsonValue(value)) return false;
+  const required = ["evidenceSnapshotId", "evidenceSnapshotVersion", "snapshotContractVersion", "snapshotBuilderVersion", "manifestVersion", "organizationId", "recordId", "revisionId", "profileRevisionId", "createdAt", "sourceManifest", "registryProjection", "submissionProjection", "evidenceProjections", "evidenceReferences", "sourceComplete", "sourceIntegrityValid", "sourceDigest", "snapshotFingerprint", "provenanceReference", "correlationReference", "integrityReference"];
+  if (!hasExactDurableKeys(value, required, ["attemptBinding", "sourceCutoffAt"])) return false;
+  return required.filter((key) => !["evidenceSnapshotVersion", "sourceManifest", "registryProjection", "submissionProjection", "evidenceProjections", "evidenceReferences", "sourceComplete", "sourceIntegrityValid", "createdAt"].includes(key))
+    .every((key) => isDurableIdentity(value[key])) && isDurableIdentity(value.evidenceSnapshotVersion) &&
+    value.sourceComplete === true && value.sourceIntegrityValid === true && isDurableTimestamp(value.createdAt) &&
+    (value.sourceCutoffAt === undefined || isDurableTimestamp(value.sourceCutoffAt)) && Array.isArray(value.evidenceProjections) && Array.isArray(value.evidenceReferences);
+}
+
+export function rehydrateOrganizationVerificationEvidenceSnapshot(
+  durableData: unknown,
+): EvidenceSnapshotDomainResult<OrganizationVerificationEvidenceSnapshot> {
+  if (!isDurableEvidenceSnapshotData(durableData)) return evidenceSnapshotFailure("evidence_snapshot_construction_failure");
+  const { snapshotFingerprint, ...semantic } = durableData;
+  if (computeEvidenceSnapshotFingerprintInternal(semantic) !== snapshotFingerprint) return evidenceSnapshotFailure("snapshot_fingerprint_mismatch");
+  return evidenceSnapshotSuccess(createOrganizationVerificationEvidenceSnapshotInternal(deepFreezeDurableValue({ ...durableData })));
 }
 
 export function readOrganizationVerificationEvidenceSnapshotInternal(

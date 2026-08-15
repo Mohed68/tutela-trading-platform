@@ -27,6 +27,16 @@ import {
   type OrganizationVerificationRecord,
 } from "./record.js";
 import type { OrganizationVerificationRevision } from "./revision.js";
+import {
+  hasExactDurableKeys,
+  isDurableIdentity,
+  isDurableJsonValue,
+  isDurablePlainObject,
+  isDurablePositiveVersion,
+  isDurableStringArray,
+  isDurableTimestamp,
+  deepFreezeDurableValue,
+} from "./durableRehydrationValidation.js";
 
 const revisionAuthenticitySeal = Symbol(
   "organization-verification-revision-authenticity",
@@ -57,6 +67,38 @@ export function isOrganizationVerificationRevision(
       true &&
     Object.isFrozen(value)
   );
+}
+
+function isDurableRevision(value: unknown): value is OrganizationVerificationRevision {
+  if (!isDurablePlainObject(value)) return false;
+  const required = [
+    "revisionId", "recordId", "organizationId", "profileRevisionId",
+    "profileRevisionSequence", "profileFingerprint", "sequence", "declaredInputs",
+    "evidenceReferenceIds", "submissionActorAuthorityReference", "submittedAt",
+    "submissionIdempotencyKey", "correlationId",
+  ];
+  if (!hasExactDurableKeys(value, required, ["supersedesRevisionId"])) return false;
+  const authority = value.submissionActorAuthorityReference;
+  return required.filter((key) => !["profileRevisionSequence", "sequence", "declaredInputs", "evidenceReferenceIds", "submissionActorAuthorityReference", "submittedAt"].includes(key))
+    .every((key) => isDurableIdentity(value[key])) &&
+    (value.supersedesRevisionId === undefined || isDurableIdentity(value.supersedesRevisionId)) &&
+    isDurablePositiveVersion(value.profileRevisionSequence) && isDurablePositiveVersion(value.sequence) &&
+    isDurableTimestamp(value.submittedAt) && isDurableJsonValue(value.declaredInputs) &&
+    isDurableStringArray(value.evidenceReferenceIds, true) &&
+    isDurablePlainObject(authority) && isDurableJsonValue(authority);
+}
+
+export function rehydrateOrganizationVerificationRevision(
+  durableData: unknown,
+): CoreDomainResult<OrganizationVerificationRevision> {
+  if (!isDurableRevision(durableData)) return domainFailure("mutable_input_rejected");
+  const candidate = {
+    ...durableData,
+    declaredInputs: deepFreezeDurableValue({ ...durableData.declaredInputs }),
+    evidenceReferenceIds: Object.freeze([...durableData.evidenceReferenceIds]),
+    submissionActorAuthorityReference: deepFreezeDurableValue({ ...durableData.submissionActorAuthorityReference }),
+  };
+  return domainSuccess(sealOrganizationVerificationRevision(candidate));
 }
 
 export interface OrganizationVerificationSubmission {

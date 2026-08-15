@@ -33,10 +33,19 @@ import {
   type OrganizationVerificationWorkflowStepRecord,
 } from "./workflowStepRecord.js";
 import {
+  ORGANIZATION_VERIFICATION_WORKFLOW_STAGES,
   isOrganizationVerificationWorkflowStage,
   type OrganizationVerificationWorkflowStage,
   type OrganizationVerificationWorkflowStep,
 } from "./workflowStages.js";
+import {
+  hasExactDurableKeys,
+  isDurableIdentity,
+  isDurablePlainObject,
+  isDurablePositiveVersion,
+  isDurableStringArray,
+  isDurableTimestamp,
+} from "../../domain/durableRehydrationValidation.js";
 
 type LifecycleExecution = OrganizationVerificationAttemptLifecycleExecution;
 
@@ -551,4 +560,36 @@ export function createOrganizationVerificationWorkflowExecution(
       : workflowFailure("workflow_conflict");
   }
   return workflowSuccess(execution);
+}
+
+function isDurableWorkflowGenesis(value: unknown): value is OrganizationVerificationWorkflowExecution {
+  if (!isDurablePlainObject(value)) return false;
+  const required = [
+    "workflowExecutionId", "workflowExecutionVersion", "organizationId", "recordId", "revisionId",
+    "attemptId", "workflowStage", "lifecycleExecution", "stepRecords", "createdAt",
+    "provenanceReferences", "integrityReferences", "workflowExecutionFingerprint",
+  ];
+  if (!hasExactDurableKeys(value, required, ["lastStepAt"])) return false;
+  return ["workflowExecutionId", "organizationId", "recordId", "revisionId", "attemptId", "workflowExecutionFingerprint"]
+    .every((key) => isDurableIdentity(value[key])) && isDurablePositiveVersion(value.workflowExecutionVersion) &&
+    ORGANIZATION_VERIFICATION_WORKFLOW_STAGES.some((stage) => stage === value.workflowStage) &&
+    Array.isArray(value.stepRecords) && value.stepRecords.length === 0 && isDurableTimestamp(value.createdAt) &&
+    (value.lastStepAt === undefined || isDurableTimestamp(value.lastStepAt)) &&
+    isDurableStringArray(value.provenanceReferences) && isDurableStringArray(value.integrityReferences);
+}
+
+export function rehydrateOrganizationVerificationWorkflowGenesis(
+  durableData: unknown,
+  lifecycleExecution: OrganizationVerificationAttemptLifecycleExecution,
+): OrganizationVerificationWorkflowContractResult<OrganizationVerificationWorkflowExecution> {
+  if (!isDurableWorkflowGenesis(durableData)) return workflowFailure("invalid_evidence");
+  const result = createOrganizationVerificationWorkflowExecution({
+    ...durableData,
+    lifecycleExecution,
+    stepRecords: Object.freeze([]),
+  });
+  if (!result.ok) return result;
+  return result.value.workflowExecutionFingerprint === durableData.workflowExecutionFingerprint
+    ? result
+    : workflowFailure("artifact_fingerprint_mismatch");
 }

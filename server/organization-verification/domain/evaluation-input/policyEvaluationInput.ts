@@ -9,6 +9,9 @@ import type {
   PolicyEvaluationInputContractVersion,
 } from "./ids.js";
 import type { OrganizationVerificationPolicySetBinding } from "./policySetBinding.js";
+import { inputFailure, inputSuccess, type PolicyEvaluationInputDomainResult } from "./errors.js";
+import { computePolicyEvaluationInputFingerprintInternal } from "./evaluationInputCanonicalization.js";
+import { deepFreezeDurableValue, hasExactDurableKeys, isDurableIdentity, isDurableJsonValue, isDurablePlainObject, isDurablePositiveVersion, isDurableTimestamp } from "../durableRehydrationValidation.js";
 
 const policyEvaluationInputSeal = Symbol(
   "organization-verification-policy-evaluation-input",
@@ -70,6 +73,23 @@ export function createOrganizationVerificationPolicyEvaluationInputInternal(
     writable: false,
   });
   return Object.freeze(policyEvaluationInput);
+}
+
+function isDurablePolicyEvaluationInputData(value: unknown): value is OrganizationVerificationPolicyEvaluationInputData {
+  if (!isDurablePlainObject(value) || !isDurableJsonValue(value)) return false;
+  const required = ["policyEvaluationInputId", "policyEvaluationInputVersion", "inputContractVersion", "inputBuilderVersion", "projectionBinding", "policySetBinding", "evaluationContext", "evaluationScope", "factSurface", "createdAt", "inputFingerprint"];
+  return hasExactDurableKeys(value, required) &&
+    ["policyEvaluationInputId", "inputContractVersion", "inputBuilderVersion", "inputFingerprint"].every((key) => isDurableIdentity(value[key])) &&
+    isDurableIdentity(value.policyEvaluationInputVersion) && isDurableTimestamp(value.createdAt);
+}
+
+export function rehydrateOrganizationVerificationPolicyEvaluationInput(
+  durableData: unknown,
+): PolicyEvaluationInputDomainResult<OrganizationVerificationPolicyEvaluationInput> {
+  if (!isDurablePolicyEvaluationInputData(durableData)) return inputFailure("policy_evaluation_input_construction_failure");
+  const { inputFingerprint, ...semantic } = durableData;
+  if (computePolicyEvaluationInputFingerprintInternal(semantic) !== inputFingerprint) return inputFailure("invalid_evaluation_input_fingerprint");
+  return inputSuccess(createOrganizationVerificationPolicyEvaluationInputInternal(deepFreezeDurableValue({ ...durableData })));
 }
 
 export function readOrganizationVerificationPolicyEvaluationInputInternal(

@@ -2,6 +2,7 @@ import type { OrganizationVerificationAttempt } from "../attempt.js";
 import type { OrganizationVerificationRecord } from "../record.js";
 import type { OrganizationVerificationRevision } from "../revision.js";
 import {
+  ORGANIZATION_VERIFICATION_DECISION_OUTCOMES,
   type OrganizationVerificationDecisionData,
   type OrganizationVerificationDecisionOutcome,
 } from "./decision.js";
@@ -15,6 +16,12 @@ import type {
   DecisionIntegrityReference,
   OrganizationVerificationDecisionId,
 } from "./ids.js";
+import {
+  hasExactDurableKeys,
+  isDurableIdentity,
+  isDurablePlainObject,
+  isDurableTimestamp,
+} from "../durableRehydrationValidation.js";
 import {
   readSealedEvaluationCompletion,
   type SealedNormalizedEvaluationCompletion,
@@ -68,6 +75,40 @@ function createDecisionInternal(
     policyProvenance: Object.freeze({ ...input.policyProvenance }),
     [decisionSeal]: true as const,
   });
+}
+
+function isDurableDecisionData(
+  value: unknown,
+): value is OrganizationVerificationDecisionData {
+  if (!isDurablePlainObject(value)) return false;
+  const required = [
+    "decisionId", "recordId", "revisionId", "attemptId", "organizationId",
+    "snapshotId", "snapshotFingerprint", "evaluationCompletionId", "outcome",
+    "decisionEngineVersion", "policyProvenance", "decidedAt", "correlationId",
+    "integrityReference",
+  ];
+  if (!hasExactDurableKeys(value, required, ["supersedesDecisionId"])) return false;
+  const policy = value.policyProvenance;
+  return (
+    required.filter((key) => !["outcome", "policyProvenance", "decidedAt"].includes(key))
+      .every((key) => isDurableIdentity(value[key])) &&
+    ORGANIZATION_VERIFICATION_DECISION_OUTCOMES.some((outcome) => outcome === value.outcome) &&
+    isDurableTimestamp(value.decidedAt) &&
+    (value.supersedesDecisionId === undefined || isDurableIdentity(value.supersedesDecisionId)) &&
+    isDurablePlainObject(policy) &&
+    hasExactDurableKeys(policy, ["policySetReference", "policySetVersion"]) &&
+    isDurableIdentity(policy.policySetReference) &&
+    isDurableIdentity(policy.policySetVersion)
+  );
+}
+
+export function rehydrateOrganizationVerificationDecision(
+  durableData: unknown,
+): DecisionDomainResult<OrganizationVerificationDecision> {
+  if (!isDurableDecisionData(durableData)) {
+    return decisionFailure("decision_context_invalid");
+  }
+  return decisionSuccess(createDecisionInternal(durableData));
 }
 
 function readDecisionInternal(

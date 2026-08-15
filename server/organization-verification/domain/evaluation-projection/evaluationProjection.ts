@@ -24,6 +24,9 @@ import type {
   EvaluationProjectionSchemaVersion,
   EvaluationProjectionVersion,
 } from "./ids.js";
+import { evaluationProjectionFailure, evaluationProjectionSuccess, type EvaluationProjectionDomainResult } from "./errors.js";
+import { computeEvaluationProjectionFingerprintInternal } from "./canonicalization.js";
+import { deepFreezeDurableValue, hasExactDurableKeys, isDurableIdentity, isDurableJsonValue, isDurablePlainObject, isDurablePositiveVersion, isDurableTimestamp } from "../durableRehydrationValidation.js";
 
 const evaluationProjectionSeal = Symbol(
   "organization-verification-evaluation-projection",
@@ -151,6 +154,23 @@ export function createOrganizationVerificationEvaluationProjectionInternal(
     writable: false,
   });
   return Object.freeze(projection);
+}
+
+function isDurableEvaluationProjectionData(value: unknown): value is OrganizationVerificationEvaluationProjectionData {
+  if (!isDurablePlainObject(value) || !isDurableJsonValue(value)) return false;
+  const required = ["evaluationProjectionId", "evaluationProjectionVersion", "projectionContractVersion", "projectionBuilderVersion", "projectionSchemaVersion", "identity", "source", "registryFacts", "submissionFacts", "evidenceFacts", "projectedAt", "projectionFingerprint", "provenanceReference", "integrityReference"];
+  return hasExactDurableKeys(value, required) &&
+    ["evaluationProjectionId", "projectionContractVersion", "projectionBuilderVersion", "projectionSchemaVersion", "projectionFingerprint", "provenanceReference", "integrityReference"].every((key) => isDurableIdentity(value[key])) &&
+    isDurableIdentity(value.evaluationProjectionVersion) && isDurableTimestamp(value.projectedAt) && Array.isArray(value.evidenceFacts);
+}
+
+export function rehydrateOrganizationVerificationEvaluationProjection(
+  durableData: unknown,
+): EvaluationProjectionDomainResult<OrganizationVerificationEvaluationProjection> {
+  if (!isDurableEvaluationProjectionData(durableData)) return evaluationProjectionFailure("evaluation_projection_construction_failure");
+  const { projectionFingerprint, ...semantic } = durableData;
+  if (computeEvaluationProjectionFingerprintInternal(semantic) !== projectionFingerprint) return evaluationProjectionFailure("evaluation_projection_fingerprint_mismatch");
+  return evaluationProjectionSuccess(createOrganizationVerificationEvaluationProjectionInternal(deepFreezeDurableValue({ ...durableData })));
 }
 
 export function isOrganizationVerificationEvaluationProjection(

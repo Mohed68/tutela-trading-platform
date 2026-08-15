@@ -19,6 +19,12 @@ import {
   type OrganizationVerificationTrustStatusValue,
   type OrganizationVerificationTrustStatusValueLiteral,
 } from "./trustStatus.js";
+import {
+  hasExactDurableKeys,
+  isDurableIdentity,
+  isDurablePlainObject,
+  isDurableTimestamp,
+} from "../durableRehydrationValidation.js";
 
 const trustStatusSeal: unique symbol = Symbol(
   "organization_verification_trust_status",
@@ -64,6 +70,40 @@ function createTrustStatusInternal(
     writable: false,
   });
   return Object.freeze(trustStatus) as OrganizationVerificationTrustStatus;
+}
+
+function isDurableTrustStatusData(
+  value: unknown,
+): value is OrganizationVerificationTrustStatusData {
+  if (!isDurablePlainObject(value)) return false;
+  const required = [
+    "projectionId", "organizationId", "recordId", "status", "sourceFactsVersion",
+    "deriverVersion", "derivationAsOf", "derivedAt", "effectiveFrom",
+    "provenanceReference", "correlationId", "integrityReference",
+  ];
+  const optional = [
+    "sourceDecisionId", "sourceRevisionId", "sourceAttemptId", "sourceSnapshotId",
+    "sourceSnapshotFingerprint", "sourceDecisionOutcome", "sourceDecisionApplicability",
+    "effectiveUntil", "invalidationFactId", "supersededDecisionId",
+  ];
+  if (!hasExactDurableKeys(value, required, optional)) return false;
+  if (
+    !["unestablished", "trusted", "not_trusted", "expired", "invalidated"].includes(String(value.status)) ||
+    !["derivationAsOf", "derivedAt", "effectiveFrom"].every((key) => isDurableTimestamp(value[key])) ||
+    (value.effectiveUntil !== undefined && !isDurableTimestamp(value.effectiveUntil))
+  ) return false;
+  return [...required.filter((key) => !["status", "derivationAsOf", "derivedAt", "effectiveFrom"].includes(key)),
+    ...optional.filter((key) => !["sourceDecisionOutcome", "sourceDecisionApplicability", "effectiveUntil"].includes(key))]
+    .every((key) => value[key] === undefined || isDurableIdentity(value[key]));
+}
+
+export function rehydrateOrganizationVerificationTrustStatus(
+  durableData: unknown,
+): TrustStatusDomainResult<OrganizationVerificationTrustStatus> {
+  if (!isDurableTrustStatusData(durableData)) {
+    return trustStatusFailure("trust_source_facts_integrity_invalid");
+  }
+  return trustStatusSuccess(createTrustStatusInternal(durableData));
 }
 
 export function isOrganizationVerificationTrustStatus(

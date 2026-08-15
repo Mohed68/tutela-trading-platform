@@ -19,10 +19,14 @@ import type {
 import {
   ORGANIZATION_VERIFICATION_POLICY_RUNTIME_EXECUTION_CONTRACT_VERSION,
   ORGANIZATION_VERIFICATION_POLICY_RUNTIME_EXECUTOR_VERSION,
+  createOrganizationVerificationPolicyRuntimeExecutionFingerprint,
   type OrganizationVerificationPolicyRuntimeExecutionContractVersion,
   type OrganizationVerificationPolicyRuntimeExecutionFingerprint,
   type OrganizationVerificationPolicyRuntimeExecutorVersion,
 } from "./ids.js";
+import { fingerprintPolicyRuntimeExecutionInternal } from "./canonical.js";
+import { policyRuntimeFailure, policyRuntimeSuccess, type OrganizationVerificationPolicyRuntimeResult } from "./errors.js";
+import { deepFreezeDurableValue, hasExactDurableKeys, isDurableIdentity, isDurableJsonValue, isDurablePlainObject, isDurablePositiveVersion, isDurableTimestamp } from "../durableRehydrationValidation.js";
 
 const policyRuntimeExecutionSeal = Symbol(
   "organization-verification-policy-runtime-execution",
@@ -84,6 +88,25 @@ export function createOrganizationVerificationPolicyEvaluationExecutionInternal(
     writable: false,
   });
   return Object.freeze(execution);
+}
+
+function isDurablePolicyExecutionData(value: unknown): value is OrganizationVerificationPolicyEvaluationExecutionData {
+  if (!isDurablePlainObject(value) || !isDurableJsonValue(value)) return false;
+  const required = ["executionId", "executionContractVersion", "executorVersion", "policyEvaluationInputId", "policyEvaluationInputVersion", "policyEvaluationInputFingerprint", "policySetId", "policySetVersion", "policySetFingerprint", "implementationSetId", "implementationSetVersion", "implementationSetFingerprint", "executionArtifactsFingerprint", "startedAt", "completedAt", "provenanceReference", "integrityReference", "ruleExecutions", "findings", "completion", "executionFingerprint"];
+  return hasExactDurableKeys(value, required) && required.filter((key) => !["policyEvaluationInputVersion", "implementationSetVersion", "ruleExecutions", "findings", "completion", "startedAt", "completedAt"].includes(key)).every((key) => isDurableIdentity(value[key])) &&
+    isDurableIdentity(value.policyEvaluationInputVersion) && isDurableIdentity(value.implementationSetVersion) &&
+    isDurableTimestamp(value.startedAt) && isDurableTimestamp(value.completedAt) && Date.parse(value.completedAt) >= Date.parse(value.startedAt) &&
+    Array.isArray(value.ruleExecutions) && Array.isArray(value.findings);
+}
+
+export function rehydrateOrganizationVerificationPolicyEvaluationExecution(
+  durableData: unknown,
+): OrganizationVerificationPolicyRuntimeResult<OrganizationVerificationPolicyEvaluationExecution> {
+  if (!isDurablePolicyExecutionData(durableData)) return policyRuntimeFailure("execution_fingerprint_mismatch");
+  const { executionFingerprint, ...semantic } = durableData;
+  const expected = createOrganizationVerificationPolicyRuntimeExecutionFingerprint(fingerprintPolicyRuntimeExecutionInternal(semantic));
+  if (!expected.ok || expected.value !== executionFingerprint) return policyRuntimeFailure("execution_fingerprint_mismatch");
+  return policyRuntimeSuccess(createOrganizationVerificationPolicyEvaluationExecutionInternal(deepFreezeDurableValue({ ...durableData })));
 }
 
 export function isOrganizationVerificationPolicyEvaluationExecution(
