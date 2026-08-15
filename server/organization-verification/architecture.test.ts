@@ -116,6 +116,9 @@ type ArchitectureViolationCode =
   | "APPLICATION_SERVICE_CONTRACT_FORBIDDEN_AUTHORITY"
   | "APPLICATION_SERVICE_CONTRACT_PUBLIC_EXPORT_LEAK"
   | "APPLICATION_SERVICE_CONTRACT_IMPLEMENTATION"
+  | "APPLICATION_SERVICE_RUNTIME_FORBIDDEN_DEPENDENCY"
+  | "APPLICATION_SERVICE_RUNTIME_FORBIDDEN_AUTHORITY"
+  | "APPLICATION_SERVICE_RUNTIME_PUBLIC_EXPORT_LEAK"
   | "CROSS_LAYER_CONFORMANCE_FORBIDDEN_DEPENDENCY"
   | "CROSS_LAYER_CONFORMANCE_FORBIDDEN_AUTHORITY"
   | "CROSS_LAYER_CONFORMANCE_PUBLIC_EXPORT_LEAK"
@@ -294,6 +297,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isApplicationServiceContract = lowerFile.startsWith(
     "server/organization-verification/application/application-service-contract/",
   );
+  const isApplicationServiceRuntime = lowerFile.startsWith(
+    "server/organization-verification/application/application-service/",
+  );
   const isCrossLayerConformance = lowerFile.startsWith(
     "server/organization-verification/application/cross-layer-conformance/",
   );
@@ -359,6 +365,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isApplicationServiceContractPublicIndex = lowerFile.endsWith(
     "server/organization-verification/application/application-service-contract/index.ts",
+  );
+  const isApplicationServiceRuntimePublicIndex = lowerFile.endsWith(
+    "server/organization-verification/application/application-service/index.ts",
   );
   const isCrossLayerConformancePublicIndex = lowerFile.endsWith(
     "server/organization-verification/application/cross-layer-conformance/index.ts",
@@ -1949,6 +1958,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPersistenceContract &&
     !isReplayRuntime &&
     !isApplicationServiceContract &&
+    !isApplicationServiceRuntime &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)attempt-lifecycle-contract(?:\/|$)/i.test(specifier),
@@ -2022,6 +2032,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPersistenceContract &&
     !isReplayRuntime &&
     !isApplicationServiceContract &&
+    !isApplicationServiceRuntime &&
     specifiers.some((specifier) =>
       /(?:^|\/)workflow-contract(?:\/|$)/i.test(specifier),
     )
@@ -2132,6 +2143,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isWorkflowRuntime &&
     !isPersistenceContract &&
     !isApplicationServiceContract &&
+    !isApplicationServiceRuntime &&
     specifiers.some((specifier) =>
       /(?:^|\/)workflow-runtime(?:\/|$)/i.test(specifier),
     )
@@ -2231,6 +2243,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isInMemoryPersistenceAdapter &&
     !isReplayRuntime &&
     !isApplicationServiceContract &&
+    !isApplicationServiceRuntime &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
       /(?:^|\/)persistence-contract(?:\/|$)/i.test(specifier),
@@ -2422,6 +2435,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     isOrganizationVerification &&
     !isReplayRuntime &&
     !isApplicationServiceContract &&
+    !isApplicationServiceRuntime &&
     specifiers.some((specifier) =>
       /(?:^|\/)replay-runtime(?:\/|$)/i.test(specifier),
     )
@@ -2522,6 +2536,75 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       "APPLICATION_SERVICE_CONTRACT_PUBLIC_EXPORT_LEAK",
       file,
       "Application-service public surface exposes a seal, authenticity registry, internal result authority, or fingerprint helper",
+    );
+  }
+
+  if (isApplicationServiceRuntime) {
+    for (const specifier of specifiers) {
+      const allowed =
+        /^\.\/[A-Za-z0-9-]+\.js$/.test(specifier) ||
+        specifier === "../application-service-contract/applicationServiceExecutions.js" ||
+        specifier === "../application-service-contract/applicationServiceFailures.js" ||
+        specifier === "../application-service-contract/applicationServiceFingerprint.js" ||
+        specifier === "../application-service-contract/applicationServiceMetadata.js" ||
+        specifier === "../application-service-contract/applicationServicePorts.js" ||
+        specifier === "../application-service-contract/applicationServiceRequests.js" ||
+        specifier === "../application-service-contract/applicationServiceResults.js" ||
+        specifier === "../persistence-contract/index.js" ||
+        specifier === "../replay-runtime/index.js" ||
+        specifier === "../workflow-contract/index.js" ||
+        specifier === "../workflow-runtime/index.js";
+      if (
+        !allowed ||
+        /(?:^|\/)(?:db|database|schema|migrations?|routes?|controllers?|frontend|client|providers?|startup|workers?|queues?|notifications?|permissions?|eligibility|unit-of-work|transactions?|infrastructure)(?:\/|\.|$)/i.test(
+          specifier,
+        ) ||
+        /^(?:node:fs|node:http|node:https|node:net|node:tls|node:dns|node:crypto)$/i.test(
+          specifier,
+        )
+      ) {
+        addViolation(
+          violations,
+          "APPLICATION_SERVICE_RUNTIME_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\bprocess\.env\b|\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)|\brandomUUID\s*\(|\bnanoid\s*\(|\bMath\.random\s*\(|\bas\s+unknown\s+as\b|\bas\s+never\b/.test(
+        input.source,
+      ) ||
+      /\b(?:executeOrganizationVerificationAttemptTransition|buildOrganizationVerificationEvidenceSnapshot|buildOrganizationVerificationEvaluationProjection|buildOrganizationVerificationPolicyEvaluationInput|executeOrganizationVerificationPolicyEvaluation|executeOrganizationVerificationDecisionTrustIntegration)\s*\(/.test(
+        input.source,
+      ) ||
+      /\b(?:executeUntilComplete|automaticProgression|advanceUntilBlocked|RetryPolicy|TimeoutPolicy|LockManager|TransactionManager|UnitOfWork|ServiceLocator|CommandBus|ParticipationEligibility|PublicationEligibility|AuthorizationService)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "APPLICATION_SERVICE_RUNTIME_FORBIDDEN_AUTHORITY",
+        file,
+        "Application Service runtime introduced hidden input, direct business authority, multi-step progression, infrastructure, or downstream authorization",
+      );
+    }
+  }
+
+  if (
+    isApplicationServiceRuntimePublicIndex &&
+    (!/export\s*\{\s*createOrganizationVerificationApplicationService\s*\}/.test(
+      input.source,
+    ) ||
+      /\b(?:applicationRequestSeal|applicationExecutionSeal|applicationResultSeal|applicationFailureInternal|fingerprintApplicationServiceContract|createOrganizationVerificationApplicationExecutionInternal|createStartOrganizationVerificationSuccessInternal|createAdvanceCompletedResultInternal|createAdvanceIdempotentResultInternal)\b/.test(
+        input.source,
+      ))
+  ) {
+    addViolation(
+      violations,
+      "APPLICATION_SERVICE_RUNTIME_PUBLIC_EXPORT_LEAK",
+      file,
+      "Application Service runtime public surface must expose only the approved factory",
     );
   }
 
@@ -4664,6 +4747,82 @@ test("Start authoritative state is Replay reconstructed and never transient gene
     ),
     false,
   );
+});
+
+test("Application Service runtime is infrastructure-free and exposes only the approved factory", () => {
+  const source = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/application-service/applicationService.ts",
+    ),
+    "utf8",
+  );
+  const publicIndex = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/application-service/index.ts",
+    ),
+    "utf8",
+  );
+  assert.equal(
+    /\b(?:process\.env|Date\.now|new\s+Date|randomUUID|Math\.random|nanoid|drizzle|postgres|fetch|UnitOfWork|TransactionManager|CommandBus)\b/.test(
+      source,
+    ),
+    false,
+  );
+  assert.equal(/\/infrastructure\//.test(source), false);
+  assert.equal(/\bas\s+unknown\s+as\b|\bas\s+never\b/.test(source), false);
+  assert.equal(/\b(?:while|executeUntilComplete|advanceUntilBlocked)\b/.test(source), false);
+  assert.equal(
+    publicIndex.trim(),
+    'export { createOrganizationVerificationApplicationService } from "./applicationService.js";',
+  );
+});
+
+test("Application Service preserves Replay authority and non-persisted Runtime evidence", () => {
+  const source = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/application-service/applicationService.ts",
+    ),
+    "utf8",
+  );
+  assert.match(
+    source,
+    /currentWorkflowExecution:\s*replay\.reconstructedWorkflowExecution/,
+  );
+  assert.match(
+    source,
+    /currentLifecycleExecution:\s*replay\.reconstructedAttemptLifecycleExecution/,
+  );
+  assert.equal(
+    /artifact:\s*stepExecution\s*[,}]/.test(
+      source,
+    ),
+    false,
+  );
+  assert.equal(
+    (source.match(/executeOneWorkflowStep\s*\(/g) ?? []).length,
+    1,
+  );
+});
+
+test("Application Service duplicate path is resolved before Workflow Runtime", () => {
+  const source = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/application-service/applicationService.ts",
+    ),
+    "utf8",
+  );
+  const duplicateIndex = source.indexOf("const duplicate = duplicatePair");
+  const runtimeIndex = source.indexOf(
+    "dependencies.workflowRuntime.executeOneWorkflowStep",
+  );
+  assert.ok(duplicateIndex > -1);
+  assert.ok(runtimeIndex > duplicateIndex);
+  assert.match(source, /duplicateAppend\.outcome !== "duplicate_append_idempotent"/);
+  assert.match(source, /createAdvanceIdempotentResultInternal\s*\(/);
 });
 
 test("Workflow Step Execution remains derived, non-persisted, and unreplayed", () => {
