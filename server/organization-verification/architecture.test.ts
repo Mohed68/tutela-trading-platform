@@ -4619,6 +4619,53 @@ test("Advance completed binds Replay authoritative state without Runtime referen
   );
 });
 
+test("Replay identity ownership amendment exposes explicit request and execution metadata only", () => {
+  const replayContracts = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/replay-runtime/replayContracts.ts",
+    ),
+    "utf8",
+  );
+  const applicationRequests = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/application-service-contract/applicationServiceRequests.ts",
+    ),
+    "utf8",
+  );
+  assert.match(replayContracts, /readonly replayRequestId: string/);
+  assert.match(replayContracts, /readonly replayRequestFingerprint: string/);
+  assert.match(applicationRequests, /readonly authoritativeReplay:/);
+  assert.match(applicationRequests, /readonly preExecutionReplay:/);
+  assert.equal(/Date\.now\(|randomUUID\(|Math\.random\(/.test(applicationRequests), false);
+  assert.equal(/Date\.now\(|randomUUID\(|Math\.random\(/.test(replayContracts), false);
+});
+
+test("Start authoritative state is Replay reconstructed and never transient genesis state", () => {
+  const results = fs.readFileSync(
+    path.join(
+      REPOSITORY_ROOT,
+      "server/organization-verification/application/application-service-contract/applicationServiceResults.ts",
+    ),
+    "utf8",
+  );
+  assert.match(
+    results,
+    /value\.currentWorkflowExecution\s*!==\s*\n?\s*replay\.reconstructedWorkflowExecution/,
+  );
+  assert.match(
+    results,
+    /value\.currentLifecycleExecution\s*!==\s*\n?\s*replay\.reconstructedAttemptLifecycleExecution/,
+  );
+  assert.equal(
+    /value\.currentWorkflowExecution\s*!==\s*value\.committedWorkflowGenesis/.test(
+      results,
+    ),
+    false,
+  );
+});
+
 test("Workflow Step Execution remains derived, non-persisted, and unreplayed", () => {
   const persistenceKinds = fs.readFileSync(
     path.join(

@@ -127,6 +127,7 @@ export interface CreateStartOrganizationVerificationRequestInput {
   readonly workflowProvenanceReferences: readonly string[];
   readonly workflowIntegrityReferences: readonly string[];
   readonly persistence: OrganizationVerificationApplicationAppendMetadata;
+  readonly authoritativeReplay: OrganizationVerificationApplicationReplayMetadata;
 }
 
 export interface StartOrganizationVerificationRequest
@@ -149,6 +150,8 @@ export interface CreateAdvanceOrganizationVerificationWorkflowRequestInput {
   readonly causationId: string;
   readonly reasonReference?: string;
   readonly persistence: OrganizationVerificationApplicationAppendMetadata;
+  readonly preExecutionReplay: OrganizationVerificationApplicationReplayMetadata;
+  readonly authoritativeReplay: OrganizationVerificationApplicationReplayMetadata;
   readonly step: OrganizationVerificationAdvanceStepRequest;
 }
 
@@ -221,6 +224,25 @@ function validReferences(value: unknown): value is readonly string[] {
     value.every((entry) => isExactApplicationIdentity(entry)) &&
     new Set(value).size === value.length
   );
+}
+
+function chronological(...timestamps: readonly string[]): boolean {
+  return (
+    timestamps.every(isExplicitApplicationTimestamp) &&
+    timestamps.every(
+      (timestamp, index) =>
+        index === 0 ||
+        Date.parse(timestamps[index - 1]!) <= Date.parse(timestamp),
+    )
+  );
+}
+
+function replayIdentityIsIndependent(
+  replay: OrganizationVerificationApplicationReplayMetadata,
+  forbiddenIdentities: readonly string[],
+): boolean {
+  return !forbiddenIdentities.includes(replay.replayRequestId) &&
+    !forbiddenIdentities.includes(replay.replayExecutionId);
 }
 
 function authorityInputFingerprint(
@@ -399,7 +421,14 @@ export function createStartOrganizationVerificationRequest(
     input.persistence,
     "genesis",
   );
-  if (metadata === undefined || persistence === undefined) {
+  const authoritativeReplay = normalizeReplayMetadataInternal(
+    input.authoritativeReplay,
+  );
+  if (
+    metadata === undefined ||
+    persistence === undefined ||
+    authoritativeReplay === undefined
+  ) {
     return Object.freeze({
       ok: false,
       failure: applicationFailureInternal("malformed_application_metadata"),
@@ -431,7 +460,21 @@ export function createStartOrganizationVerificationRequest(
     Date.parse(input.workflowCreatedAt) <
       Date.parse(input.initialLifecycleExecution.createdAt) ||
     !validReferences(input.workflowProvenanceReferences) ||
-    !validReferences(input.workflowIntegrityReferences)
+    !validReferences(input.workflowIntegrityReferences) ||
+    !chronological(
+      metadata.requestedAt,
+      input.workflowCreatedAt,
+      persistence.appendedAt,
+      authoritativeReplay.replayedAt,
+      metadata.applicationCompletedAt,
+    ) ||
+    !replayIdentityIsIndependent(authoritativeReplay, [
+      metadata.applicationExecutionId,
+      metadata.commandId,
+      persistence.appendId,
+      persistence.genesisEvidenceEntryId!,
+      input.streamIdentity.workflowExecutionId,
+    ])
   ) {
     return Object.freeze({
       ok: false,
@@ -450,6 +493,7 @@ export function createStartOrganizationVerificationRequest(
     workflowProvenanceReferences: [...input.workflowProvenanceReferences].sort(),
     workflowIntegrityReferences: [...input.workflowIntegrityReferences].sort(),
     persistence,
+    authoritativeReplay,
   };
   return Object.freeze({
     ok: true,
@@ -468,6 +512,7 @@ export function createStartOrganizationVerificationRequest(
         [...input.workflowIntegrityReferences].sort(),
       ),
       persistence,
+      authoritativeReplay,
       requestFingerprint: fingerprintApplicationServiceContract(
         "start_request",
         semantic,
@@ -484,10 +529,18 @@ export function createAdvanceOrganizationVerificationWorkflowRequest(
     input.persistence,
     "step",
   );
+  const preExecutionReplay = normalizeReplayMetadataInternal(
+    input.preExecutionReplay,
+  );
+  const authoritativeReplay = normalizeReplayMetadataInternal(
+    input.authoritativeReplay,
+  );
   const stepFingerprint = authorityInputFingerprint(input.step);
   if (
     metadata === undefined ||
     persistence === undefined ||
+    preExecutionReplay === undefined ||
+    authoritativeReplay === undefined ||
     stepFingerprint === undefined
   ) {
     return Object.freeze({
@@ -520,7 +573,33 @@ export function createAdvanceOrganizationVerificationWorkflowRequest(
     !isExactApplicationIdentity(input.correlationId) ||
     !isExactApplicationIdentity(input.causationId) ||
     (input.reasonReference !== undefined &&
-      !isExactApplicationIdentity(input.reasonReference))
+      !isExactApplicationIdentity(input.reasonReference)) ||
+    !chronological(
+      metadata.requestedAt,
+      preExecutionReplay.replayedAt,
+      input.occurredAt,
+      persistence.appendedAt,
+      authoritativeReplay.replayedAt,
+      metadata.applicationCompletedAt,
+    ) ||
+    new Set([
+      preExecutionReplay.replayRequestId,
+      preExecutionReplay.replayExecutionId,
+      authoritativeReplay.replayRequestId,
+      authoritativeReplay.replayExecutionId,
+    ]).size !== 4 ||
+    !replayIdentityIsIndependent(preExecutionReplay, [
+      metadata.applicationExecutionId,
+      metadata.commandId,
+      persistence.appendId,
+      input.workflowStepId,
+    ]) ||
+    !replayIdentityIsIndependent(authoritativeReplay, [
+      metadata.applicationExecutionId,
+      metadata.commandId,
+      persistence.appendId,
+      input.workflowStepId,
+    ])
   ) {
     return Object.freeze({
       ok: false,
@@ -544,6 +623,8 @@ export function createAdvanceOrganizationVerificationWorkflowRequest(
     causationId: input.causationId,
     reasonReference: input.reasonReference,
     persistence,
+    preExecutionReplay,
+    authoritativeReplay,
     requestedStep: step.requestedStep,
     expectedWorkflowStage: step.expectedWorkflowStage,
     authorityInputFingerprint: stepFingerprint,
@@ -572,6 +653,8 @@ export function createAdvanceOrganizationVerificationWorkflowRequest(
         ? { reasonReference: input.reasonReference }
         : {}),
       persistence,
+      preExecutionReplay,
+      authoritativeReplay,
       step,
       requestFingerprint: fingerprintApplicationServiceContract(
         "advance_request",
@@ -596,7 +679,17 @@ function createQueryRequest<
   if (
     metadata === undefined ||
     replay === undefined ||
-    !isOrganizationVerificationWorkflowStreamIdentity(input.streamIdentity)
+    !isOrganizationVerificationWorkflowStreamIdentity(input.streamIdentity) ||
+    !chronological(
+      metadata.requestedAt,
+      replay.replayedAt,
+      metadata.applicationCompletedAt,
+    ) ||
+    !replayIdentityIsIndependent(replay, [
+      metadata.applicationExecutionId,
+      metadata.queryId,
+      input.streamIdentity.workflowExecutionId,
+    ])
   ) {
     return Object.freeze({
       ok: false,

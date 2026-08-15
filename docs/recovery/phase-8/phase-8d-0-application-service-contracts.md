@@ -1,5 +1,9 @@
 # Phase 8D.0 — Organization Verification Application Service Contracts
 
+> Amended by Phase 8D.0.8. Start now binds one authoritative post-append
+> Replay, Advance binds distinct pre-execution and post-append Replay metadata,
+> and Replay Request identity is separate from Replay Execution identity.
+
 ## Status and accepted baseline
 
 Accepted predecessor:
@@ -95,6 +99,7 @@ The authentic start request binds:
 - explicit Workflow creation time, provenance, and integrity;
 - distinct explicit append ID and genesis evidence-entry ID;
 - explicit append time, provenance, and integrity.
+- explicit authoritative post-append Replay Request and Execution metadata.
 
 The stream identity must match the Organization, Record, Revision, and Attempt
 identities in the authentic Lifecycle Execution. No Record, Revision, Attempt,
@@ -109,7 +114,8 @@ The start result union is:
 
 Completed and idempotent success contain authentic application execution
 evidence, the committed genesis, an authentic append receipt, the resulting
-persistence version, and the current Workflow. The idempotent outcome is
+persistence version, and Replay-reconstructed current Workflow and Lifecycle
+state. The idempotent outcome is
 separate from rejection and requires the frozen persistence outcome
 `duplicate_append_idempotent`.
 
@@ -133,6 +139,8 @@ The authentic advance request binds:
   evidence-entry ID;
 - explicit append time and references;
 - exactly one stage-specific authority input.
+- distinct explicit pre-execution and authoritative post-append Replay
+  Request/Execution metadata.
 
 The stage-to-step relation is fixed:
 

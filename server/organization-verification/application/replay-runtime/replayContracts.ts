@@ -64,6 +64,7 @@ export interface OrganizationVerificationReplayFailure {
 }
 
 export interface CreateOrganizationVerificationReplayRequestInput {
+  readonly replayRequestId: string;
   readonly replayExecutionId: string;
   readonly sourceEvidenceStream: unknown;
   readonly replayedAt: string;
@@ -72,11 +73,13 @@ export interface CreateOrganizationVerificationReplayRequestInput {
 }
 
 export interface OrganizationVerificationReplayRequest {
+  readonly replayRequestId: string;
   readonly replayExecutionId: string;
   readonly sourceEvidenceStream: OrganizationVerificationEvidenceStream;
   readonly replayedAt: string;
   readonly provenanceReferences: readonly string[];
   readonly integrityReferences: readonly string[];
+  readonly replayRequestFingerprint: string;
 }
 
 export type OrganizationVerificationReplayRequestCreationResult =
@@ -125,6 +128,8 @@ export interface OrganizationVerificationReplayDiagnostics {
 }
 
 export interface OrganizationVerificationReplayExecution {
+  readonly replayRequestId: string;
+  readonly replayRequestFingerprint: string;
   readonly replayExecutionId: string;
   readonly streamIdentity: OrganizationVerificationWorkflowStreamIdentity;
   readonly persistenceStreamVersion: number;
@@ -243,7 +248,9 @@ export function createOrganizationVerificationReplayRequest(
     return requestFailure("replay_stream_not_found_input");
   }
   if (
+    !exactReplayIdentity(input.replayRequestId) ||
     !exactReplayIdentity(input.replayExecutionId) ||
+    input.replayRequestId === input.replayExecutionId ||
     !explicitReplayTimestamp(input.replayedAt) ||
     !isOrganizationVerificationEvidenceStream(input.sourceEvidenceStream)
   ) {
@@ -276,12 +283,28 @@ export function createOrganizationVerificationReplayRequest(
     return requestFailure("replay_stream_integrity_failure");
   }
 
+  const requestSemantic = {
+    scope: "organization_verification_replay_request",
+    replayRequestId: input.replayRequestId,
+    replayExecutionId: input.replayExecutionId,
+    streamIdentityFingerprint:
+      input.sourceEvidenceStream.streamIdentity.streamIdentityFingerprint,
+    persistenceStreamVersion: input.sourceEvidenceStream.streamVersion,
+    sourceEvidenceStreamFingerprint:
+      input.sourceEvidenceStream.evidenceStreamFingerprint,
+    replayedAt: input.replayedAt,
+    provenanceReferences,
+    integrityReferences,
+  };
   const request = {
+    replayRequestId: input.replayRequestId,
     replayExecutionId: input.replayExecutionId,
     sourceEvidenceStream: input.sourceEvidenceStream,
     replayedAt: input.replayedAt,
     provenanceReferences,
     integrityReferences,
+    replayRequestFingerprint:
+      fingerprintOrganizationVerificationReplay(requestSemantic),
   };
   return Object.freeze({
     ok: true,
@@ -292,15 +315,64 @@ export function createOrganizationVerificationReplayRequest(
 export function isOrganizationVerificationReplayRequest(
   value: unknown,
 ): value is OrganizationVerificationReplayRequest {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Object.getOwnPropertyDescriptor(value, replayRequestSeal)?.value !==
+      true ||
+    !Object.isFrozen(value)
+  ) {
+    return false;
+  }
+  const replayRequestId = Object.getOwnPropertyDescriptor(
+    value,
+    "replayRequestId",
+  )?.value;
+  const replayExecutionId = Object.getOwnPropertyDescriptor(
+    value,
+    "replayExecutionId",
+  )?.value;
+  const sourceEvidenceStream = Object.getOwnPropertyDescriptor(
+    value,
+    "sourceEvidenceStream",
+  )?.value;
+  const replayedAt = Object.getOwnPropertyDescriptor(
+    value,
+    "replayedAt",
+  )?.value;
+  const provenanceReferences = Object.getOwnPropertyDescriptor(
+    value,
+    "provenanceReferences",
+  )?.value;
+  const integrityReferences = Object.getOwnPropertyDescriptor(
+    value,
+    "integrityReferences",
+  )?.value;
+  const replayRequestFingerprint = Object.getOwnPropertyDescriptor(
+    value,
+    "replayRequestFingerprint",
+  )?.value;
   return (
-    typeof value === "object" &&
-    value !== null &&
-    Object.getOwnPropertyDescriptor(value, replayRequestSeal)?.value ===
-      true &&
-    Object.isFrozen(value) &&
-    isOrganizationVerificationEvidenceStream(
-      Object.getOwnPropertyDescriptor(value, "sourceEvidenceStream")?.value,
-    )
+    exactReplayIdentity(replayRequestId) &&
+    exactReplayIdentity(replayExecutionId) &&
+    replayRequestId !== replayExecutionId &&
+    explicitReplayTimestamp(replayedAt) &&
+    isOrganizationVerificationEvidenceStream(sourceEvidenceStream) &&
+    typeof replayRequestFingerprint === "string" &&
+    replayRequestFingerprint ===
+      fingerprintOrganizationVerificationReplay({
+        scope: "organization_verification_replay_request",
+        replayRequestId,
+        replayExecutionId,
+        streamIdentityFingerprint:
+          sourceEvidenceStream.streamIdentity.streamIdentityFingerprint,
+        persistenceStreamVersion: sourceEvidenceStream.streamVersion,
+        sourceEvidenceStreamFingerprint:
+          sourceEvidenceStream.evidenceStreamFingerprint,
+        replayedAt,
+        provenanceReferences,
+        integrityReferences,
+      })
   );
 }
 
@@ -405,6 +477,8 @@ export function createReplayExecutionInternal(
   });
   const replayFingerprint = fingerprintOrganizationVerificationReplay({
     scope: "organization_verification_replay_execution",
+    replayRequestId: input.request.replayRequestId,
+    replayRequestFingerprint: input.request.replayRequestFingerprint,
     replayExecutionId: input.request.replayExecutionId,
     streamIdentityFingerprint:
       stream.streamIdentity.streamIdentityFingerprint,
@@ -428,6 +502,8 @@ export function createReplayExecutionInternal(
   });
   return sealReplayValue(
     {
+      replayRequestId: input.request.replayRequestId,
+      replayRequestFingerprint: input.request.replayRequestFingerprint,
       replayExecutionId: input.request.replayExecutionId,
       streamIdentity: stream.streamIdentity,
       persistenceStreamVersion: stream.streamVersion,

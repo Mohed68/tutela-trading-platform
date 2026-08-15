@@ -160,6 +160,7 @@ function replayRequest(
 ): replay.OrganizationVerificationReplayRequest {
   return must(
     replay.createOrganizationVerificationReplayRequest({
+      replayRequestId: `${replayExecutionId}-request`,
       replayExecutionId,
       sourceEvidenceStream: stream,
       replayedAt: "2026-09-01T00:40:00.000Z",
@@ -217,6 +218,7 @@ function appendBatch(
 test("accepts only an authentic integrity-verified evidence stream", () => {
   const fixture = buildReplayFixture();
   const request = replay.createOrganizationVerificationReplayRequest({
+    replayRequestId: "replay-authentic-request",
     replayExecutionId: "replay-authentic-input",
     sourceEvidenceStream: fixture.stream,
     replayedAt: "2026-09-01T00:40:00.000Z",
@@ -226,6 +228,8 @@ test("accepts only an authentic integrity-verified evidence stream", () => {
   assert.equal(request.ok, true);
   if (!request.ok) return;
   assert.equal(replay.isOrganizationVerificationReplayRequest(request.value), true);
+  assert.equal(request.value.replayRequestId, "replay-authentic-request");
+  assert.match(request.value.replayRequestFingerprint, /^sha256:/);
 
   const notFound =
     must(
@@ -235,6 +239,7 @@ test("accepts only an authentic integrity-verified evidence stream", () => {
     );
   assert.deepEqual(
     replay.createOrganizationVerificationReplayRequest({
+      replayRequestId: "replay-not-found-request",
       replayExecutionId: "replay-not-found",
       sourceEvidenceStream: notFound,
       replayedAt: "2026-09-01T00:40:00.000Z",
@@ -257,6 +262,7 @@ test("accepts only an authentic integrity-verified evidence stream", () => {
     structuredClone(fixture.stream),
   ]) {
     const rejected = replay.createOrganizationVerificationReplayRequest({
+      replayRequestId: "replay-fake-source-request",
       replayExecutionId: "replay-fake-source",
       sourceEvidenceStream: fake,
       replayedAt: "2026-09-01T00:40:00.000Z",
@@ -267,6 +273,42 @@ test("accepts only an authentic integrity-verified evidence stream", () => {
     if (rejected.ok) continue;
     assert.equal(rejected.code, "replay_unauthentic_stream");
   }
+});
+
+test("Replay Request identity is explicit, distinct, immutable, and fingerprint-bound", () => {
+  const fixture = buildReplayFixture();
+  const input = {
+    replayRequestId: "replay-request-identity",
+    replayExecutionId: "replay-execution-identity",
+    sourceEvidenceStream: fixture.stream,
+    replayedAt: "2026-09-01T00:40:00.000Z",
+    provenanceReferences: ["replay-provenance"],
+    integrityReferences: ["replay-integrity"],
+  };
+  const left = must(replay.createOrganizationVerificationReplayRequest(input));
+  const right = must(
+    replay.createOrganizationVerificationReplayRequest({
+      ...input,
+      provenanceReferences: [...input.provenanceReferences].reverse(),
+      integrityReferences: [...input.integrityReferences].reverse(),
+    }),
+  );
+  assert.equal(left.replayRequestFingerprint, right.replayRequestFingerprint);
+  assert.equal(Object.isFrozen(left), true);
+  assert.equal(
+    replay.createOrganizationVerificationReplayRequest({
+      ...input,
+      replayRequestId: input.replayExecutionId,
+    }).ok,
+    false,
+  );
+  const changed = must(
+    replay.createOrganizationVerificationReplayRequest({
+      ...input,
+      replayRequestId: "replay-request-identity-2",
+    }),
+  );
+  assert.notEqual(left.replayRequestFingerprint, changed.replayRequestFingerprint);
 });
 
 test("replays a valid genesis-only stream without implying completion", () => {
@@ -287,6 +329,9 @@ test("replays a valid genesis-only stream without implying completion", () => {
   assert.equal(execution.workflowStepRecordBindings.length, 0);
   assert.equal(execution.diagnostics.terminalCoordinationReached, false);
   assert.equal(execution.completionStatus, "stream_consumed");
+  assert.equal(execution.replayRequestId, "replay-genesis-request");
+  assert.equal(execution.replayExecutionId, "replay-genesis");
+  assert.match(execution.replayRequestFingerprint, /^sha256:/);
 });
 
 test("reconstructs valid partial Workflow histories exactly", () => {
@@ -617,6 +662,7 @@ test("replay is deterministic and property-order independent", () => {
       provenanceReferences: ["replay-provenance"],
       replayedAt: "2026-09-01T00:40:00.000Z",
       sourceEvidenceStream: fixture.stream,
+      replayRequestId: "replay-deterministic-request",
       replayExecutionId: "replay-deterministic",
     }),
   );

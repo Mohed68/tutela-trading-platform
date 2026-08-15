@@ -62,7 +62,9 @@ interface StartSuccess {
   readonly committedWorkflowGenesis: OrganizationVerificationWorkflowExecution;
   readonly appendReceipt: OrganizationVerificationEvidenceAppendReceipt;
   readonly resultingPersistenceStreamVersion: number;
+  readonly replayExecution: OrganizationVerificationReplayExecution;
   readonly currentWorkflowExecution: OrganizationVerificationWorkflowExecution;
+  readonly currentLifecycleExecution: OrganizationVerificationAttemptLifecycleExecution;
 }
 
 export type StartOrganizationVerificationResult =
@@ -191,16 +193,49 @@ export function createStartOrganizationVerificationSuccessInternal(
   outcome: "start_completed" | "start_idempotent",
   value: StartSuccess,
 ): StartOrganizationVerificationResult | undefined {
+  const replay = value.replayExecution;
   if (
     !authenticExecution(value.applicationExecution, outcome) ||
     !isOrganizationVerificationWorkflowExecution(
       value.committedWorkflowGenesis,
     ) ||
     value.committedWorkflowGenesis.workflowExecutionVersion !== 1 ||
-    value.currentWorkflowExecution !== value.committedWorkflowGenesis ||
+    !isOrganizationVerificationReplayExecution(replay) ||
+    value.currentWorkflowExecution !==
+      replay.reconstructedWorkflowExecution ||
+    value.currentLifecycleExecution !==
+      replay.reconstructedAttemptLifecycleExecution ||
+    !semanticallySameWorkflowExecution(
+      value.committedWorkflowGenesis,
+      replay.reconstructedWorkflowExecution,
+    ) ||
     !isOrganizationVerificationEvidenceAppendReceipt(value.appendReceipt) ||
+    replay.persistenceStreamVersion !==
+      value.resultingPersistenceStreamVersion ||
+    replay.streamIdentity.streamIdentityFingerprint !==
+      value.appendReceipt.streamIdentity.streamIdentityFingerprint ||
+    replay.sourceEvidenceStreamFingerprint.trim().length === 0 ||
     value.appendReceipt.resultingStreamVersion !==
       value.resultingPersistenceStreamVersion ||
+    value.applicationExecution.previousPersistenceStreamVersion !== 0 ||
+    value.applicationExecution.resultingPersistenceStreamVersion !==
+      value.resultingPersistenceStreamVersion ||
+    value.applicationExecution.previousWorkflowVersion !== 0 ||
+    value.applicationExecution.resultingWorkflowVersion !== 1 ||
+    !hasExactCanonicalFingerprintBinding(
+      value.applicationExecution,
+      [
+        value.committedWorkflowGenesis.workflowExecutionFingerprint,
+        value.appendReceipt.appendReceiptFingerprint,
+        replay.replayRequestFingerprint,
+        replay.replayExecutionId,
+        replay.replayFingerprint,
+        replay.sourceEvidenceStreamFingerprint,
+        replay.reconstructedWorkflowExecution.workflowExecutionFingerprint,
+        replay.reconstructedAttemptLifecycleExecution
+          .attemptLifecycleExecutionFingerprint,
+      ],
+    ) ||
     value.appendReceipt.outcome !==
       (outcome === "start_completed"
         ? "appended"
@@ -503,6 +538,7 @@ export function createAdvanceCompletedResultInternal(
     value.appendReceipt.idempotentReplay !== false ||
     !hasExactCanonicalFingerprintBinding(value.applicationExecution, [
       stepExecution.workflowStepExecutionFingerprint,
+      replay.replayRequestFingerprint,
       replay.replayExecutionId,
       replay.replayFingerprint,
       replay.sourceEvidenceStreamFingerprint,
@@ -589,6 +625,7 @@ export function createAdvanceIdempotentResultInternal(
       authorityFingerprint,
       value.workflowStepRecord.workflowStepBindingFingerprint,
       value.appendReceipt.appendReceiptFingerprint,
+      replay.replayRequestFingerprint,
       replay.replayFingerprint,
       replay.sourceEvidenceStreamFingerprint,
       value.currentWorkflowExecution.workflowExecutionFingerprint,

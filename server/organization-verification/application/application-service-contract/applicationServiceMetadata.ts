@@ -22,6 +22,7 @@ export interface OrganizationVerificationApplicationQueryMetadata {
 }
 
 export interface OrganizationVerificationApplicationReplayMetadata {
+  readonly replayRequestId: string;
   readonly replayExecutionId: string;
   readonly replayedAt: string;
   readonly provenanceReferences: readonly string[];
@@ -134,7 +135,9 @@ export function normalizeReplayMetadataInternal(
   const provenanceReferences = normalizeReferences(value.provenanceReferences);
   const integrityReferences = normalizeReferences(value.integrityReferences);
   if (
+    !isExactApplicationIdentity(value.replayRequestId) ||
     !isExactApplicationIdentity(value.replayExecutionId) ||
+    value.replayRequestId === value.replayExecutionId ||
     !isExplicitApplicationTimestamp(value.replayedAt) ||
     provenanceReferences === undefined ||
     integrityReferences === undefined
@@ -142,6 +145,7 @@ export function normalizeReplayMetadataInternal(
     return undefined;
   }
   return Object.freeze({
+    replayRequestId: value.replayRequestId,
     replayExecutionId: value.replayExecutionId,
     replayedAt: value.replayedAt,
     provenanceReferences,

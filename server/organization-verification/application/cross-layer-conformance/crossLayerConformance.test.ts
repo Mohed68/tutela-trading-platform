@@ -76,6 +76,7 @@ test("identity lineage is complete, contiguous, required, and owner-explicit", (
       "attempt_id",
       "workflow_execution_id",
       "persistence_stream_identity",
+      "replay_request_id",
       "replay_execution_id",
       "application_request_identity",
       "application_execution_id",
@@ -83,8 +84,20 @@ test("identity lineage is complete, contiguous, required, and owner-explicit", (
   );
   assert.deepEqual(
     lineage.map((entry) => entry.order),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
   );
+  const expectedParents = [
+    undefined,
+    "organization_id",
+    "record_id",
+    "revision_id",
+    "attempt_id",
+    "workflow_execution_id",
+    "persistence_stream_identity",
+    "replay_request_id",
+    undefined,
+    "application_request_identity",
+  ];
   for (let index = 0; index < lineage.length; index += 1) {
     const entry = lineage[index]!;
     assert.equal(entry.required, true);
@@ -92,9 +105,15 @@ test("identity lineage is complete, contiguous, required, and owner-explicit", (
     assert.notEqual(entry.boundBy, "");
     assert.equal(
       entry.parentIdentity,
-      index === 0 ? undefined : lineage[index - 1]!.identity,
+      expectedParents[index],
     );
     assert.equal(entry.forbiddenCompetingOwners.includes(entry.owner), false);
+  }
+  for (const identity of ["replay_request_id", "replay_execution_id"] as const) {
+    const entry = lineage.find((candidate) => candidate.identity === identity);
+    assert.ok(entry);
+    assert.equal(entry.owner, "application_service_contract");
+    assert.equal(entry.suppliedBy, "application_service_caller");
   }
 });
 
@@ -146,6 +165,7 @@ test("application fingerprint traces through Replay, Workflow, Persistence, and 
   };
   visit("application_execution_fingerprint");
   for (const expected of [
+    "replay_request_fingerprint",
     "replay_fingerprint",
     "workflow_execution_fingerprint",
     "persistence_stream_fingerprint",
@@ -294,6 +314,7 @@ test("every source-of-truth concept has exactly one owner", () => {
   assert.deepEqual(
     matrix.map((entry) => entry.concept),
     [
+      "replay_request_and_execution_metadata",
       "current_workflow_state",
       "current_lifecycle_state",
       "workflow_history",

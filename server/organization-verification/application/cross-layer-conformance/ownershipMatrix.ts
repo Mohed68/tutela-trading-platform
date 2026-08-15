@@ -80,10 +80,15 @@ export const ORGANIZATION_VERIFICATION_LAYER_OWNERSHIP_MATRIX =
     }),
     Object.freeze({
       layer: "replay_runtime",
-      owns: Object.freeze(["deterministic_reconstruction"]),
+      owns: Object.freeze([
+        "deterministic_reconstruction",
+        "replay_request_authenticity",
+        "replay_execution_evidence",
+      ]),
       consumes: Object.freeze([
         "durable_evidence_semantics",
         "workflow_execution_semantics",
+        "caller_supplied_replay_execution_metadata",
       ]),
       forbiddenOwnership: Object.freeze([
         "authority_execution",
@@ -99,6 +104,8 @@ export const ORGANIZATION_VERIFICATION_LAYER_OWNERSHIP_MATRIX =
         "application_use_case_boundary",
         "application_execution_evidence",
         "application_failure_vocabulary",
+        "replay_request_identity_contract",
+        "replay_execution_metadata_contract",
       ]),
       consumes: Object.freeze([
         "persistence_ports",
@@ -146,6 +153,21 @@ export const ORGANIZATION_VERIFICATION_LAYER_OWNERSHIP_MATRIX =
 
 export const ORGANIZATION_VERIFICATION_SOURCE_OF_TRUTH_MATRIX =
   Object.freeze([
+    Object.freeze({
+      concept: "replay_request_and_execution_metadata",
+      owner: "application_service_contract",
+      authoritativeArtifact:
+        "OrganizationVerificationApplicationReplayMetadata",
+      consumers: Object.freeze([
+        "replay_runtime",
+        "application_service_runtime",
+      ]),
+      forbiddenCompetingOwners: Object.freeze([
+        "persistence_adapter",
+        "workflow_runtime",
+        "application_service_runtime",
+      ]),
+    }),
     Object.freeze({
       concept: "current_workflow_state",
       owner: "replay_runtime",

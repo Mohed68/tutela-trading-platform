@@ -38,9 +38,20 @@ export const ORGANIZATION_VERIFICATION_FINGERPRINT_LINEAGE =
       replacesParent: false,
     }),
     Object.freeze({
+      fingerprint: "replay_request_fingerprint",
+      owner: "replay_runtime",
+      parentFingerprints: Object.freeze([
+        "persistence_stream_fingerprint",
+      ]),
+      evidenceBinding:
+        "OrganizationVerificationReplayRequest.replayRequestFingerprint",
+      replacesParent: false,
+    }),
+    Object.freeze({
       fingerprint: "replay_fingerprint",
       owner: "replay_runtime",
       parentFingerprints: Object.freeze([
+        "replay_request_fingerprint",
         "persistence_stream_fingerprint",
         "workflow_execution_fingerprint",
         "authority_artifact_fingerprint",
@@ -75,6 +86,7 @@ export const ORGANIZATION_VERIFICATION_ADVANCE_RESULT_FINGERPRINT_BINDINGS =
       duplicateProofOwner: "persistence_contract",
       requiredEvidence: Object.freeze([
         "workflow_step_execution_fingerprint",
+        "replay_request_fingerprint",
         "replay_execution_identity",
         "replay_fingerprint",
         "persistence_stream_fingerprint",
@@ -95,6 +107,7 @@ export const ORGANIZATION_VERIFICATION_ADVANCE_RESULT_FINGERPRINT_BINDINGS =
         "persisted_authority_artifact_fingerprint",
         "workflow_step_record_fingerprint",
         "original_append_receipt_fingerprint",
+        "replay_request_fingerprint",
         "replay_fingerprint",
         "persistence_stream_fingerprint",
         "current_workflow_execution_fingerprint",

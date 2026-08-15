@@ -59,10 +59,14 @@ function queryMetadata() {
   };
 }
 
-function replayMetadata() {
+function replayMetadata(
+  identity = "application-replay",
+  replayedAt = "2026-10-01T00:00:00.500Z",
+) {
   return {
-    replayExecutionId: "application-replay-1",
-    replayedAt: "2026-10-01T00:00:00.500Z",
+    replayRequestId: `${identity}-request`,
+    replayExecutionId: `${identity}-execution`,
+    replayedAt,
     provenanceReferences: ["replay-provenance-1"],
     integrityReferences: ["replay-integrity-1"],
   };
@@ -195,6 +199,7 @@ function advanceResultFixture() {
   );
   const replayRequest = must(
     createOrganizationVerificationReplayRequest({
+      replayRequestId: "application-result-replay-request",
       replayExecutionId: "application-result-replay",
       sourceEvidenceStream: stream,
       replayedAt: "2026-10-01T00:40:00.000Z",
@@ -250,6 +255,7 @@ function advanceResultFixture() {
   };
   const completedLowerLayerFingerprints = [
     stepExecution.workflowStepExecutionFingerprint,
+    replayExecution.replayRequestFingerprint,
     replayExecution.replayExecutionId,
     replayExecution.replayFingerprint,
     replayExecution.sourceEvidenceStreamFingerprint,
@@ -266,6 +272,7 @@ function advanceResultFixture() {
     stepExecution.authorityResult.executionFingerprint,
     stepExecution.workflowStepRecord.workflowStepBindingFingerprint,
     idempotentReceipt.appendReceiptFingerprint,
+    replayExecution.replayRequestFingerprint,
     replayExecution.replayFingerprint,
     replayExecution.sourceEvidenceStreamFingerprint,
     replayExecution.reconstructedWorkflowExecution.workflowExecutionFingerprint,
@@ -361,7 +368,7 @@ function startRequestInput() {
     expectedPersistenceStreamVersion: 0 as const,
     initialWorkflowExecutionVersion: 1 as const,
     initialLifecycleExecution: genesis.lifecycleExecution,
-    workflowCreatedAt: genesis.createdAt,
+    workflowCreatedAt: "2026-10-01T00:00:00.250Z",
     workflowProvenanceReferences: ["workflow-provenance-1"],
     workflowIntegrityReferences: ["workflow-integrity-1"],
     persistence: {
@@ -371,6 +378,10 @@ function startRequestInput() {
       provenanceReferences: ["append-provenance-1"],
       integrityReferences: ["append-integrity-1"],
     },
+    authoritativeReplay: replayMetadata(
+      "start-authoritative-replay",
+      "2026-10-01T00:00:00.750Z",
+    ),
   };
 }
 
@@ -386,7 +397,7 @@ function advanceBase() {
       expectedWorkflowExecutionId: predecessor.workflowExecutionId,
       expectedWorkflowVersion: predecessor.workflowExecutionVersion,
       workflowStepId: "application-workflow-step-1",
-      occurredAt: "2026-10-01T00:00:00.000Z",
+      occurredAt: "2026-10-01T00:00:00.250Z",
       provenanceReferences: ["step-provenance-1"],
       integrityReferences: ["step-integrity-1"],
       correlationId: "step-correlation-1",
@@ -399,6 +410,14 @@ function advanceBase() {
         provenanceReferences: ["append-provenance-1"],
         integrityReferences: ["append-integrity-1"],
       },
+      preExecutionReplay: replayMetadata(
+        "advance-pre-replay",
+        "2026-10-01T00:00:00.100Z",
+      ),
+      authoritativeReplay: replayMetadata(
+        "advance-authoritative-replay",
+        "2026-10-01T00:00:00.750Z",
+      ),
     },
   };
 }
@@ -443,6 +462,7 @@ test("start request is authentic, immutable, explicit, and version zero only", (
   assert.equal(Object.isFrozen(request), true);
   assert.equal(Object.isFrozen(request.metadata), true);
   assert.equal(Object.isFrozen(request.persistence), true);
+  assert.equal(Object.isFrozen(request.authoritativeReplay), true);
 
   assert.equal(
     contract.createStartOrganizationVerificationRequest({
@@ -513,6 +533,35 @@ test("start request fingerprint is deterministic and property-order independent"
     }),
   );
   assert.equal(left.requestFingerprint, right.requestFingerprint);
+});
+
+test("start binds one authoritative post-append Replay and rejects impossible chronology", () => {
+  const input = startRequestInput();
+  const request = must(contract.createStartOrganizationVerificationRequest(input));
+  assert.equal(
+    request.authoritativeReplay.replayRequestId,
+    input.authoritativeReplay.replayRequestId,
+  );
+  assert.equal(
+    contract.createStartOrganizationVerificationRequest({
+      ...input,
+      authoritativeReplay: {
+        ...input.authoritativeReplay,
+        replayedAt: "2026-10-01T00:00:00.400Z",
+      },
+    }).ok,
+    false,
+  );
+  assert.equal(
+    contract.createStartOrganizationVerificationRequest({
+      ...input,
+      authoritativeReplay: {
+        ...input.authoritativeReplay,
+        replayExecutionId: input.persistence.appendId,
+      },
+    }).ok,
+    false,
+  );
 });
 
 test("all six approved advance step contracts are constructible", () => {
@@ -713,6 +762,64 @@ test("advance structural copies are unauthentic", () => {
       false,
     );
   }
+});
+
+test("advance binds distinct pre-execution and authoritative Replay metadata with strict chronology", () => {
+  const { value } = advanceBase();
+  const input = {
+    ...value,
+    step: {
+      requestedStep: "attempt_transition" as const,
+      expectedWorkflowStage: "attempt_in_progress" as const,
+      authorityInput: {
+        lifecycleExecutionId: "lifecycle-replay-contract",
+        expectedPredecessorLifecycleExecutionVersion: 1,
+        nextLifecycleExecutionVersion: 2,
+        transitionId: "transition-replay-contract",
+        requestedTransition: "queued" as const,
+        expectedPredecessorAttemptState: "not_started" as const,
+        expectedResultingAttemptState: "queued" as const,
+        recordId: value.streamIdentity.recordId,
+        revisionId: value.streamIdentity.revisionId,
+        attemptId: value.streamIdentity.attemptId,
+        attemptSequence: 1,
+        occurredAt: value.occurredAt,
+        provenanceReferences: ["authority-provenance"],
+        integrityReferences: ["authority-integrity"],
+      },
+    },
+  };
+  const request = must(
+    contract.createAdvanceOrganizationVerificationWorkflowRequest(input),
+  );
+  assert.notEqual(
+    request.preExecutionReplay.replayRequestId,
+    request.authoritativeReplay.replayRequestId,
+  );
+  assert.notEqual(
+    request.preExecutionReplay.replayExecutionId,
+    request.authoritativeReplay.replayExecutionId,
+  );
+  assert.equal(
+    contract.createAdvanceOrganizationVerificationWorkflowRequest({
+      ...input,
+      authoritativeReplay: {
+        ...input.authoritativeReplay,
+        replayExecutionId: input.preExecutionReplay.replayExecutionId,
+      },
+    }).ok,
+    false,
+  );
+  assert.equal(
+    contract.createAdvanceOrganizationVerificationWorkflowRequest({
+      ...input,
+      preExecutionReplay: {
+        ...input.preExecutionReplay,
+        replayedAt: "2026-10-01T00:00:00.300Z",
+      },
+    }).ok,
+    false,
+  );
 });
 
 test("load-current-state is the authoritative reconstructed-state query", () => {
@@ -940,6 +1047,7 @@ test("advance completion rejects Replay and persistence fingerprint mismatches",
   const input = completedAdvanceResultInput(fixture);
   const alternateRequest = must(
     createOrganizationVerificationReplayRequest({
+      replayRequestId: "application-result-alternate-replay-request",
       replayExecutionId: "application-result-alternate-replay",
       sourceEvidenceStream: fixture.stream,
       replayedAt: "2026-10-01T00:42:00.000Z",
@@ -1030,6 +1138,7 @@ test("attempt-transition idempotency returns the persisted Lifecycle artifact wi
     persistedAuthorityResult.attemptLifecycleExecutionFingerprint,
     step.workflowStepRecord.workflowStepBindingFingerprint,
     receipt.appendReceiptFingerprint,
+    fixture.replayExecution.replayRequestFingerprint,
     fixture.replayExecution.replayFingerprint,
     fixture.replayExecution.sourceEvidenceStreamFingerprint,
     fixture.replayExecution.reconstructedWorkflowExecution
@@ -1299,6 +1408,28 @@ test("start result distinguishes committed and idempotent success from rejection
       outcome: "appended",
     }),
   );
+  const stream = must(
+    createOrganizationVerificationEvidenceStream({
+      streamIdentity,
+      entries: [stored],
+    }),
+  );
+  const replayRequest = must(
+    createOrganizationVerificationReplayRequest({
+      replayRequestId: "result-start-replay-request",
+      replayExecutionId: "result-start-replay-execution",
+      sourceEvidenceStream: stream,
+      replayedAt: "2026-10-01T00:00:00.750Z",
+      provenanceReferences: ["result-replay-provenance"],
+      integrityReferences: ["result-replay-integrity"],
+    }),
+  );
+  const replayResult = replayOrganizationVerificationWorkflow(replayRequest);
+  assert.equal(replayResult.outcome, "replay_completed");
+  if (replayResult.outcome !== "replay_completed") {
+    throw new Error(replayResult.failure.code);
+  }
+  const replayExecution = replayResult.execution;
   const execution =
     createOrganizationVerificationApplicationExecutionInternal({
       applicationExecutionId: "result-execution",
@@ -1315,7 +1446,17 @@ test("start result distinguishes committed and idempotent success from rejection
       lowerLayerFingerprints: [
         genesis.workflowExecutionFingerprint,
         receipt.appendReceiptFingerprint,
-      ],
+        replayExecution.replayRequestFingerprint,
+        replayExecution.replayExecutionId,
+        replayExecution.replayFingerprint,
+        replayExecution.sourceEvidenceStreamFingerprint,
+        replayExecution.reconstructedWorkflowExecution
+          .workflowExecutionFingerprint,
+        replayExecution.reconstructedAttemptLifecycleExecution
+          .attemptLifecycleExecutionFingerprint,
+      ]
+        .filter((value, index, values) => values.indexOf(value) === index)
+        .sort((left, right) => left.localeCompare(right)),
     });
   assert.ok(execution);
   const result = createStartOrganizationVerificationSuccessInternal(
@@ -1325,7 +1466,11 @@ test("start result distinguishes committed and idempotent success from rejection
       committedWorkflowGenesis: genesis,
       appendReceipt: receipt,
       resultingPersistenceStreamVersion: 1,
-      currentWorkflowExecution: genesis,
+      replayExecution,
+      currentWorkflowExecution:
+        replayExecution.reconstructedWorkflowExecution,
+      currentLifecycleExecution:
+        replayExecution.reconstructedAttemptLifecycleExecution,
     },
   );
   assert.ok(result);

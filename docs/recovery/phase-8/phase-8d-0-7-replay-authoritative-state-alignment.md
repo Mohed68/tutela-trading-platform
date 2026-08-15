@@ -1,5 +1,8 @@
 # Phase 8D.0.7 — Replay Authoritative State Alignment
 
+> Phase 8D.0.8 subsequently defines explicit Replay Request and Execution
+> identity ownership and extends the same authoritative Replay rule to Start.
+
 ## Status and accepted baseline
 
 Accepted predecessor:
