@@ -240,6 +240,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     "server/organization-verification/",
   );
   const isOfferVerification = lowerFile.startsWith("server/verification/");
+  const isOrganizationParticipationEligibility = lowerFile.startsWith(
+    "server/organization-participation-eligibility/",
+  );
   const isOrganizationRegistry = lowerFile.startsWith(
     "server/organization-registry/",
   );
@@ -3066,7 +3069,13 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isOrganizationVerification &&
     !/\.test\.(?:ts|tsx)$/i.test(lowerFile) &&
     specifiers.some((specifier) =>
-      /(?:^|\/)organization-verification(?:\/|$)/i.test(specifier),
+      /(?:^|\/)organization-verification(?:\/|$)/i.test(specifier) &&
+      !(
+        isOrganizationParticipationEligibility &&
+        /(?:^|\/)organization-verification\/(?:application\/(?:persistence-contract|replay-runtime)|domain\/decision-trust-integration)\/index(?:\.js)?$/i.test(
+          specifier,
+        )
+      ),
     )
   ) {
     addViolation(
