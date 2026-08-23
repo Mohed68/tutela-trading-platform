@@ -59,6 +59,7 @@
     "test:organization-registry-contracts": "tsx --test server/organization-registry/contracts.test.ts",
     "test:organization-membership": "tsx --test server/organization-membership/membership.test.ts",
     "test:organization-participation-eligibility": "tsx --test server/organization-participation-eligibility/eligibility.test.ts",
+    "test:organization-participation-runtime": "node --env-file=.env --import tsx --test server/organization-participation-eligibility/postgresRuntime.test.ts",
     "test:organization-participation-architecture": "tsx --test server/organization-participation-eligibility/architecture.test.ts",
     "test:offer-publication-eligibility": "tsx --test server/verification/eligibilityReadModel.test.ts server/offer-publication-eligibility/publicationEligibility.test.ts",
     "test:offer-publication-architecture": "tsx --test server/offer-publication-eligibility/architecture.test.ts",

@@ -1,6 +1,7 @@
 import { pool } from "../db.js";
 import { getCommodityUnits, qtyFactor, type CanonUnit } from "../conversion/index.js";
 import type { MarketFilter } from "../filters/publicOffers.js";
+import { productionOrganizationParticipationEligibilityReadAdapter } from "../organization-participation-eligibility/productionRuntime.js";
 import {
   evaluateOfferPublicationEligibility,
   isOfferPublicationEligibilityResult,
@@ -123,16 +124,10 @@ export function projectPublishedOffer(
   };
 }
 
-const unavailableOrganizationParticipation = Object.freeze({
-  async resolveCurrentOrganizationParticipationEligibility() {
-    return Object.freeze({ status: "unavailable" as const });
-  },
-});
-
 const productionPublicationDependencies: OfferPublicationEligibilityDependencies =
   Object.freeze({
     organizationParticipationEligibility:
-      unavailableOrganizationParticipation,
+      productionOrganizationParticipationEligibilityReadAdapter,
     offerVerificationEligibility: offerVerificationEligibilityReadRepository,
   });
 

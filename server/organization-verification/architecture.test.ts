@@ -3072,8 +3072,18 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       /(?:^|\/)organization-verification(?:\/|$)/i.test(specifier) &&
       !(
         isOrganizationParticipationEligibility &&
-        /(?:^|\/)organization-verification\/(?:application\/(?:persistence-contract|replay-runtime)|domain\/decision-trust-integration)\/index(?:\.js)?$/i.test(
-          specifier,
+        (
+          /(?:^|\/)organization-verification\/(?:application\/(?:persistence-contract|replay-runtime)|domain\/decision-trust-integration)\/index(?:\.js)?$/i.test(
+            specifier,
+          ) ||
+          (
+            lowerFile.endsWith(
+              "server/organization-participation-eligibility/productionruntime.ts",
+            ) &&
+            /(?:^|\/)organization-verification\/infrastructure\/persistence\/postgres\/index(?:\.js)?$/i.test(
+              specifier,
+            )
+          )
         )
       ),
     )

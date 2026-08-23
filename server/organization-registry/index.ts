@@ -37,3 +37,4 @@ export type {
   ProfileRevisionResolution,
   RegistryPortFailureCode,
 } from "./ports.js";
+export { createPostgresOrganizationRegistryProfileRevisionAdapter } from "./postgresProfileRevisionReadAdapter.js";

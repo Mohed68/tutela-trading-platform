@@ -11,6 +11,7 @@ export {
   type OrganizationMembershipRole,
   type OrganizationMembershipStatus,
 } from "./membership.js";
+export { createPostgresOrganizationMembershipReadAdapter } from "./postgresMembershipReadAdapter.js";
 export type {
   ExactOrganizationMembershipQuery,
   OrganizationMembershipReadPort,

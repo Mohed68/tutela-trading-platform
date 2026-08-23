@@ -87,9 +87,27 @@ test("Publication capability contains no Order, Contract, payment, or external c
   }
 });
 
-test("the runtime stays fail-closed until Organization Participation persistence is wired", () => {
+test("the runtime consumes authoritative Organization Participation persistence", () => {
   const marketplace = source("server/marketplace/publicMarketplace.ts");
-  assert.match(marketplace, /unavailableOrganizationParticipation/);
-  assert.match(marketplace, /status:\s*"unavailable"/);
+  const runtime = source(
+    "server/organization-participation-eligibility/postgresRuntime.ts",
+  );
+  const composition = source(
+    "server/organization-participation-eligibility/productionRuntime.ts",
+  );
+  assert.match(
+    composition,
+    /createPostgresMarketplaceOrganizationParticipationEligibilityAdapter/,
+  );
+  assert.match(
+    composition,
+    /createPostgresOrganizationVerificationPersistenceAdapter/,
+  );
+  assert.doesNotMatch(marketplace, /unavailableOrganizationParticipation/);
+  assert.match(runtime, /createOrganizationVerificationReplayRequest/);
+  assert.match(runtime, /replayOrganizationVerificationWorkflow/);
+  assert.match(runtime, /status:\s*"unavailable"/);
   assert.doesNotMatch(marketplace, /users\.verified|kybStatus|verificationLevel/);
+  assert.doesNotMatch(runtime, /users\.verified|kybStatus|verificationLevel/);
+  assert.doesNotMatch(composition, /users\.verified|kybStatus|verificationLevel/);
 });

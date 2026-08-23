@@ -22,3 +22,16 @@ export type {
   OrganizationVerificationParticipationStateResolution,
 } from "./eligibilityPorts.js";
 export { createOrganizationParticipationEligibilityService } from "./eligibilityService.js";
+export {
+  createMarketplaceOrganizationParticipationEligibilityAdapter,
+  createOrganizationVerificationParticipationStateAdapter,
+  createPostgresMarketplaceOrganizationParticipationEligibilityAdapter,
+  createPostgresOrganizationParticipationRuntimeBindingAdapter,
+  fingerprintOrganizationParticipationRuntimeBinding,
+  type CurrentOrganizationParticipationEligibilityReadPort,
+  type CurrentOrganizationParticipationEligibilityResolution,
+  type OrganizationParticipationRuntimeBinding,
+  type OrganizationParticipationRuntimeBindingReadPort,
+  type OrganizationParticipationRuntimeBindingResolution,
+  type OrganizationParticipationRuntimeClock,
+} from "./postgresRuntime.js";

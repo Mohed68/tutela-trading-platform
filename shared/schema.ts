@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
+  foreignKey,
   index,
   jsonb,
   pgTable,
@@ -11,6 +12,7 @@ import {
   integer,
   boolean,
   pgEnum,
+  primaryKey,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -543,6 +545,166 @@ export const organizationVerificationDurableEvidence = pgTable(
     check(
       "organization_verification_evidence_payload_fingerprint_check",
       sql`${table.durablePayloadFingerprint} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
+export const organizationRegistryProfileRevisions = pgTable(
+  "organization_registry_profile_revisions",
+  {
+    organizationId: varchar("organization_id").notNull(),
+    organizationProfileRevisionId: varchar(
+      "organization_profile_revision_id",
+    ).notNull(),
+    registryContractVersion: varchar("registry_contract_version").notNull(),
+    contractPayload: jsonb("contract_payload")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "string",
+    }).notNull(),
+    integrityReference: varchar("integrity_reference").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [
+        table.organizationId,
+        table.organizationProfileRevisionId,
+      ],
+      name: "organization_registry_profile_revision_pkey",
+    }),
+    uniqueIndex("organization_registry_profile_revision_contract_unique").on(
+      table.organizationId,
+      table.organizationProfileRevisionId,
+      table.registryContractVersion,
+    ),
+    check(
+      "organization_registry_profile_revision_version_check",
+      sql`${table.registryContractVersion} = 'organization_registry_profile_revision.v1'`,
+    ),
+  ],
+);
+
+export const organizationMemberships = pgTable(
+  "organization_memberships",
+  {
+    membershipId: varchar("membership_id").primaryKey(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id),
+    organizationId: varchar("organization_id").notNull(),
+    role: varchar("role").notNull(),
+    status: varchar("status").notNull(),
+    membershipVersion: integer("membership_version").notNull(),
+    effectiveFrom: timestamp("effective_from", {
+      withTimezone: true,
+      mode: "string",
+    }).notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "string",
+    }).notNull(),
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+      mode: "string",
+    }).notNull(),
+    provenanceReference: varchar("provenance_reference").notNull(),
+    integrityReference: varchar("integrity_reference").notNull(),
+    membershipFingerprint: varchar("membership_fingerprint").notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_membership_scope_unique").on(
+      table.membershipId,
+      table.organizationId,
+      table.userId,
+    ),
+    index("organization_membership_user_organization_idx").on(
+      table.userId,
+      table.organizationId,
+    ),
+    check(
+      "organization_membership_role_check",
+      sql`${table.role} IN ('owner', 'member')`,
+    ),
+    check(
+      "organization_membership_status_check",
+      sql`${table.status} IN ('active', 'inactive')`,
+    ),
+    check(
+      "organization_membership_version_check",
+      sql`${table.membershipVersion} > 0`,
+    ),
+    check(
+      "organization_membership_fingerprint_check",
+      sql`${table.membershipFingerprint} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
+export const organizationParticipationRuntimeBindings = pgTable(
+  "organization_participation_runtime_bindings",
+  {
+    bindingId: varchar("binding_id").notNull().unique(),
+    organizationId: varchar("organization_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    membershipId: varchar("membership_id").notNull(),
+    organizationProfileRevisionId: varchar(
+      "organization_profile_revision_id",
+    ).notNull(),
+    registryContractVersion: varchar("registry_contract_version").notNull(),
+    verificationStreamIdentityFingerprint: varchar(
+      "verification_stream_identity_fingerprint",
+    )
+      .notNull()
+      .references(
+        () =>
+          organizationVerificationPersistenceStreams.streamIdentityFingerprint,
+      ),
+    bindingVersion: integer("binding_version").notNull(),
+    integrityReference: varchar("integrity_reference").notNull(),
+    bindingFingerprint: varchar("binding_fingerprint").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.organizationId, table.userId],
+      name: "organization_participation_runtime_bindings_pkey",
+    }),
+    foreignKey({
+      columns: [table.membershipId, table.organizationId, table.userId],
+      foreignColumns: [
+        organizationMemberships.membershipId,
+        organizationMemberships.organizationId,
+        organizationMemberships.userId,
+      ],
+      name: "organization_participation_binding_membership_fk",
+    }),
+    foreignKey({
+      columns: [
+        table.organizationId,
+        table.organizationProfileRevisionId,
+        table.registryContractVersion,
+      ],
+      foreignColumns: [
+        organizationRegistryProfileRevisions.organizationId,
+        organizationRegistryProfileRevisions.organizationProfileRevisionId,
+        organizationRegistryProfileRevisions.registryContractVersion,
+      ],
+      name: "organization_participation_binding_profile_revision_fk",
+    }),
+    index("organization_participation_binding_membership_idx").on(
+      table.membershipId,
+    ),
+    index("organization_participation_binding_verification_stream_idx").on(
+      table.verificationStreamIdentityFingerprint,
+    ),
+    check(
+      "organization_participation_binding_version_check",
+      sql`${table.bindingVersion} > 0`,
+    ),
+    check(
+      "organization_participation_binding_fingerprint_check",
+      sql`${table.bindingFingerprint} ~ '^sha256:[0-9a-f]{64}$'`,
     ),
   ],
 );
