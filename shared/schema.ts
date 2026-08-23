@@ -227,9 +227,12 @@ export const contractStatusEnum = pgEnum("contract_status", ["draft", "pending",
 
 export const contracts = pgTable("contracts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").unique(),
   offerId: varchar("offer_id").notNull().references(() => offers.id),
   buyerId: varchar("buyer_id").notNull().references(() => users.id),
   sellerId: varchar("seller_id").notNull().references(() => users.id),
+  buyerOrganizationId: varchar("buyer_organization_id"),
+  sellerOrganizationId: varchar("seller_organization_id"),
   quantity: decimal("quantity", { precision: 15, scale: 2 }).notNull(),
   pricePerUnit: decimal("price_per_unit", { precision: 15, scale: 2 }).notNull(),
   totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
@@ -242,6 +245,12 @@ export const contracts = pgTable("contracts", {
   paymentTerms: text("payment_terms"),
   deliveryTerms: text("delivery_terms"),
   specifications: text("specifications"),
+  contractVersion: integer("contract_version"),
+  acceptedOrderVersion: integer("accepted_order_version"),
+  acceptedOrderFingerprint: varchar("accepted_order_fingerprint"),
+  acceptedTermsVersion: integer("accepted_terms_version"),
+  acceptedTermsFingerprint: varchar("accepted_terms_fingerprint"),
+  contractFingerprint: varchar("contract_fingerprint"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -311,9 +320,12 @@ export const partnerRelations = pgTable("partner_relations", {
 
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  contractId: varchar("contract_id").notNull().references(() => contracts.id),
+  contractId: varchar("contract_id").references(() => contracts.id),
+  offerId: varchar("offer_id").references(() => offers.id),
   buyerId: varchar("buyer_id").notNull().references(() => users.id),
   sellerId: varchar("seller_id").notNull().references(() => users.id),
+  buyerOrganizationId: varchar("buyer_organization_id"),
+  sellerOrganizationId: varchar("seller_organization_id"),
   commodity: varchar("commodity").notNull(),
   quantity: decimal("quantity", { precision: 15, scale: 2 }).notNull(),
   unit: varchar("unit").notNull(),
@@ -321,7 +333,7 @@ export const orders = pgTable("orders", {
   totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
   currency: varchar("currency").default("USD"),
   status: varchar("status", { 
-    enum: ['created', 'payment_pending', 'paid', 'in_transit', 'delivered', 'completed', 'cancelled', 'disputed'] 
+    enum: ['created', 'accepted', 'payment_pending', 'paid', 'in_transit', 'delivered', 'completed', 'cancelled', 'disputed']
   }).default('created'),
   paymentStatus: varchar("payment_status", { 
     enum: ['pending', 'processing', 'completed', 'failed', 'refunded'] 
@@ -334,6 +346,16 @@ export const orders = pgTable("orders", {
   estimatedDelivery: timestamp("estimated_delivery"),
   actualDelivery: timestamp("actual_delivery"),
   notes: text("notes"),
+  offerVersion: varchar("offer_version"),
+  offerFingerprint: varchar("offer_fingerprint"),
+  publicationEligibilityFingerprint: varchar("publication_eligibility_fingerprint"),
+  buyerParticipationEligibilityFingerprint: varchar("buyer_participation_eligibility_fingerprint"),
+  acceptedTermsVersion: integer("accepted_terms_version"),
+  acceptedTermsFingerprint: varchar("accepted_terms_fingerprint"),
+  acceptedTermsSnapshot: jsonb("accepted_terms_snapshot").$type<Record<string, unknown>>(),
+  orderVersion: integer("order_version"),
+  orderFingerprint: varchar("order_fingerprint"),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true, mode: "string" }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

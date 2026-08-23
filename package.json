@@ -63,6 +63,7 @@
     "test:organization-participation-architecture": "tsx --test server/organization-participation-eligibility/architecture.test.ts",
     "test:offer-publication-eligibility": "tsx --test server/verification/eligibilityReadModel.test.ts server/offer-publication-eligibility/publicationEligibility.test.ts",
     "test:offer-publication-architecture": "tsx --test server/offer-publication-eligibility/architecture.test.ts",
+    "test:trading-flow": "tsx --test server/trading-flow/tradingFlow.test.ts server/trading-flow/architecture.test.ts",
     "test:verification-engine": "tsx --test server/verification/engine.test.ts server/verification/architecture.test.ts",
     "test:verification-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-6b.runtime.test.ts",
     "test:migrations": "tsx --test scripts/migrations/rehearsal-lib.test.ts",

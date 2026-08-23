@@ -14,13 +14,12 @@ import { requireAdminAuth, requirePermission, adminRateLimit } from "./adminAuth
 import { logAdminAction, AUDIT_ACTIONS } from "./auditLogger";
 import { 
   insertOfferSchema, 
-  insertContractSchema, 
   insertVerificationDocumentSchema,
   insertCommoditySchema,
   insertInterestedOfferSchema 
 } from "@shared/schema";
 import { validateDocument } from "./services/aiValidation";
-import { createSmartContract, getContractStatus } from "./services/blockchain";
+import { getContractStatus } from "./services/blockchain";
 import { generatePerformanceInsights } from "./services/insightsGenerator";
 import { generatePersonalizedRecommendations } from "./services/aiRecommendations";
 import { seedDemoData, clearDemoData } from "./seedData";
@@ -45,6 +44,7 @@ import {
 } from "./marketplace/publicMarketplace";
 import { buildDashboardOverview } from "./dashboard";
 import { registerDraftRoutes } from "./drafts/routes";
+import { productionTradingFlowService } from "./trading-flow/productionService";
 
 // Initialize Stripe
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -647,20 +647,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/orders', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const orderData = { ...req.body, userId };
-      const order = await storage.createOrder(orderData);
-      res.status(201).json(order);
+      const result = await productionTradingFlowService.createOrder({
+        offerId: req.body?.offerId,
+        buyerUserId: userId,
+        buyerOrganizationId: req.body?.buyerOrganizationId,
+        quantity: req.body?.quantity,
+      });
+      if (!result.ok) {
+        return res.status(result.code === "offer_not_found" ? 404 : 409).json({
+          message: "Order creation is not authorized for the current offer and participant state.",
+          code: result.code,
+        });
+      }
+      res.status(201).json(result.value);
     } catch (error) {
       console.error("Error creating order:", error);
       res.status(400).json({ message: "Failed to create order" });
     }
   });
 
-  app.patch('/api/orders/:id/status', isAuthenticated, async (req, res) => {
+  app.patch('/api/orders/:id/status', isAuthenticated, async (req: any, res) => {
     try {
       const { status } = req.body;
-      await storage.updateOrderStatus(req.params.id, status);
-      res.json({ message: "Order status updated successfully" });
+      if (status !== "accepted") {
+        return res.status(409).json({ message: "This order transition is not available in the first-cycle trading flow." });
+      }
+      const result = await productionTradingFlowService.acceptOrder(
+        req.params.id,
+        req.user.claims.sub,
+      );
+      if (!result.ok) {
+        return res.status(result.code === "order_not_found" ? 404 : 409).json({
+          message: "Order acceptance is not authorized for the current order state.",
+          code: result.code,
+        });
+      }
+      res.json(result.value);
     } catch (error) {
       console.error("Error updating order status:", error);
       res.status(500).json({ message: "Failed to update order status" });
@@ -679,10 +701,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/contracts/:id', isAuthenticated, async (req, res) => {
+  app.get('/api/contracts/:id', isAuthenticated, async (req: any, res) => {
     try {
       const contract = await storage.getContractById(req.params.id);
       if (!contract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+      const userId = req.user.claims.sub;
+      if (contract.buyerId !== userId && contract.sellerId !== userId) {
         return res.status(404).json({ message: "Contract not found" });
       }
       res.json(contract);
@@ -695,60 +721,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/contracts', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const validatedData = insertContractSchema.parse(req.body);
-      
-      // Create the contract
-      const contract = await storage.createContract(validatedData);
-      
-      // Log contract signing event
-      BusinessEvents.contractSigned(
-        contract.id,
-        validatedData.buyerId || userId,
-        validatedData.sellerId || userId,
-        parseFloat(validatedData.totalAmount),
+      const result = await productionTradingFlowService.createContract(
+        req.body?.orderId,
+        userId,
       );
-      
-      // Create an explicitly simulated smart contract.
-      try {
-        const offer = await storage.getOfferById(contract.offerId);
-        if (!offer) {
-          throw new Error("Contract offer not found for simulation");
-        }
-
-        const simulation = await createSmartContract({
-          buyerId: contract.buyerId,
-          sellerId: contract.sellerId,
-          commodity: offer.commodity.name,
-          quantity: contract.quantity,
-          price: contract.totalAmount,
-          terms: {
-            paymentTerms: contract.paymentTerms,
-            deliveryTerms: contract.deliveryTerms,
-            specifications: contract.specifications,
-          },
-        });
-        await storage.updateContractSmartContract(
-          contract.id,
-          simulation.contractAddress,
-          simulation.status,
-        );
-        
-        res.status(201).json({ 
-          ...contract,
-          smartContractAddress: simulation.contractAddress,
-          smartContractStatus: simulation.status,
-          simulation: true,
-          message: "Contract created with simulated smart-contract deployment",
-        });
-      } catch (blockchainError) {
-        console.error("Smart-contract simulation failed:", blockchainError);
-        BusinessEvents.blockchainError(contract.id, blockchainError instanceof Error ? blockchainError.message : 'Unknown blockchain error');
-        res.status(201).json({ 
-          ...contract,
-          simulation: true,
-          message: "Contract created, smart-contract simulation pending",
+      if (!result.ok) {
+        return res.status(result.code === "order_not_found" ? 404 : 409).json({
+          message: "Contract creation requires an authoritative accepted order.",
+          code: result.code,
         });
       }
+      res.status(201).json(result.value);
     } catch (error) {
       console.error("Error creating contract:", error);
       res.status(400).json({ message: "Failed to create contract" });
@@ -756,14 +739,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch('/api/contracts/:id/status', isAuthenticated, async (req, res) => {
-    try {
-      const { status } = req.body;
-      await storage.updateContractStatus(req.params.id, status);
-      res.json({ message: "Contract status updated successfully" });
-    } catch (error) {
-      console.error("Error updating contract status:", error);
-      res.status(500).json({ message: "Failed to update contract status" });
-    }
+    res.status(409).json({ message: "Contract lifecycle transitions are outside the first-cycle trading flow." });
   });
 
   app.get('/api/contracts/:id/blockchain-status', isAuthenticated, async (req, res) => {
