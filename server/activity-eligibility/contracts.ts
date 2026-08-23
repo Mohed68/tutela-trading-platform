@@ -14,6 +14,11 @@ export const ACTIVITY_ELIGIBILITY_REASON_CODES = [
   "activity_context_not_matched",
   "activity_context_requires_review",
   "activity_evidence_unavailable",
+  "activity_evidence_integrity_failure",
+  "commodity_context_not_matched",
+  "commodity_context_requires_review",
+  "jurisdiction_context_not_matched",
+  "jurisdiction_context_requires_review",
   "activity_policy_unavailable",
   "activity_scope_mismatch",
 ] as const;

@@ -269,6 +269,8 @@ test("Marketplace publishes when every authoritative gate passes", async () => {
     technicalPolicyVersion: "technical/v1",
     commercialPolicyVersion: "commercial/v1",
     inputFingerprint: "d".repeat(64),
+    evidenceSource: "platform_submitted",
+    evidenceAssuranceLevel: "documentary",
   });
   assert.ok(projection);
   const records = await buildPublishedMarketplaceOfferRecords([offer], {

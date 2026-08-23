@@ -10,7 +10,7 @@ import {
 } from "../verification/eligibilityReadModel.js";
 
 export const OFFER_PUBLICATION_ELIGIBILITY_CONTRACT_VERSION =
-  "offer-publication-eligibility/v1" as const;
+  "offer-publication-eligibility/v2" as const;
 
 export const OFFER_PUBLICATION_ELIGIBILITY_REASON_CODES = [
   "organization_participation_unavailable",
@@ -19,6 +19,7 @@ export const OFFER_PUBLICATION_ELIGIBILITY_REASON_CODES = [
   "offer_verification_unavailable",
   "offer_verification_incomplete",
   "offer_verification_not_eligible",
+  "offer_evidence_assurance_unavailable",
   "authority_scope_mismatch",
 ] as const;
 
@@ -131,6 +132,16 @@ export function evaluateOfferPublicationEligibility(
     verificationFingerprint = verification.projectionFingerprint;
     if (verification.offerId !== input.offerId) {
       addReason(reasons, "authority_scope_mismatch");
+    }
+    if (
+      verification.evidenceSource !== "platform_submitted" ||
+      ![
+        "documentary",
+        "source_confirmed",
+        "independently_inspected",
+      ].includes(verification.evidenceAssuranceLevel)
+    ) {
+      addReason(reasons, "offer_evidence_assurance_unavailable");
     }
     if (
       verification.processState !== "completed" ||

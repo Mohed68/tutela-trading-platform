@@ -21,3 +21,8 @@ export type {
   ActivityEligibilityPolicyPort,
   ActivityEligibilityServicePort,
 } from "./ports.js";
+export {
+  MINIMUM_TRADE_ACTIVITY_POLICY_VERSION,
+  createMinimumTradeActivityEligibilityService,
+  type MinimumTradeActivityEligibilityService,
+} from "./minimumTradeActivityPolicy.js";

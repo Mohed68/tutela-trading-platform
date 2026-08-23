@@ -5,14 +5,17 @@ import type {
   VerificationEligibilityProjection,
   VerificationProcessState,
 } from "../../shared/verification.js";
+import type { EvidenceAssuranceLevel } from "../evidence-provider/index.js";
 
 export const OFFER_VERIFICATION_ELIGIBILITY_READ_MODEL_VERSION =
-  "offer-verification-eligibility/v1" as const;
+  "offer-verification-eligibility/v2" as const;
 
 export interface AuthoritativeOfferVerificationEligibility
   extends Readonly<VerificationEligibilityProjection> {
   readonly readModelVersion: typeof OFFER_VERIFICATION_ELIGIBILITY_READ_MODEL_VERSION;
   readonly projectionFingerprint: string;
+  readonly evidenceSource: "platform_submitted";
+  readonly evidenceAssuranceLevel: EvidenceAssuranceLevel;
 }
 
 export interface OfferVerificationEligibilitySource {
@@ -26,6 +29,8 @@ export interface OfferVerificationEligibilitySource {
   readonly technicalPolicyVersion: string;
   readonly commercialPolicyVersion: string;
   readonly inputFingerprint: string;
+  readonly evidenceSource: "platform_submitted";
+  readonly evidenceAssuranceLevel: EvidenceAssuranceLevel;
 }
 
 export type OfferVerificationEligibilityResolution =
@@ -79,6 +84,12 @@ export function deriveAuthoritativeOfferVerificationEligibility(
     !identity(source.engineVersion) ||
     !identity(source.technicalPolicyVersion) ||
     !identity(source.commercialPolicyVersion) ||
+    source.evidenceSource !== "platform_submitted" ||
+    ![
+      "documentary",
+      "source_confirmed",
+      "independently_inspected",
+    ].includes(source.evidenceAssuranceLevel) ||
     !/^[a-f0-9]{64}$/.test(source.inputFingerprint)
   ) {
     return undefined;
@@ -109,6 +120,8 @@ export function deriveAuthoritativeOfferVerificationEligibility(
         technicalPolicyVersion: source.technicalPolicyVersion,
         commercialPolicyVersion: source.commercialPolicyVersion,
         inputFingerprint: source.inputFingerprint,
+        evidenceSource: source.evidenceSource,
+        evidenceAssuranceLevel: source.evidenceAssuranceLevel,
       }),
     )
     .digest("hex")}`;
@@ -124,6 +137,8 @@ export function deriveAuthoritativeOfferVerificationEligibility(
     technicalPolicyVersion: source.technicalPolicyVersion,
     commercialPolicyVersion: source.commercialPolicyVersion,
     inputFingerprint: source.inputFingerprint,
+    evidenceSource: source.evidenceSource,
+    evidenceAssuranceLevel: source.evidenceAssuranceLevel,
     readModelVersion: OFFER_VERIFICATION_ELIGIBILITY_READ_MODEL_VERSION,
     projectionFingerprint,
   });

@@ -73,6 +73,8 @@ export async function resolveCurrentOfferVerificationEligibility(
       technicalPolicyVersion: row.technical_policy_version,
       commercialPolicyVersion: row.commercial_policy_version,
       inputFingerprint: row.input_fingerprint,
+      evidenceSource: "platform_submitted",
+      evidenceAssuranceLevel: "documentary",
     });
     return projection
       ? Object.freeze({ status: "resolved", projection })

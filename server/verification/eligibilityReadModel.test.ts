@@ -17,6 +17,8 @@ const approvedSource = Object.freeze({
   technicalPolicyVersion: "technical/v1",
   commercialPolicyVersion: "commercial/v1",
   inputFingerprint: "a".repeat(64),
+  evidenceSource: "platform_submitted" as const,
+  evidenceAssuranceLevel: "documentary" as const,
 });
 
 test("current completed approval derives authentic eligible Offer Verification", () => {

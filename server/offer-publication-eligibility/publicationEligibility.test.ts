@@ -74,6 +74,8 @@ function offerVerification(
     technicalPolicyVersion: "technical/v1",
     commercialPolicyVersion: "commercial/v1",
     inputFingerprint: "b".repeat(64),
+    evidenceSource: "platform_submitted",
+    evidenceAssuranceLevel: "documentary",
   });
   assert.ok(projection);
   return projection;
@@ -103,6 +105,7 @@ test("eligible Organization plus verified lifecycle and approved Offer Verificat
   const result = evaluateOfferPublicationEligibility(input());
   assert.equal(result.outcome, "publishable");
   assert.deepEqual(result.reasonCodes, []);
+  assert.equal(offerVerification().evidenceAssuranceLevel, "documentary");
   assert.equal(isOfferPublicationEligibilityResult(result), true);
 });
 

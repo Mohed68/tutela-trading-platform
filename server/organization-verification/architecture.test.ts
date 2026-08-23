@@ -246,6 +246,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isOrganizationRegistry = lowerFile.startsWith(
     "server/organization-registry/",
   );
+  const isTradeTrustPolicyConfiguration = lowerFile.startsWith(
+    "server/trade-trust-policy/",
+  );
   const isRegistryAcl = lowerFile.endsWith(
     "server/organization-verification/integration/organizationregistryacl.ts",
   );
@@ -290,6 +293,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   );
   const isWorkflowRuntime = lowerFile.startsWith(
     "server/organization-verification/application/workflow-runtime/",
+  );
+  const isProductionEvidenceAdapter = lowerFile.startsWith(
+    "server/organization-verification/application/production-evidence-adapter/",
   );
   const isPersistenceContract = lowerFile.startsWith(
     "server/organization-verification/application/persistence-contract/",
@@ -1311,6 +1317,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isEvaluationProjectionDomain &&
     !isWorkflowContract &&
     !isWorkflowRuntime &&
+    !isProductionEvidenceAdapter &&
     !isPersistenceContract &&
     !isDurableEvidenceContract &&
     !isApplicationServiceContract &&
@@ -2169,6 +2176,39 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       file,
       "Workflow runtime exposes a seal, constructor, fingerprint, or result helper",
     );
+  }
+
+  if (isProductionEvidenceAdapter) {
+    for (const specifier of specifiers) {
+      const allowed =
+        specifier === "node:crypto" ||
+        specifier === "../../../evidence-provider/index.js" ||
+        specifier === "../../domain/index.js" ||
+        specifier === "../../domain/evidence-snapshot/index.js";
+      if (!allowed) {
+        addViolation(
+          violations,
+          "SNAPSHOT_DOMAIN_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|executeOrganizationVerificationPolicyEvaluation|createOrganizationVerificationEvidenceSnapshotInternal)\b/.test(
+        input.source,
+      ) ||
+      /\b(?:process\.env|Date\.now|randomUUID|nanoid|db|storage|repository|marketplace|ParticipationEligibility|PublicationEligibility)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "UNAUTHORIZED_SNAPSHOT_CONSTRUCTION",
+        file,
+        "Production evidence adapter may only authenticate and normalize platform evidence",
+      );
+    }
   }
 
   if (
@@ -3067,6 +3107,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
 
   if (
     !isOrganizationVerification &&
+    !isTradeTrustPolicyConfiguration &&
     !/\.test\.(?:ts|tsx)$/i.test(lowerFile) &&
     specifiers.some((specifier) =>
       /(?:^|\/)organization-verification(?:\/|$)/i.test(specifier) &&
@@ -3094,6 +3135,43 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       file,
       "Organization Verification skeleton imported outside its inert boundary",
     );
+  }
+
+  if (isTradeTrustPolicyConfiguration) {
+    for (const specifier of specifiers) {
+      const allowed =
+        specifier === "node:crypto" ||
+        /organization-verification\/domain\/(?:policy|policy-runtime-contract)\/index\.js$/i.test(
+          specifier,
+        ) ||
+        /^\.\/(?:organizationVerificationPolicy)\.js$/i.test(specifier) ||
+        /^\.\.\/(?:activity-eligibility|compliance-trigger|evidence-provider)\/index\.js$/i.test(
+          specifier,
+        ) ||
+        /organization-verification\/application\/production-evidence-adapter\/platformEvidenceAdapter\.js$/i.test(
+          specifier,
+        );
+      if (!allowed) {
+        addViolation(
+          violations,
+          "POLICY_DOMAIN_FORBIDDEN_DEPENDENCY",
+          file,
+          specifier,
+        );
+      }
+    }
+    if (
+      /\b(?:decideOrganizationVerification|deriveOrganizationVerificationTrustStatus|ParticipationEligibility|PublicationEligibility|process\.env|Date\.now|randomUUID|nanoid)\b/.test(
+        input.source,
+      )
+    ) {
+      addViolation(
+        violations,
+        "POLICY_DOMAIN_FORBIDDEN_AUTHORITY",
+        file,
+        "Production policy configuration may define Rules but cannot own Decision, Trust, or Eligibility",
+      );
+    }
   }
 
   return violations;

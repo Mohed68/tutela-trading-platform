@@ -73,6 +73,8 @@ function eligibleOfferVerification(offerId = "public-offer") {
     technicalPolicyVersion: "technical/v1",
     commercialPolicyVersion: "commercial/v1",
     inputFingerprint: "c".repeat(64),
+    evidenceSource: "platform_submitted",
+    evidenceAssuranceLevel: "documentary",
   });
   assert.ok(projection);
   return projection;

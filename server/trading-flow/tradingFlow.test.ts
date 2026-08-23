@@ -50,6 +50,7 @@ function verification(offerId = "offer-1", decision: "approved" | "revision_requ
     decision, completedAt: "2026-09-04T00:00:00.000Z", engineVersion: "engine/v1",
     technicalPolicyVersion: "technical/v1", commercialPolicyVersion: "commercial/v1",
     inputFingerprint: "a".repeat(64),
+    evidenceSource: "platform_submitted", evidenceAssuranceLevel: "documentary",
   });
   assert.ok(value);
   return value;
