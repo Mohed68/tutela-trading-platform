@@ -225,11 +225,17 @@ export async function setupAuth(app: Express) {
 
     const activationMode = getRegistrationActivationMode();
     if (activationMode === "temporary_direct") {
-      await registerTemporaryDirectLocalAccount(parsed.data, { storage });
-      return res.status(201).json({
-        activation: "direct",
-        message: "Your account is ready to sign in.",
-      });
+      try {
+        await registerTemporaryDirectLocalAccount(parsed.data, { storage });
+        return res.status(201).json({
+          activation: "direct",
+          message: "Your account is ready to sign in.",
+        });
+      } catch {
+        return res.status(503).json({
+          message: "Account registration is temporarily unavailable.",
+        });
+      }
     }
 
     const configuration = getVerificationEmailConfiguration();

@@ -259,3 +259,18 @@ test("temporary direct registration is explicitly marked and never marks email v
   assert.match(method, /TEMPORARY_DIRECT_REGISTRATION_PROVENANCE/);
   assert.ok(!method.includes("emailVerificationTokens"));
 });
+
+test("temporary registration storage failures remain a safe HTTP response", () => {
+  const authSource = fs.readFileSync(
+    path.join(process.cwd(), "server/auth.ts"),
+    "utf8",
+  );
+  const directBranch = authSource.slice(
+    authSource.indexOf('if (activationMode === "temporary_direct")'),
+    authSource.indexOf("const configuration = getVerificationEmailConfiguration()"),
+  );
+  assert.match(directBranch, /try\s*\{/);
+  assert.match(directBranch, /catch\s*\{/);
+  assert.match(directBranch, /res\.status\(503\)/);
+  assert.doesNotMatch(directBranch, /console\.(?:error|log)/);
+});

@@ -53,6 +53,7 @@ export function shouldRunStartupSeeding(
   environment: RecoveryEnvironment = process.env,
 ): boolean {
   return (
+    environment.TUTELA_STARTUP_DEMO_SEED === "true" &&
     !isRecoveryMode(environment) &&
     environment.NODE_ENV !== "production" &&
     environment.RENDER === undefined
@@ -62,7 +63,11 @@ export function shouldRunStartupSeeding(
 export function shouldRegisterDemoDataAdministration(
   environment: RecoveryEnvironment = process.env,
 ): boolean {
-  return shouldRunStartupSeeding(environment);
+  return (
+    !isRecoveryMode(environment) &&
+    environment.NODE_ENV !== "production" &&
+    environment.RENDER === undefined
+  );
 }
 
 export function shouldInitializeExternalMonitoring(

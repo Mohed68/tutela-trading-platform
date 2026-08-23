@@ -14,6 +14,10 @@ const migration0014 = readFileSync(
   new URL("../../migrations/0014_order_contract_authority.sql", import.meta.url),
   "utf8",
 );
+const migration0015 = readFileSync(
+  new URL("../../migrations/0015_temporary_registration_provenance.sql", import.meta.url),
+  "utf8",
+);
 
 test("staging prerequisite is additive and never rewrites legacy rows", () => {
   assert.doesNotMatch(
@@ -66,4 +70,14 @@ test("prerequisite supplies exactly the baseline objects consumed by 0011 and 00
 test("migration filename orders the prerequisite between 0010 and 0011", () => {
   assert.ok("0010_verification_immutability.sql" < "0010a_staging_baseline_prerequisites.sql");
   assert.ok("0010a_staging_baseline_prerequisites.sql" < "0011_self_service_registration.sql");
+});
+
+test("temporary registration provenance preserves recovery uniqueness without fabricating state", () => {
+  assert.match(migration0015, /tutela-temporary-direct-registration/);
+  assert.match(migration0015, /users_recovery_marker_unique/);
+  assert.match(
+    migration0015,
+    /WHERE recovery_provenance = 'tutela-recovery-test'/,
+  );
+  assert.doesNotMatch(migration0015, /\b(?:UPDATE|DELETE|INSERT|TRUNCATE)\b/i);
 });

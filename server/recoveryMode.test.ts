@@ -10,9 +10,16 @@ import {
 } from "./recoveryMode.js";
 import { safeErrorMessage } from "./safeErrors.js";
 
-test("recovery mode is opt-in and preserves normal defaults", () => {
+test("recovery mode is opt-in and startup seeding requires explicit opt-in", () => {
   assert.equal(isRecoveryMode({ NODE_ENV: "development" }), false);
-  assert.equal(shouldRunStartupSeeding({ NODE_ENV: "development" }), true);
+  assert.equal(shouldRunStartupSeeding({ NODE_ENV: "development" }), false);
+  assert.equal(
+    shouldRunStartupSeeding({
+      NODE_ENV: "development",
+      TUTELA_STARTUP_DEMO_SEED: "true",
+    }),
+    true,
+  );
   assert.equal(
     shouldRegisterDemoDataAdministration({ NODE_ENV: "development" }),
     true,
