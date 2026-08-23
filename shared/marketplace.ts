@@ -41,7 +41,7 @@ export interface PublicMarketplaceOffer {
     payment: string | null;
     validUntil: string | null;
   };
-  status: "active";
+  status: "verified" | "active";
   trust: {
     offerVerification: {
       state: "verified";
@@ -71,7 +71,8 @@ export interface PublicMarketplaceOffersResponse {
   offers: PublicMarketplaceOffer[];
   totalCount: number;
   publicationPolicy:
-    "verified_offer_and_verified_seller_organization";
+    | "offer_publication_eligibility_v1"
+    | "verified_offer_and_verified_seller_organization";
 }
 
 export interface PublicMarketplaceSummary {

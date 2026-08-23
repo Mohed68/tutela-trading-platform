@@ -12,12 +12,9 @@ export type MarketFilter = {
  * This MUST be used by both list and summary endpoints to ensure 1:1 matching
  */
 export function wherePublicOffers(f: MarketFilter = {}) {
-  // Log the where object to detect unit leaks
+  // Publication authority is evaluated by Offer Publication Eligibility.
+  // This helper owns discovery filters only and must never recreate the gate.
   const whereClause = {
-    // Core marketplace criteria - NEVER change these without updating both endpoints
-    verified: true,
-    sellerOrgVerified: true,  // This is critical for verified trader count
-    status: 'active',
     // Future multi-tenancy support
     ...(f.tenantId ? { tenant_id: f.tenantId } : {}),
     // Commodity filtering

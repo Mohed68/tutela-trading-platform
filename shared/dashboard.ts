@@ -22,7 +22,8 @@ export interface DashboardOwnedOffersSummary {
 export interface DashboardMarketplaceSummary {
   publishedOffers: number;
   publicationPolicy:
-    "verified_offer_and_verified_seller_organization";
+    | "offer_publication_eligibility_v1"
+    | "verified_offer_and_verified_seller_organization";
 }
 
 export interface DashboardOverviewDto {

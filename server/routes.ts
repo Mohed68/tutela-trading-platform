@@ -417,8 +417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         offers,
         totalCount: offers.length,
-        publicationPolicy:
-          "verified_offer_and_verified_seller_organization",
+        publicationPolicy: "offer_publication_eligibility_v1",
       });
     } catch (error) {
       console.error(`Error fetching offers: ${safeErrorMessage(error)}`);
@@ -484,8 +483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         offers,
         totalCount: offers.length,
-        publicationPolicy:
-          "verified_offer_and_verified_seller_organization",
+        publicationPolicy: "offer_publication_eligibility_v1",
       });
     } catch (error) {
       console.error(`Error searching offers: ${safeErrorMessage(error)}`);

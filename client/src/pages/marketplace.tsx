@@ -201,8 +201,8 @@ export default function Marketplace() {
             Marketplace
           </h1>
           <p className="text-gray-600">
-            Only offers with confirmed offer and seller-organization
-            verification are published.
+            Offers appear only after the platform's publication eligibility
+            gate confirms every required authority.
           </p>
         </div>
 

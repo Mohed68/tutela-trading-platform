@@ -130,7 +130,7 @@ test(
         offers: [],
         totalCount: 0,
         publicationPolicy:
-          "verified_offer_and_verified_seller_organization",
+          "offer_publication_eligibility_v1",
       });
 
       step = "summary";
@@ -168,7 +168,7 @@ test(
         offers: [],
         totalCount: 0,
         publicationPolicy:
-          "verified_offer_and_verified_seller_organization",
+          "offer_publication_eligibility_v1",
       });
 
       step = "write_guard";

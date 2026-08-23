@@ -6,8 +6,7 @@ import type {
   DashboardOwnedOffersSummary,
 } from "@shared/dashboard";
 
-const PUBLICATION_POLICY =
-  "verified_offer_and_verified_seller_organization" as const;
+const PUBLICATION_POLICY = "offer_publication_eligibility_v1" as const;
 
 function unavailable(): DashboardModule<never> {
   return { state: "unavailable", data: null };

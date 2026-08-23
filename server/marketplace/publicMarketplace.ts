@@ -1,6 +1,13 @@
 import { pool } from "../db.js";
 import { getCommodityUnits, qtyFactor, type CanonUnit } from "../conversion/index.js";
 import type { MarketFilter } from "../filters/publicOffers.js";
+import {
+  evaluateOfferPublicationEligibility,
+  isOfferPublicationEligibilityResult,
+  type OfferPublicationEligibilityDependencies,
+  type OfferPublicationEligibilityResult,
+} from "../offer-publication-eligibility/index.js";
+import { offerVerificationEligibilityReadRepository } from "../verification/eligibilityReadRepository.js";
 import type {
   PublicMarketplaceOffer,
   PublicMarketplaceOptions,
@@ -9,15 +16,15 @@ import type {
 
 export interface PublishedOfferRow {
   id: string;
-  offer_verified: boolean | null;
-  seller_organization_verified: boolean | null;
+  user_id: string;
+  seller_organization_id: string | null;
   offer_type: "buy" | "sell";
   quantity: string;
   unit: string;
   price_per_unit: string;
   currency: string | null;
   location: string;
-  status: "active";
+  status: string;
   valid_until: Date | string | null;
   minimum_quantity: string | null;
   delivery_terms: string | null;
@@ -31,18 +38,6 @@ export interface PublishedOfferRow {
 
 export interface PublishedMarketplaceOfferRecord {
   offer: PublicMarketplaceOffer;
-}
-
-export function hasCompletePublicationProof(input: {
-  offerVerified: boolean | null | undefined;
-  sellerOrganizationVerified: boolean | null | undefined;
-  status: string | null | undefined;
-}): boolean {
-  return (
-    input.offerVerified === true &&
-    input.sellerOrganizationVerified === true &&
-    input.status === "active"
-  );
 }
 
 function isoDate(value: Date | string | null): string | null {
@@ -59,15 +54,18 @@ function numberOrNull(value: string | number | null): number | null {
 
 export function projectPublishedOffer(
   row: PublishedOfferRow,
+  publicationEligibility: OfferPublicationEligibilityResult,
 ): PublishedMarketplaceOfferRecord {
   if (
-    !hasCompletePublicationProof({
-      offerVerified: row.offer_verified,
-      sellerOrganizationVerified: row.seller_organization_verified,
-      status: row.status,
-    })
+    !isOfferPublicationEligibilityResult(publicationEligibility) ||
+    publicationEligibility.outcome !== "publishable" ||
+    publicationEligibility.offerId !== row.id ||
+    publicationEligibility.lifecycleStatus !== row.status ||
+    publicationEligibility.sellerOrganizationId !==
+      row.seller_organization_id ||
+    publicationEligibility.sellerUserId !== row.user_id
   ) {
-    throw new Error("MARKETPLACE_PUBLICATION_PROOF_REQUIRED");
+    throw new Error("MARKETPLACE_PUBLICATION_ELIGIBILITY_REQUIRED");
   }
 
   const quantity = numberOrNull(row.quantity);
@@ -97,7 +95,7 @@ export function projectPublishedOffer(
         payment: row.payment_terms,
         validUntil: isoDate(row.valid_until),
       },
-      status: "active",
+      status: "verified",
       trust: {
         offerVerification: {
           state: "verified",
@@ -125,43 +123,35 @@ export function projectPublishedOffer(
   };
 }
 
-export async function hasAuthoritativeMarketplaceVerification(): Promise<boolean> {
-  const result = await pool.query<{ authoritative: boolean }>(`
-    SELECT (
-      EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'offers'
-          AND column_name = 'verified'
-          AND data_type = 'boolean'
-      )
-      AND EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'offers'
-          AND column_name = 'seller_org_verified'
-          AND data_type = 'boolean'
-      )
-    ) AS authoritative
-  `);
+const unavailableOrganizationParticipation = Object.freeze({
+  async resolveCurrentOrganizationParticipationEligibility() {
+    return Object.freeze({ status: "unavailable" as const });
+  },
+});
 
-  return result.rows[0]?.authoritative === true;
-}
+const productionPublicationDependencies: OfferPublicationEligibilityDependencies =
+  Object.freeze({
+    organizationParticipationEligibility:
+      unavailableOrganizationParticipation,
+    offerVerificationEligibility: offerVerificationEligibilityReadRepository,
+  });
 
 export async function getPublishedMarketplaceOfferRecords(): Promise<
   PublishedMarketplaceOfferRecord[]
-> {
-  if (!(await hasAuthoritativeMarketplaceVerification())) {
-    return [];
-  }
+>;
+export async function getPublishedMarketplaceOfferRecords(
+  dependencies: OfferPublicationEligibilityDependencies,
+): Promise<PublishedMarketplaceOfferRecord[]>;
+export async function getPublishedMarketplaceOfferRecords(
+  dependencies: OfferPublicationEligibilityDependencies =
+    productionPublicationDependencies,
+): Promise<PublishedMarketplaceOfferRecord[]> {
 
   const result = await pool.query<PublishedOfferRow>(`
     SELECT
       offer.id,
-      offer.verified AS offer_verified,
-      offer.seller_org_verified AS seller_organization_verified,
+      offer.user_id,
+      offer.seller_org_id AS seller_organization_id,
       offer.type::text AS offer_type,
       offer.quantity::text AS quantity,
       offer.unit,
@@ -181,13 +171,43 @@ export async function getPublishedMarketplaceOfferRecords(): Promise<
     FROM public.offers AS offer
     INNER JOIN public.commodities AS commodity
       ON commodity.id = offer.commodity_id
-    WHERE offer.verified IS TRUE
-      AND offer.seller_org_verified IS TRUE
-      AND offer.status::text = 'active'
     ORDER BY offer.created_at DESC
   `);
 
-  return result.rows.map(projectPublishedOffer);
+  return buildPublishedMarketplaceOfferRecords(result.rows, dependencies);
+}
+
+export async function buildPublishedMarketplaceOfferRecords(
+  rows: readonly PublishedOfferRow[],
+  dependencies: OfferPublicationEligibilityDependencies,
+): Promise<PublishedMarketplaceOfferRecord[]> {
+  const records: PublishedMarketplaceOfferRecord[] = [];
+  for (const row of rows) {
+    const organizationParticipation = row.seller_organization_id
+      ? await dependencies.organizationParticipationEligibility.resolveCurrentOrganizationParticipationEligibility(
+          {
+            organizationId: row.seller_organization_id,
+            userId: row.user_id,
+          },
+        )
+      : Object.freeze({ status: "not_found" as const });
+    const offerVerification =
+      await dependencies.offerVerificationEligibility.resolveCurrentOfferVerificationEligibility(
+        row.id,
+      );
+    const publicationEligibility = evaluateOfferPublicationEligibility({
+      offerId: row.id,
+      lifecycleStatus: row.status,
+      sellerOrganizationId: row.seller_organization_id ?? "",
+      sellerUserId: row.user_id,
+      organizationParticipation,
+      offerVerification,
+    });
+    if (publicationEligibility.outcome === "publishable") {
+      records.push(projectPublishedOffer(row, publicationEligibility));
+    }
+  }
+  return records;
 }
 
 function commodityKey(offer: PublicMarketplaceOffer): string {

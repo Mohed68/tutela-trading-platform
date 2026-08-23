@@ -21,7 +21,7 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 const LEGACY_USER_COUNT = 4;
 const LEGACY_OFFER_COUNT = 9;
 const PUBLICATION_POLICY =
-  "verified_offer_and_verified_seller_organization";
+  "offer_publication_eligibility_v1";
 const BLOCKED_LEGACY_DASHBOARD_ROUTES = [
   "/api/dashboard/metrics",
   "/api/dashboard/activity",

@@ -59,7 +59,7 @@ test("authoritative zero offer results are represented as empty", () => {
     data: {
       publishedOffers: 0,
       publicationPolicy:
-        "verified_offer_and_verified_seller_organization",
+        "offer_publication_eligibility_v1",
     },
   });
 });

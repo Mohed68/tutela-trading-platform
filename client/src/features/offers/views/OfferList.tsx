@@ -62,9 +62,8 @@ export default function OfferList({
     return matchesSearch && matchesCategory;
   });
 
-  // The legacy card receives only public fields, and only after both explicit
-  // verification states are proven. Unknown states are not converted to
-  // boolean false and cannot enter the render path.
+  // The legacy card receives only the public projection after the server-side
+  // Publication Eligibility gate has admitted it.
   const publishedOffers = filteredOffers.flatMap((offer) => {
     if (
       offer.trust.offerVerification.state !== "verified" ||
@@ -137,7 +136,7 @@ export default function OfferList({
         </h3>
         <p className="text-gray-600">
           {filter === 'marketplace' ? 
-            "Offers appear only after both offer and seller-organization verification are confirmed." :
+            "Offers appear only after the publication eligibility gate confirms every required authority." :
             filter === 'user' ?
             "Create your first offer to get started with trading." :
             "Browse marketplace to find interesting offers to track."

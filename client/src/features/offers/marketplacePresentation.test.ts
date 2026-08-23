@@ -9,7 +9,7 @@ function source(relativePath: string): string {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
-test("marketplace empty state explains the strict verification policy", () => {
+test("marketplace empty state explains the Publication Eligibility gate", () => {
   const offerList = source(
     "client/src/features/offers/views/OfferList.tsx",
   );
@@ -19,7 +19,7 @@ test("marketplace empty state explains the strict verification policy", () => {
   );
   assert.match(
     offerList,
-    /both offer and seller-organization verification are confirmed/,
+    /publication eligibility gate confirms every required authority/,
   );
 });
 

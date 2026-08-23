@@ -2,9 +2,6 @@ import { useMemo } from 'react';
 
 interface Offer {
   id: string;
-  verified: boolean;
-  sellerOrgVerified?: boolean;
-  status: string;
   commodity?: { name: string; type: string };
   commodityType?: string;
   commodityName?: string;
@@ -15,7 +12,6 @@ interface Offer {
   sellerOrgName?: string;
   sellerOrgId?: string;
   userId?: string;
-  sellerOrg?: { id: string; verified: boolean };
 }
 
 function matchesSearch(offer: Offer, search: string): boolean {
@@ -41,12 +37,9 @@ export function useVisibleOffers({
   category: string | null;
 }) {
   const filtered = useMemo(() => {
-    // Start with verified, active offers only (single source of truth)
-    const base = (data ?? []).filter(offer => 
-      offer.verified === true && 
-      (offer.sellerOrg?.verified === true || offer.sellerOrgVerified === true) &&
-      offer.status === 'active'
-    );
+    // The server-side Publication Eligibility gate is the sole publication
+    // authority. Client filtering is presentation-only.
+    const base = data ?? [];
     
     // Apply category filter if specified
     const byCategory = category && category !== 'all' 
