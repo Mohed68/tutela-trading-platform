@@ -1,4 +1,5 @@
 import type { QueryResultRow } from "pg";
+import { createHash } from "node:crypto";
 
 import { pool } from "../db.js";
 import {
@@ -18,6 +19,7 @@ interface CurrentVerificationRow extends QueryResultRow {
   technical_policy_version: string;
   commercial_policy_version: string;
   input_fingerprint: string;
+  binding_id:string;evidence_id:string;evidence_version:string;evidence_assurance_level:"documentary"|"source_confirmed"|"independently_inspected";evidence_fingerprint:string;persisted_evidence_fingerprint:string;bound_at:Date|string;binding_fingerprint:string;
 }
 
 function isoTimestamp(value: Date | string | null): string | null {
@@ -50,10 +52,15 @@ export async function resolveCurrentOfferVerificationEligibility(
         attempt.engine_version,
         attempt.technical_policy_version,
         attempt.commercial_policy_version,
-        attempt.input_fingerprint
+        attempt.input_fingerprint,binding.binding_id,binding.evidence_id,
+        binding.evidence_version,binding.evidence_assurance_level,
+        binding.evidence_fingerprint,evidence.evidence_fingerprint AS persisted_evidence_fingerprint,
+        binding.bound_at,binding.binding_fingerprint
       FROM public.offer_verification_attempts AS attempt
       INNER JOIN current_submission
         ON current_submission.revision = attempt.submission_revision
+      INNER JOIN public.offer_verification_evidence_bindings binding ON binding.attempt_id=attempt.id AND binding.offer_id=attempt.offer_id AND binding.submission_revision=attempt.submission_revision
+      INNER JOIN public.platform_submitted_evidence evidence ON evidence.evidence_id=binding.evidence_id AND evidence.evidence_version=binding.evidence_version AND evidence.subject_kind='offer' AND evidence.subject_id=attempt.offer_id
       WHERE attempt.offer_id = $1
       ORDER BY attempt.attempt_sequence DESC, attempt.created_at DESC
       LIMIT 1
@@ -62,6 +69,8 @@ export async function resolveCurrentOfferVerificationEligibility(
     );
     const row = result.rows[0];
     if (!row) return Object.freeze({ status: "not_found" });
+    const boundAt=isoTimestamp(row.bound_at),expected=boundAt?`sha256:${createHash("sha256").update(JSON.stringify({scope:"offer-verification-evidence-binding/v1",bindingId:row.binding_id,attemptId:row.attempt_id,offerId:row.offer_id,submissionRevision:row.submission_revision,evidenceId:row.evidence_id,evidenceVersion:row.evidence_version,evidenceAssuranceLevel:row.evidence_assurance_level,evidenceFingerprint:row.evidence_fingerprint,boundAt})).digest("hex")}`:null;
+    if(!expected||expected!==row.binding_fingerprint||row.evidence_fingerprint!==row.persisted_evidence_fingerprint)return Object.freeze({status:"integrity_failure"});
     const projection = deriveAuthoritativeOfferVerificationEligibility({
       offerId: row.offer_id,
       submissionRevision: row.submission_revision,
@@ -74,7 +83,7 @@ export async function resolveCurrentOfferVerificationEligibility(
       commercialPolicyVersion: row.commercial_policy_version,
       inputFingerprint: row.input_fingerprint,
       evidenceSource: "platform_submitted",
-      evidenceAssuranceLevel: "documentary",
+      evidenceAssuranceLevel: row.evidence_assurance_level,
     });
     return projection
       ? Object.freeze({ status: "resolved", projection })

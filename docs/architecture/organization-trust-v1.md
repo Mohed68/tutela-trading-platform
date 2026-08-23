@@ -12,6 +12,29 @@ Scope: architecture and documentation only
 
 Implementation status: not authorized
 
+## Production Cycle 1 registration and runtime authority amendment
+
+An authenticated local trader may register one primary Organization when that
+user holds no active `owner` Membership in another Organization. This is an
+application-layer launch policy, not a permanent Domain invariant.
+Registration atomically appends an `active` Registry profile revision and an
+active `owner` Membership for the creator.
+
+Registry `active` means registered and operational only. It does not imply
+verification, Trust, Activity Eligibility, Participation Eligibility,
+Publication Eligibility, or trading authority. Production Cycle 1 Membership
+roles are only `owner` and `member`. An active owner may manage Membership
+role/status, submit or revise Organization evidence, and initiate Verification;
+Membership never constructs Decision, Trust, or any Eligibility result.
+
+The production composition writes Registry/Membership atomically, stores
+platform evidence immutably, invokes the existing Organization Verification
+Application Service, and binds Participation only to PostgreSQL load and
+Replay-derived Trust. Activity Eligibility remains independent and gates the
+application composition. Offer documentary evidence is bound to the exact
+Offer Verification Attempt. External KYB/compliance providers remain optional
+future evidence sources and cannot directly approve TUTELA authority.
+
 ## 1. Executive Summary
 
 Organization Trust is the first capability formally organized with Offer

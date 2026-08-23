@@ -609,6 +609,29 @@ Examples:
 
 ### 12.1 Finding model
 
+#### Rule execution outcome contract
+
+Each Rule has one configured failure disposition. Runtime execution permits
+exactly two outcomes:
+
+- `satisfied`: the Rule passed and Runtime emits no failure Finding. An explicit,
+  Rule-bound Finding ID may be reserved in the caller-supplied Execution
+  Artifacts for that Rule's possible failure path, but it is not emitted or
+  treated as a Finding when the Rule passes;
+- the Rule's configured failure disposition: the Rule failed and at least one
+  authentic Finding bound to that exact Rule ID/version is required.
+
+Any other disposition, a failure without its required Finding, or a
+`satisfied` result accompanied by a contradictory failure Finding fails
+closed. This correction does not transfer Decision authority to Policy
+Runtime: Runtime still emits only Rule Results, Findings, and Policy Evaluation
+Completion for the Decision Engine to consume.
+
+The caller must not pre-execute a Rule to decide whether to allocate artifacts.
+Runtime is the sole Rule execution point and evaluates each bound implementation
+exactly once. Reserved failure artifacts keep ID and clock generation explicit
+without making the caller a second Rule executor.
+
 Every finding contains:
 
 ```text

@@ -1,7 +1,7 @@
 import { pool } from "../db.js";
 import { getCommodityUnits, qtyFactor, type CanonUnit } from "../conversion/index.js";
 import type { MarketFilter } from "../filters/publicOffers.js";
-import { productionOrganizationParticipationEligibilityReadAdapter } from "../organization-participation-eligibility/productionRuntime.js";
+import { productionActivityAwareParticipationAdapter } from "../trade-trust-application/applicationService.js";
 import {
   evaluateOfferPublicationEligibility,
   isOfferPublicationEligibilityResult,
@@ -127,7 +127,7 @@ export function projectPublishedOffer(
 const productionPublicationDependencies: OfferPublicationEligibilityDependencies =
   Object.freeze({
     organizationParticipationEligibility:
-      productionOrganizationParticipationEligibilityReadAdapter,
+      productionActivityAwareParticipationAdapter,
     offerVerificationEligibility: offerVerificationEligibilityReadRepository,
   });
 
@@ -183,6 +183,12 @@ export async function buildPublishedMarketplaceOfferRecords(
           {
             organizationId: row.seller_organization_id,
             userId: row.user_id,
+            activityContext: {
+              activityCode: row.commodity_category,
+              commodityId: row.commodity_id,
+              commodityClassification: row.commodity_category,
+              jurisdiction: null,
+            },
           },
         )
       : Object.freeze({ status: "not_found" as const });

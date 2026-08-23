@@ -189,7 +189,8 @@ export function executeOrganizationVerificationPolicyEvaluation(
     );
     if (
       !disposition.ok ||
-      disposition.value !== binding.rule.evaluationDisposition
+      (disposition.value !== "satisfied" &&
+        disposition.value !== binding.rule.evaluationDisposition)
     ) {
       return policyRuntimeFailure("rule_execution_contract_failure", {
         path: `rules.${index}`,
@@ -205,7 +206,19 @@ export function executeOrganizationVerificationPolicyEvaluation(
         artifact.ruleId === binding.rule.ruleId &&
         artifact.ruleVersion === binding.rule.ruleVersion,
     );
-    for (const [findingIndex, findingArtifact] of findingArtifacts.entries()) {
+    if (
+      disposition.value === "satisfied" &&
+      binding.rule.evaluationDisposition === "satisfied" &&
+      findingArtifacts.length > 0
+    ) {
+      return policyRuntimeFailure("execution_artifacts_mismatch", {
+        path: `rules.${index}.findings`,
+        cause: "contradictory_satisfied_finding",
+      });
+    }
+    const emittedFindingArtifacts =
+      disposition.value === "satisfied" ? [] : findingArtifacts;
+    for (const [findingIndex, findingArtifact] of emittedFindingArtifacts.entries()) {
       const provenanceReference =
         createOrganizationVerificationPolicyProvenanceReference(
           findingArtifact.provenanceReference,

@@ -45,6 +45,7 @@ import {
 import { buildDashboardOverview } from "./dashboard";
 import { registerDraftRoutes } from "./drafts/routes";
 import { productionTradingFlowService } from "./trading-flow/productionService";
+import { registerTradeTrustApplicationRoutes } from "./trade-trust-application/routes";
 
 // Initialize Stripe
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -65,6 +66,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
   registerDraftRoutes(app);
+  registerTradeTrustApplicationRoutes(app);
 
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString(), environment: process.env.NODE_ENV ?? "development" });

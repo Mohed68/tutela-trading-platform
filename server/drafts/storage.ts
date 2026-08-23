@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import { pool } from "../db.js";
 import {
@@ -401,6 +402,9 @@ export async function submitOwnedDraftOffer(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const evidence=await client.query<{evidence_id:string;evidence_version:string;evidence_fingerprint:string}>(`SELECT evidence.evidence_id,evidence.evidence_version,evidence.evidence_fingerprint FROM public.offers offer LEFT JOIN public.platform_submitted_evidence evidence ON evidence.subject_kind='offer' AND evidence.subject_id=offer.id AND evidence.subject_version=to_char(offer.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') WHERE offer.id=$1 AND offer.user_id=$2 AND offer.status::text='draft' FOR UPDATE OF offer`,[draftId,ownerId]);
+    const documentaryEvidence=evidence.rows[0];
+    if(!documentaryEvidence?.evidence_id){await client.query("ROLLBACK");throw new Error("OFFER_DOCUMENTARY_EVIDENCE_REQUIRED");}
     const result = await client.query<DraftRow>(
       `
         WITH submitted AS (
@@ -471,7 +475,9 @@ export async function submitOwnedDraftOffer(
         validUntil: isoTimestamp(row.valid_until),
         lifecycleStatus: "submitted",
       };
-      await queueVerificationAttempt(client, snapshot);
+      const queued=await queueVerificationAttempt(client,snapshot),boundAt=new Date().toISOString(),bindingId=randomUUID();
+      const bindingFingerprint=`sha256:${createHash("sha256").update(JSON.stringify({scope:"offer-verification-evidence-binding/v1",bindingId,attemptId:queued.attemptId,offerId:row.id,submissionRevision:nextRevision,evidenceId:documentaryEvidence.evidence_id,evidenceVersion:documentaryEvidence.evidence_version,evidenceAssuranceLevel:"documentary",evidenceFingerprint:documentaryEvidence.evidence_fingerprint,boundAt})).digest("hex")}`;
+      await client.query(`INSERT INTO public.offer_verification_evidence_bindings(binding_id,attempt_id,offer_id,submission_revision,evidence_id,evidence_version,evidence_assurance_level,evidence_fingerprint,bound_at,binding_fingerprint) VALUES($1,$2,$3,$4,$5,$6,'documentary',$7,$8,$9)`,[bindingId,queued.attemptId,row.id,nextRevision,documentaryEvidence.evidence_id,documentaryEvidence.evidence_version,documentaryEvidence.evidence_fingerprint,boundAt,bindingFingerprint]);
       await client.query("COMMIT");
       return toSubmittedDto(row);
     }

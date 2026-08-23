@@ -103,7 +103,10 @@ export function createOrganizationVerificationRuleEvaluationResult(
   if (input.resultIntegrityValid !== true) {
     return policyFailure("rule_result_integrity_invalid");
   }
-  if (input.disposition !== input.rule.evaluationDisposition) {
+  if (
+    input.disposition !== "satisfied" &&
+    input.disposition !== input.rule.evaluationDisposition
+  ) {
     return policyFailure("conflicting_rule_result");
   }
   if (

@@ -14,6 +14,12 @@ export interface MarketplaceOrganizationParticipationEligibilityReadPort {
   resolveCurrentOrganizationParticipationEligibility(input: Readonly<{
     organizationId: string;
     userId: string;
+    activityContext?: Readonly<{
+      activityCode: string;
+      commodityId: string;
+      commodityClassification: string | null;
+      jurisdiction: string | null;
+    }>;
   }>): Promise<MarketplaceOrganizationParticipationResolution>;
 }
 

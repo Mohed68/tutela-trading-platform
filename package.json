@@ -66,6 +66,7 @@
     "test:trading-flow": "tsx --test server/trading-flow/tradingFlow.test.ts server/trading-flow/architecture.test.ts",
     "test:progressive-trade-trust-architecture": "tsx --test server/activity-eligibility/contracts.test.ts server/activity-eligibility/architecture.test.ts server/evidence-provider/evidenceProvider.test.ts server/verification/evidenceSemantics.test.ts",
     "test:minimum-trade-trust-policy": "tsx --test server/trade-trust-policy/organizationVerificationPolicy.test.ts server/trade-trust-policy/productionWiring.test.ts server/activity-eligibility/minimumTradeActivityPolicy.test.ts server/compliance-trigger/contracts.test.ts server/trade-trust-policy.architecture.test.ts",
+    "test:production-trade-trust-runtime": "tsx --test server/trade-trust-application/applicationService.test.ts",
     "test:verification-engine": "tsx --test server/verification/engine.test.ts server/verification/architecture.test.ts",
     "test:verification-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-6b.runtime.test.ts",
     "test:migrations": "tsx --test scripts/migrations/rehearsal-lib.test.ts scripts/migrations/staging-baseline-reconciliation.test.ts",

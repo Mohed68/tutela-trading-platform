@@ -16,7 +16,7 @@ type Result<T> =
   | { readonly ok: false; readonly code: string; readonly path?: string };
 
 function must<T>(result: Result<T>): T {
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, true, result.ok ? undefined : JSON.stringify(result));
   if (!result.ok) throw new Error(result.code);
   return result.value;
 }
@@ -386,6 +386,7 @@ function makeExecutionArtifacts(
     reverseFindings?: boolean;
     reverseResults?: boolean;
     omitRevisionFinding?: boolean;
+    includeSatisfiedFinding?: boolean;
   }> = {},
 ) {
   const references = artifactReferences();
@@ -403,8 +404,10 @@ function makeExecutionArtifacts(
   const findings = implementationSet.bindings
     .filter(
       (binding) =>
-        !options.omitRevisionFinding ||
-        binding.rule.ruleId !== "runtime-rule-revision",
+        (binding.rule.evaluationDisposition !== "satisfied" ||
+          options.includeSatisfiedFinding === true) &&
+        (!options.omitRevisionFinding ||
+          binding.rule.ruleId !== "runtime-rule-revision"),
     )
     .map((binding, index) => ({
       ruleId: binding.rule.ruleId,
@@ -473,7 +476,7 @@ test("executes a successful synthetic multi-Rule Policy", () => {
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.value.ruleExecutions.length, 2);
-  assert.equal(result.value.findings.length, 2);
+  assert.equal(result.value.findings.length, 1);
   assert.equal(
     result.value.completion.classification,
     "revision_required",
@@ -742,16 +745,16 @@ test("keeps invalid Rule dispositions separate from Findings", () => {
   assert.equal("findings" in result, false);
 });
 
-test("creates Findings only through frozen Policy authority", () => {
+test("creates failure Findings only through frozen Policy authority", () => {
   const execution = must(
     runtime.executeOrganizationVerificationPolicyEvaluation(
       makeExecutionInput(),
     ),
   );
-  assert.equal(execution.findings.length, 2);
+  assert.equal(execution.findings.length, 1);
   assert.deepEqual(
     execution.findings.map((finding) => finding.findingId),
-    ["runtime-finding-1", "runtime-finding-2"],
+    ["runtime-finding-1"],
   );
   assert.equal(Object.isFrozen(execution.findings[0]), true);
 });
@@ -779,7 +782,7 @@ test("creates Policy Evaluation Completion through frozen aggregation", () => {
     execution.completion.evaluationCompletionId,
     "runtime-completion-1",
   );
-  assert.equal(execution.completion.findingSummary.findingCount, 2);
+  assert.equal(execution.completion.findingSummary.findingCount, 1);
   assert.equal(execution.completion.ruleResults.length, 2);
   assert.equal(Object.isFrozen(execution.completion), true);
 });
@@ -837,8 +840,45 @@ test("orders Rule Results and Findings canonically", () => {
   );
   assert.deepEqual(
     execution.findings.map((finding) => finding.ruleId),
-    ["runtime-rule-satisfied", "runtime-rule-revision"],
+    ["runtime-rule-revision"],
   );
+});
+
+test("configured failure Rule may legitimately return satisfied without a Finding", () => {
+  const input = makeEvaluationInput();
+  const implementationSet = makeImplementationSet([
+    makeImplementation("runtime-rule-revision", "satisfied"),
+    makeImplementation("runtime-rule-satisfied", "satisfied"),
+  ]);
+  const result = runtime.executeOrganizationVerificationPolicyEvaluation({
+      evaluationInput: input,
+      policySet: makePolicySet(),
+      implementationSet,
+      executionArtifacts: makeExecutionArtifacts(input, implementationSet),
+  });
+  assert.equal(result.ok, true, result.ok ? undefined : JSON.stringify(result));
+  if (result.ok) {
+    assert.equal(result.value.findings.length, 0);
+    assert.equal(result.value.completion.classification, "approval_ready");
+  }
+});
+
+test("satisfied disposition with a contradictory failure Finding is rejected", () => {
+  const input = makeEvaluationInput();
+  const implementationSet = makeImplementationSet();
+  const result = runtime.executeOrganizationVerificationPolicyEvaluation({
+    evaluationInput: input,
+    policySet: makePolicySet(),
+    implementationSet,
+    executionArtifacts: makeExecutionArtifacts(input, implementationSet, {
+      includeSatisfiedFinding: true,
+    }),
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.code, "execution_artifacts_mismatch");
+    assert.equal(result.cause, "contradictory_satisfied_finding");
+  }
 });
 
 test("produces a deterministic canonical execution fingerprint", () => {

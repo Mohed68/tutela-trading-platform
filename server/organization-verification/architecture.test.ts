@@ -249,6 +249,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   const isTradeTrustPolicyConfiguration = lowerFile.startsWith(
     "server/trade-trust-policy/",
   );
+  const isProductionTradeTrustApplication = lowerFile.startsWith(
+    "server/trade-trust-application/",
+  );
   const isRegistryAcl = lowerFile.endsWith(
     "server/organization-verification/integration/organizationregistryacl.ts",
   );
@@ -1205,6 +1208,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPersistenceContract &&
     !isDurableEvidenceContract &&
     !isApplicationServiceContract &&
+    !isProductionTradeTrustApplication &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1265,6 +1269,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPersistenceContract &&
     !isDurableEvidenceContract &&
     !isApplicationServiceContract &&
+    !isProductionTradeTrustApplication &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -1321,6 +1326,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
     !isPersistenceContract &&
     !isDurableEvidenceContract &&
     !isApplicationServiceContract &&
+    !isProductionTradeTrustApplication &&
     !isDomainPublicIndex &&
     !lowerFile.endsWith("/organization-verification/index.ts") &&
     specifiers.some((specifier) =>
@@ -3108,6 +3114,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
   if (
     !isOrganizationVerification &&
     !isTradeTrustPolicyConfiguration &&
+    !isProductionTradeTrustApplication &&
     !/\.test\.(?:ts|tsx)$/i.test(lowerFile) &&
     specifiers.some((specifier) =>
       /(?:^|\/)organization-verification(?:\/|$)/i.test(specifier) &&

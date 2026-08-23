@@ -153,7 +153,10 @@ export function registerDraftRoutes(app: Express): void {
           return response.status(404).json({ message: "Offer not found." });
         }
         response.json(submitted);
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.message === "OFFER_DOCUMENTARY_EVIDENCE_REQUIRED") {
+          return response.status(422).json({ message: "Documentary offer evidence is required before submission." });
+        }
         routeFailure(response);
       }
     },
