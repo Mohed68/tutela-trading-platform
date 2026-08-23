@@ -68,7 +68,7 @@
     "test:minimum-trade-trust-policy": "tsx --test server/trade-trust-policy/organizationVerificationPolicy.test.ts server/trade-trust-policy/productionWiring.test.ts server/activity-eligibility/minimumTradeActivityPolicy.test.ts server/compliance-trigger/contracts.test.ts server/trade-trust-policy.architecture.test.ts",
     "test:verification-engine": "tsx --test server/verification/engine.test.ts server/verification/architecture.test.ts",
     "test:verification-runtime": "node --env-file=.env --import tsx --test scripts/offers/phase-6b.runtime.test.ts",
-    "test:migrations": "tsx --test scripts/migrations/rehearsal-lib.test.ts",
+    "test:migrations": "tsx --test scripts/migrations/rehearsal-lib.test.ts scripts/migrations/staging-baseline-reconciliation.test.ts",
     "test:recovery": "tsx --test server/recoveryMode.test.ts server/services/openaiClient.test.ts",
     "migration:rehearsal": "node --env-file=.env --import tsx scripts/migration-rehearsal.ts",
     "db:push": "drizzle-kit push",
