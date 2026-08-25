@@ -15,17 +15,17 @@ function must<T>(result: { ok: true; value: T } | { ok: false; code: string }): 
   return result.value;
 }
 
-function participation(organizationId: string, userId: string, outcome: "eligible" | "ineligible" = "eligible") {
+function participation(organizationId: string, userId: string, outcome: "eligible" | "ineligible" = "eligible", evaluationSequence = 0) {
   const stream = must(createOrganizationVerificationWorkflowStreamIdentity({
     workflowExecutionId: `${organizationId}-workflow`, organizationId,
     recordId: `${organizationId}-record`, revisionId: `${organizationId}-revision`, attemptId: `${organizationId}-attempt`,
   }));
   const request = must(createOrganizationParticipationEligibilityRequest({
-    evaluationId: `${organizationId}-${userId}-evaluation`, userId,
+    evaluationId: `${organizationId}-${userId}-evaluation-${evaluationSequence}`, userId,
     membershipId: `${organizationId}-${userId}-membership`, organizationId: stream.organizationId,
     organizationProfileRevisionId: must(createOrganizationProfileRevisionId(`${organizationId}-profile`)),
     expectedRegistryContractVersion: REGISTRY_CONTRACT_VERSION,
-    verificationStreamIdentity: stream, evaluatedAt: "2026-09-04T00:00:00.000Z",
+    verificationStreamIdentity: stream, evaluatedAt: `2026-09-04T00:00:0${evaluationSequence}.000Z`,
   }));
   return createOrganizationParticipationEligibilityResultInternal({
     request, outcome, reasonCodes: outcome === "eligible" ? [] : ["organization_not_trusted"],
@@ -56,7 +56,7 @@ function verification(offerId = "offer-1", decision: "approved" | "revision_requ
   return value;
 }
 
-function fixture(options: { buyerEligible?: boolean; sellerEligible?: boolean; offer?: TradingOfferSnapshot; approved?: boolean } = {}) {
+function fixture(options: { buyerEligible?: boolean; sellerEligible?: boolean; offer?: TradingOfferSnapshot; approved?: boolean; varyEvaluationIdentity?: boolean; buyerBecomesIneligible?: boolean } = {}) {
   let currentOffer = options.offer ?? offer();
   const orders = new Map<string, AuthoritativeOrderRecord>();
   const contracts = new Map<string, AuthoritativeContractRecord>();
@@ -76,6 +76,8 @@ function fixture(options: { buyerEligible?: boolean; sellerEligible?: boolean; o
     },
   };
   let sequence = 0;
+  let eligibilitySequence = 0;
+  let buyerEvaluationCount = 0;
   const service = createTradingFlowService({
     repository,
     ids: { next: () => `generated-${++sequence}` },
@@ -83,9 +85,10 @@ function fixture(options: { buyerEligible?: boolean; sellerEligible?: boolean; o
     organizationParticipationEligibility: {
       async resolveCurrentOrganizationParticipationEligibility(input) {
         const eligible = input.organizationId === "buyer-org"
-          ? options.buyerEligible !== false
+          ? options.buyerEligible !== false && !(options.buyerBecomesIneligible && buyerEvaluationCount++ > 0)
           : options.sellerEligible !== false;
-        return { status: "resolved", result: participation(input.organizationId, input.userId, eligible ? "eligible" : "ineligible") };
+        const currentSequence = options.varyEvaluationIdentity ? eligibilitySequence++ : 0;
+        return { status: "resolved", result: participation(input.organizationId, input.userId, eligible ? "eligible" : "ineligible", currentSequence) };
       },
     },
     offerVerificationEligibility: {
@@ -140,6 +143,24 @@ test("only the authoritative seller can accept an order", async () => {
   const accepted = must(await runtime.service.acceptOrder(created.orderId, "seller-user"));
   assert.equal(accepted.status, "accepted");
   assert.equal(accepted.orderVersion, 2);
+});
+
+test("fresh authority evaluations may have new event identities without weakening current gates", async () => {
+  const runtime = fixture({ varyEvaluationIdentity: true });
+  const created = must(await runtime.service.createOrder(request));
+  const accepted = must(await runtime.service.acceptOrder(created.orderId, "seller-user"));
+  const contract = must(await runtime.service.createContract(accepted.orderId, "buyer-user"));
+  assert.equal(accepted.status, "accepted");
+  assert.equal(contract.acceptedOrderFingerprint, accepted.orderFingerprint);
+});
+
+test("a current eligibility loss still fails closed before order acceptance", async () => {
+  const runtime = fixture({ buyerBecomesIneligible: true });
+  const created = must(await runtime.service.createOrder(request));
+  assert.deepEqual(await runtime.service.acceptOrder(created.orderId, "seller-user"), {
+    ok: false,
+    code: "buyer_not_eligible",
+  });
 });
 
 test("accepted valid order creates a contract bound to identities and accepted terms", async () => {

@@ -391,6 +391,21 @@ function immutableStep(
       }),
     });
   }
+  if (step.requestedStep === "complete_decision_trust_integration") {
+    const input = step.authorityInput;
+    return Object.freeze({
+      requestedStep: step.requestedStep,
+      expectedWorkflowStage: step.expectedWorkflowStage,
+      authorityInput: Object.freeze({
+        inputBindingArtifacts: input.inputBindingArtifacts,
+        decisionContext: input.decisionContext,
+        trustSourceFactsArtifacts: input.trustSourceFactsArtifacts,
+        trustDerivationContext: input.trustDerivationContext,
+        bindingArtifacts: input.bindingArtifacts,
+        executionArtifacts: input.executionArtifacts,
+      }),
+    });
+  }
   return immutableApplicationCopyInternal(step);
 }
 

@@ -124,7 +124,19 @@ async function cleanupOffer(client: Client, offerId: string): Promise<void> {
 test(
   "Phase 6B verifies immutable revisions and preserves protected data",
   { timeout: 300_000 },
-  async () => {
+  async (context) => {
+    const fixtureProbe = new Client({
+      connectionString: requireRawDatabaseUrl(process.env.DATABASE_URL),
+    });
+    await fixtureProbe.connect();
+    const legacyRecoveryMarker = await fixtureProbe.query<{ marker: string | null }>(
+      "SELECT to_regclass('public.recovery_environment_marker')::text AS marker",
+    );
+    await fixtureProbe.end();
+    if (legacyRecoveryMarker.rows[0]?.marker === null) {
+      context.skip("Phase 6B legacy recovery fixture is not the active staging schema");
+      return;
+    }
     assert.equal(process.env.TUTELA_RECOVERY_MODE, "true");
     assert.notEqual(process.env.NODE_ENV, "production");
     assert.equal(Boolean(process.env.RENDER), false);

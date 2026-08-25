@@ -77,7 +77,7 @@ export function adaptPlatformEvidenceToOrganizationVerificationReference(input: 
   }
 
   const evidenceReferenceId = value(
-    createEvidenceReferenceId(input.evidence.evidenceId),
+    createEvidenceReferenceId(`${input.evidence.evidenceId}:${input.category}`),
   );
   const evidenceReferenceVersion = value(
     createEvidenceReferenceVersion(input.evidence.evidenceVersion),

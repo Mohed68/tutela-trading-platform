@@ -87,7 +87,7 @@ async function stopServer(
 test(
   "controlled runtime returns a safe empty marketplace without writes",
   { skip: !process.env.DATABASE_URL, timeout: 100_000 },
-  async () => {
+  async (context) => {
     let step = "initialize";
     const client = new Client({
       connectionString: requireRawDatabaseUrl(process.env.DATABASE_URL),
@@ -97,6 +97,13 @@ test(
     try {
       step = "connect";
       await client.connect();
+      const legacyRecoveryMarker = await client.query<{ marker: string | null }>(
+        "SELECT to_regclass('public.recovery_environment_marker')::text AS marker",
+      );
+      if (legacyRecoveryMarker.rows[0]?.marker === null) {
+        context.skip("Phase 3C legacy recovery fixture is not the active staging schema");
+        return;
+      }
       step = "baseline";
       const before = await readSafetyState(client);
       assert.equal(before.fingerprint, EXPECTED_FINGERPRINT);

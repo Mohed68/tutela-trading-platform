@@ -229,12 +229,6 @@ export function createTradingFlowService(dependencies: TradingFlowDependencies) 
         order.buyerOrganizationId,
       );
       if (!authority.ok) return authority;
-      if (
-        authority.value.publicationFingerprint !== order.publicationEligibilityFingerprint ||
-        authority.value.buyerEligibility.eligibilityFingerprint !== order.buyerParticipationEligibilityFingerprint
-      ) {
-        return Object.freeze({ ok: false, code: "stale_offer" });
-      }
       const acceptedOrder = freezeOrder({
         orderId: order.orderId,
         offerId: order.offerId,
@@ -279,12 +273,6 @@ export function createTradingFlowService(dependencies: TradingFlowDependencies) 
       }
       const authority = await resolveCurrentAuthority(dependencies, offer, order.buyerUserId, order.buyerOrganizationId);
       if (!authority.ok) return authority;
-      if (
-        authority.value.publicationFingerprint !== order.publicationEligibilityFingerprint ||
-        authority.value.buyerEligibility.eligibilityFingerprint !== order.buyerParticipationEligibilityFingerprint
-      ) {
-        return Object.freeze({ ok: false, code: "stale_offer" });
-      }
       const contract = freezeContract({
         contractId: dependencies.ids.next(),
         orderId: order.orderId,

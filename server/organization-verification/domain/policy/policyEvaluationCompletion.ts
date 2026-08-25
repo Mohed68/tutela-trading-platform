@@ -17,6 +17,14 @@ import type {
 } from "./ids.js";
 import type { OrganizationVerificationPolicyCategory } from "./reasonCode.js";
 import type { OrganizationVerificationRuleEvaluationResult } from "./ruleEvaluationResult.js";
+import {
+  deepFreezeDurableValue,
+  hasExactDurableKeys,
+  isDurableIdentity,
+  isDurablePlainObject,
+  isDurableTimestamp,
+} from "../durableRehydrationValidation.js";
+import { policyFailure, policySuccess, type PolicyDomainResult } from "./errors.js";
 
 const policyEvaluationCompletionSeal: unique symbol = Symbol(
   "organization_verification_policy_evaluation_completion",
@@ -112,6 +120,52 @@ export function createOrganizationVerificationPolicyEvaluationCompletionInternal
     findingSummary: freezeSummary(input.findingSummary),
     [policyEvaluationCompletionSeal]: true as const,
   });
+}
+
+function isDurablePolicyEvaluationCompletionData(
+  durableData: unknown,
+): durableData is OrganizationVerificationPolicyEvaluationCompletionData {
+  const keys = [
+    "evaluationCompletionId", "policySetId", "policySetVersion",
+    "policyContractVersion", "organizationId", "recordId", "revisionId",
+    "attemptId", "snapshotId", "snapshotFingerprint", "ruleResults",
+    "findingSummary", "evaluationStartedAt", "evaluationCompletedAt",
+    "completionIntegrityValid", "completionComplete", "classification",
+    "provenanceReference", "correlationId", "integrityReference",
+  ];
+  if (
+    !isDurablePlainObject(durableData) ||
+    !hasExactDurableKeys(durableData, keys) ||
+    !keys.filter((key) => ![
+      "ruleResults", "findingSummary", "evaluationStartedAt",
+      "evaluationCompletedAt", "completionIntegrityValid", "completionComplete",
+    ].includes(key)).every((key) => isDurableIdentity(durableData[key])) ||
+    !Array.isArray(durableData.ruleResults) ||
+    !isDurablePlainObject(durableData.findingSummary) ||
+    !isDurableTimestamp(durableData.evaluationStartedAt) ||
+    !isDurableTimestamp(durableData.evaluationCompletedAt) ||
+    Date.parse(durableData.evaluationCompletedAt) < Date.parse(durableData.evaluationStartedAt) ||
+    durableData.completionIntegrityValid !== true ||
+    durableData.completionComplete !== true ||
+    !ORGANIZATION_VERIFICATION_POLICY_EVALUATION_CLASSIFICATIONS.some(
+      (classification) => classification === durableData.classification,
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function rehydrateOrganizationVerificationPolicyEvaluationCompletion(
+  durableData: unknown,
+): PolicyDomainResult<OrganizationVerificationPolicyEvaluationCompletion> {
+  if (!isDurablePolicyEvaluationCompletionData(durableData)) {
+    return policyFailure("normalized_evaluation_adapter_failure");
+  }
+  const frozen = deepFreezeDurableValue(durableData);
+  return policySuccess(
+    createOrganizationVerificationPolicyEvaluationCompletionInternal(frozen),
+  );
 }
 
 export function readOrganizationVerificationPolicyEvaluationCompletion(

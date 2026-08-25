@@ -1443,11 +1443,15 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       const isApprovedNormalizedBoundary =
         lowerFile.endsWith("/normalizedevaluationadapter.ts") &&
         specifier === "../decision/index.js";
+      const isApprovedDurableCompletionRehydration =
+        lowerFile.endsWith("/policyevaluationcompletion.ts") &&
+        specifier === "../durableRehydrationValidation.js";
       if (
         !isLocalPolicyModule &&
         !isApprovedCoreIdentity &&
         !isApprovedRegistrySurface &&
-        !isApprovedNormalizedBoundary
+        !isApprovedNormalizedBoundary &&
+        !isApprovedDurableCompletionRehydration
       ) {
         addViolation(
           violations,
@@ -1586,6 +1590,9 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
       const isApprovedCoreSurface = specifier === "../index.js";
       const isApprovedDurableValidation =
         specifier === "../durableRehydrationValidation.js";
+      const isApprovedDurableCompletionRehydrator =
+        lowerFile.endsWith("/policyevaluationexecution.ts") &&
+        specifier === "../policy/policyEvaluationCompletion.js";
       const isApprovedHashingPrimitive = specifier === "node:crypto";
       if (
         !isLocalRuntimeModule &&
@@ -1594,6 +1601,7 @@ function scanSourceFile(input: SourceFile): ArchitectureViolation[] {
         !isApprovedExecutionContractSurface &&
         !isApprovedCoreSurface &&
         !isApprovedDurableValidation &&
+        !isApprovedDurableCompletionRehydrator &&
         !isApprovedHashingPrimitive
       ) {
         addViolation(

@@ -250,9 +250,18 @@ export async function createOwnedDraftOffer(
 ): Promise<DraftOfferDetailDto> {
   const result = await pool.query<DraftRow>(
     `
-      WITH inserted AS (
+      WITH authoritative_owner_organization AS (
+        SELECT membership.organization_id
+        FROM public.organization_memberships AS membership
+        WHERE membership.user_id = $1
+          AND membership.role = 'owner'
+          AND membership.status = 'active'
+        ORDER BY membership.effective_from, membership.membership_id
+        LIMIT 1
+      ), inserted AS (
         INSERT INTO public.offers (
           user_id,
+          seller_org_id,
           commodity_id,
           type,
           quantity,
@@ -263,8 +272,9 @@ export async function createOwnedDraftOffer(
           status,
           valid_until
         )
-        VALUES (
+        SELECT
           $1,
+          authoritative_owner_organization.organization_id,
           $2,
           $3::public.offer_type,
           $4::numeric(15,2),
@@ -274,7 +284,7 @@ export async function createOwnedDraftOffer(
           $8,
           'draft'::public.offer_status,
           $9
-        )
+        FROM authoritative_owner_organization
         RETURNING *
       )
       SELECT

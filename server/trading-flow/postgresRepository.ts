@@ -33,7 +33,7 @@ interface OfferRow extends QueryResultRow {
   payment_terms: string | null;
   specifications: string | null;
   valid_until: Date | string | null;
-  offer_version: Date | string | null;
+  offer_version: string | null;
 }
 
 export async function loadTradingOffer(offerId: string): Promise<TradingOfferSnapshot | null> {
@@ -43,13 +43,14 @@ export async function loadTradingOffer(offerId: string): Promise<TradingOfferSna
            offer.min_quantity::text, offer.unit, offer.price_per_unit::text,
            offer.currency, offer.delivery_terms, offer.payment_terms,
            offer.specifications, offer.valid_until,
-           COALESCE(offer.updated_at, offer.created_at) AS offer_version
+           to_char(COALESCE(offer.updated_at, offer.created_at) AT TIME ZONE 'UTC',
+             'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS offer_version
     FROM public.offers AS offer
     INNER JOIN public.commodities AS commodity ON commodity.id = offer.commodity_id
     WHERE offer.id = $1
   `, [offerId]);
   const row = result.rows[0];
-  const offerVersion = row ? iso(row.offer_version) : null;
+  const offerVersion = row?.offer_version ?? null;
   if (!row || !row.seller_org_id || !offerVersion) return null;
   const unsigned = {
     offerId: row.id,
@@ -146,7 +147,9 @@ const ORDER_COLUMNS = `id, offer_id, buyer_id, buyer_organization_id,
   seller_id, seller_organization_id, status, order_version, offer_version,
   offer_fingerprint, publication_eligibility_fingerprint,
   buyer_participation_eligibility_fingerprint, accepted_terms_version,
-  accepted_terms_fingerprint, accepted_terms_snapshot, created_at, accepted_at,
+  accepted_terms_fingerprint, accepted_terms_snapshot,
+  to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+  accepted_at,
   order_fingerprint`;
 
 export const postgresTradingFlowRepository: TradingFlowRepository = Object.freeze({
@@ -162,15 +165,16 @@ export const postgresTradingFlowRepository: TradingFlowRepository = Object.freez
         accepted_terms_fingerprint, accepted_terms_snapshot, order_version,
         order_fingerprint, accepted_at, created_at, updated_at
       )
-      SELECT $1, NULL, offer.id, $2, offer.user_id, $3, $4, commodity.name,
+      SELECT $1, NULL, offer.id, $2, offer.user_id, $3::text, $4::text, commodity.name,
              $5::numeric, $6, $7::numeric, $8::numeric, $9, 'created',
-             $10, $11, $12, $13, 1, $14, $15::jsonb, 1, $16, NULL, $17::timestamptz, $17::timestamptz
+             $10::text, $11, $12, $13, 1, $14, $15::jsonb, 1, $16, NULL, $17::timestamptz, $17::timestamptz
       FROM public.offers AS offer
       INNER JOIN public.commodities AS commodity ON commodity.id = offer.commodity_id
       WHERE offer.id = $18
         AND offer.user_id = $19
-        AND offer.seller_org_id = $4
-        AND COALESCE(offer.updated_at, offer.created_at) = $10::timestamptz
+        AND offer.seller_org_id = $4::text
+        AND to_char(COALESCE(offer.updated_at, offer.created_at) AT TIME ZONE 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') = $10::text
       RETURNING ${ORDER_COLUMNS}
     `, [
       order.orderId, order.buyerUserId, order.buyerOrganizationId,
@@ -215,8 +219,11 @@ export const postgresTradingFlowRepository: TradingFlowRepository = Object.freez
       SELECT $1, source.id, source.offer_id, source.buyer_id, source.seller_id,
              source.buyer_organization_id, source.seller_organization_id,
              source.quantity, source.price_per_unit, source.total_amount,
-             source.currency, 'draft', source.payment_terms, source.delivery_terms,
-             source.specifications, 1, source.order_version, source.order_fingerprint,
+             source.currency, 'draft',
+             source.accepted_terms_snapshot ->> 'paymentTerms',
+             source.accepted_terms_snapshot ->> 'deliveryTerms',
+             source.accepted_terms_snapshot ->> 'specifications',
+             1, source.order_version, source.order_fingerprint,
              source.accepted_terms_version, source.accepted_terms_fingerprint,
              $2, $3::timestamptz, $3::timestamptz
       FROM public.orders AS source

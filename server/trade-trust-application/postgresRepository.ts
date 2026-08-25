@@ -186,9 +186,9 @@ export async function loadOrganizationProfile(organizationId:string, profileRevi
 }
 
 export async function loadOwnedDraft(offerId:string,userId:string):Promise<{status:string;updatedAt:string}|null>{
-  const result=await pool.query<QueryResultRow>(`SELECT status::text,updated_at FROM public.offers WHERE id=$1 AND user_id=$2`,[offerId,userId]);
+  const result=await pool.query<QueryResultRow>(`SELECT status::text,to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updated_at_version FROM public.offers WHERE id=$1 AND user_id=$2`,[offerId,userId]);
   const row=result.rows[0];
-  return row ? {status:String(row.status),updatedAt:new Date(row.updated_at).toISOString()} : null;
+  return row ? {status:String(row.status),updatedAt:String(row.updated_at_version)} : null;
 }
 
 export async function loadParticipationProfile(organizationId:string,userId:string):Promise<{profileRevisionId:string;profilePayload:Record<string,unknown>}|null>{

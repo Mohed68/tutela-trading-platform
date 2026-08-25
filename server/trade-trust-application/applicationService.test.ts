@@ -22,6 +22,12 @@ test("Organization registration is atomic and the one-Organization rule is launc
   assert.doesNotMatch(migration,/UNIQUE\s*\(\s*user_id\s*\)/i);
 });
 
+test("durable persistence accepts both authenticated domain fingerprint representations",()=>{
+  const migration=source("migrations/0017_organization_verification_artifact_fingerprint_compatibility.sql");
+  assert.match(migration,/\^\(sha256:\)\?\[0-9a-f\]\{64\}\$/);
+  assert.doesNotMatch(migration,/\b(?:UPDATE|DELETE|INSERT|TRUNCATE)\b/i);
+});
+
 test("owner Membership authorizes commands but manufactures no Trust or Eligibility",()=>{
   const service=source("server/trade-trust-application/applicationService.ts");
   assert.match(service,/isActiveOwner/);
@@ -39,6 +45,8 @@ test("Verification uses Application Service and authoritative Replay",()=>{
   assert.doesNotMatch(runtime,/\.implementation\.evaluate\s*\(/);
   assert.match(runtime,/requestedStep:"complete_policy"/);
   assert.doesNotMatch(runtime,/workflowRuntime\.test|buildRuntimeFixture|synthetic/i);
+  assert.match(runtime,/organization-existence-evidence-reference/);
+  assert.match(runtime,/representative-association-evidence-reference/);
 });
 
 test("platform Evidence and Offer binding are immutable and legacy flags cannot bypass",()=>{
@@ -49,6 +57,15 @@ test("platform Evidence and Offer binding are immutable and legacy flags cannot 
   assert.match(migration,/offer_verification_evidence_bindings/);
   assert.match(eligibility,/persisted_evidence_fingerprint/);
   assert.doesNotMatch(app,/users\.verified|kyb_status|verification_level/i);
+});
+
+test("Draft creation binds seller Organization only from active owner Membership",()=>{
+  const drafts=source("server/drafts/storage.ts");
+  assert.match(drafts,/authoritative_owner_organization/);
+  assert.match(drafts,/membership\.role = 'owner'/);
+  assert.match(drafts,/membership\.status = 'active'/);
+  assert.match(drafts,/seller_org_id/);
+  assert.doesNotMatch(drafts,/users\.verified|kyb_status/i);
 });
 
 test("controllers translate requests and delegate authority",()=>{

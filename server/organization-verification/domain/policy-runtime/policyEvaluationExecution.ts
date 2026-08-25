@@ -27,6 +27,7 @@ import {
 import { fingerprintPolicyRuntimeExecutionInternal } from "./canonical.js";
 import { policyRuntimeFailure, policyRuntimeSuccess, type OrganizationVerificationPolicyRuntimeResult } from "./errors.js";
 import { deepFreezeDurableValue, hasExactDurableKeys, isDurableIdentity, isDurableJsonValue, isDurablePlainObject, isDurablePositiveVersion, isDurableTimestamp } from "../durableRehydrationValidation.js";
+import { rehydrateOrganizationVerificationPolicyEvaluationCompletion } from "../policy/policyEvaluationCompletion.js";
 
 const policyRuntimeExecutionSeal = Symbol(
   "organization-verification-policy-runtime-execution",
@@ -106,7 +107,9 @@ export function rehydrateOrganizationVerificationPolicyEvaluationExecution(
   const { executionFingerprint, ...semantic } = durableData;
   const expected = createOrganizationVerificationPolicyRuntimeExecutionFingerprint(fingerprintPolicyRuntimeExecutionInternal(semantic));
   if (!expected.ok || expected.value !== executionFingerprint) return policyRuntimeFailure("execution_fingerprint_mismatch");
-  return policyRuntimeSuccess(createOrganizationVerificationPolicyEvaluationExecutionInternal(deepFreezeDurableValue({ ...durableData })));
+  const completion = rehydrateOrganizationVerificationPolicyEvaluationCompletion(durableData.completion);
+  if (!completion.ok) return policyRuntimeFailure("execution_fingerprint_mismatch");
+  return policyRuntimeSuccess(createOrganizationVerificationPolicyEvaluationExecutionInternal(deepFreezeDurableValue({ ...durableData, completion: completion.value })));
 }
 
 export function isOrganizationVerificationPolicyEvaluationExecution(
