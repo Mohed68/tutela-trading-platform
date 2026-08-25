@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 const baseUrl = process.env.TUTELA_E2E_BASE_URL ?? "http://127.0.0.1:5100";
 const statePath = join(tmpdir(), "tutela-phase-8g-staging-state.json");
-const commodity = Object.freeze({
+let commodity = Object.freeze({
   id: "ca961030-ee2c-49c4-83df-a61bdf4864be",
   classification: "metals_precious",
   activityCode: "metals_precious",
@@ -51,6 +51,19 @@ async function identity(scope) {
   });
   check(login.status === 200 && login.cookie, `${scope}_login_${login.status}`);
   return { credentials, cookie: login.cookie, userId: login.value.id };
+}
+
+async function loadCanonicalCommodity(actor) {
+  const options = await request("/api/drafts/options", { cookie: actor.cookie });
+  const copper = options.value?.commodities?.find(
+    (entry) => entry.name === "Copper Cathode",
+  );
+  check(options.status === 200 && copper, `commodity_catalog_${options.status}`);
+  commodity = Object.freeze({
+    id: copper.id,
+    classification: copper.category,
+    activityCode: copper.category,
+  });
 }
 
 async function organization(actor, scope) {
@@ -111,6 +124,7 @@ async function beforeRestart() {
   const seller = await identity("Seller");
   const buyer = await identity("Buyer");
   const negative = await identity("Negative");
+  await loadCanonicalCommodity(seller);
   const sellerOrg = await organization(seller, "Seller");
   const buyerOrg = await organization(buyer, "Buyer");
   const negativeOrg = await organization(negative, "Negative");
@@ -171,13 +185,14 @@ async function beforeRestart() {
 
   await writeFile(statePath, JSON.stringify({
     seller: { credentials: seller.credentials }, buyer: { credentials: buyer.credentials },
-    sellerOrg, buyerOrg, offerId: draft.value.id, orderId: order.value.orderId, contractId: contract.value.contractId,
+    sellerOrg, buyerOrg, commodity, offerId: draft.value.id, orderId: order.value.orderId, contractId: contract.value.contractId,
   }), { mode: 0o600 });
   console.log(JSON.stringify({ phase: "before_restart", health: "pass", registrations: 3, trust: "trusted", participation: "eligible", offer: "publishable", order: "accepted", contract: "created", failClosed: "pass" }));
 }
 
 async function afterRestart() {
   const state = JSON.parse(await readFile(statePath, "utf8"));
+  commodity = Object.freeze(state.commodity);
   const health = await request("/api/health"); check(health.status === 200, "post_restart_health");
   for (const actor of [state.seller, state.buyer]) {
     const login = await request("/api/auth/login", { method: "POST", body: { email: actor.credentials.email, password: actor.credentials.password } });
