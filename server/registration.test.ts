@@ -11,7 +11,11 @@ import {
   registrationSchema,
 } from "./registration.js";
 import { getRegistrationActivationMode } from "./registrationPolicy.js";
-import { getVerificationEmailConfiguration } from "./verificationEmail.js";
+import {
+  buildVerificationEmailContent,
+  createResendVerificationEmailSender,
+  getVerificationEmailConfiguration,
+} from "./verificationEmail.js";
 
 const validInput = {
   firstName: "Ada",
@@ -27,6 +31,28 @@ test("registration policy normalizes email and rejects weak credentials", () => 
       .success,
     false,
   );
+});
+
+test("registration rejects normalized public email domains and accepts custom business domains", () => {
+  for (const email of [
+    "trader@gmail.com",
+    "trader@outlook.com",
+    "trader@hotmail.com",
+    "trader@yahoo.com",
+    "Trader@GmAiL.CoM",
+  ]) {
+    assert.equal(
+      registrationSchema.safeParse({ ...validInput, email }).success,
+      false,
+      `${email} must be rejected`,
+    );
+  }
+
+  const accepted = registrationSchema.parse({
+    ...validInput,
+    email: "Trader@Acme-Commodities.COM",
+  });
+  assert.equal(accepted.email, "trader@acme-commodities.com");
 });
 
 test("verification tokens are stored only as deterministic digests", () => {
@@ -66,6 +92,29 @@ test("registration creates a disabled account and sends one verification URL", a
     "2026-01-02T00:00:00.000Z",
   );
   assert.match(delivery.verificationUrl, /^https:\/\/tutela\.example\/verify-email\?token=/);
+});
+
+test("existing accounts preserve the same accepted registration result", async () => {
+  let deliveryAttempted = false;
+  const result = await registerLocalAccount(validInput, {
+    storage: {
+      async createPendingLocalRegistration() {
+        return null;
+      },
+      async discardPendingLocalRegistrationAttempt() {
+        assert.fail("no delivery was attempted");
+      },
+    },
+    sender: {
+      async send() {
+        deliveryAttempted = true;
+      },
+    },
+    applicationBaseUrl: "https://tutela.example",
+  });
+
+  assert.deepEqual(result, { accepted: true });
+  assert.equal(deliveryAttempted, false);
 });
 
 test("failed email delivery removes only the new pending account", async () => {
@@ -178,6 +227,57 @@ test("verification URL preserves only the opaque token", () => {
   );
   assert.equal(url.pathname, "/verify-email");
   assert.equal(url.searchParams.get("token"), "opaque-token");
+});
+
+test("verification email contains branded HTML and a complete text fallback", () => {
+  const verificationUrl =
+    "https://tutela.example/verify-email?token=opaque-token";
+  const content = buildVerificationEmailContent(
+    { applicationBaseUrl: "https://tutela.example/" },
+    verificationUrl,
+  );
+
+  assert.equal(content.subject, "Verify your TUTELA account");
+  assert.match(content.html, /Verify my account/);
+  assert.match(content.html, /https:\/\/tutela\.example\/tutela-logo\.png/);
+  assert.ok(content.html.includes(verificationUrl));
+  assert.match(content.html, /expires in 24 hours/);
+  assert.ok(content.text.includes(verificationUrl));
+  assert.match(content.text, /Verify my account/);
+  assert.doesNotMatch(content.html, /configured-secret|RESEND_API_KEY|SESSION_SECRET/);
+  assert.doesNotMatch(content.text, /configured-secret|RESEND_API_KEY|SESSION_SECRET/);
+});
+
+test("Resend delivery supplies both HTML and text without leaking the API key", async () => {
+  const originalFetch = globalThis.fetch;
+  let authorization = "";
+  let payload: Record<string, unknown> | undefined;
+  globalThis.fetch = async (_input, init) => {
+    authorization = String((init?.headers as Record<string, string>).authorization);
+    payload = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(null, { status: 202 });
+  };
+
+  try {
+    await createResendVerificationEmailSender({
+      apiKey: "configured-secret",
+      sender: "no-reply@tutelaworld.com",
+      applicationBaseUrl: "https://tutela.example/",
+    }).send({
+      recipient: "trader@acme.example",
+      verificationUrl:
+        "https://tutela.example/verify-email?token=opaque-token",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(authorization, "Bearer configured-secret");
+  assert.equal(typeof payload?.html, "string");
+  assert.equal(typeof payload?.text, "string");
+  assert.equal(payload?.subject, "Verify your TUTELA account");
+  assert.doesNotMatch(String(payload?.html), /configured-secret/);
+  assert.doesNotMatch(String(payload?.text), /configured-secret/);
 });
 
 test("temporary direct registration stays opt-in and email verification remains default", () => {

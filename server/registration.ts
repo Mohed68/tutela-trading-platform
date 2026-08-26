@@ -1,6 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { AuthenticationIdentity } from "@shared/auth";
+import {
+  BUSINESS_EMAIL_REJECTION,
+  usesBlockedPublicEmailDomain,
+} from "@shared/businessEmail";
 import { hashPassword } from "./password.js";
 import type { IStorage } from "./storage.js";
 
@@ -14,7 +18,10 @@ export const registrationSchema = z.object({
     .trim()
     .email()
     .max(254)
-    .transform((value) => value.toLowerCase()),
+    .transform((value) => value.toLowerCase())
+    .refine((value) => !usesBlockedPublicEmailDomain(value), {
+      message: BUSINESS_EMAIL_REJECTION.code,
+    }),
   password: z
     .string()
     .min(12)

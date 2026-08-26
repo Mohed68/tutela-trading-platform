@@ -9,15 +9,16 @@ export default function RegistrationPending() {
       <Card className="w-full max-w-lg text-center">
         <CardHeader>
           <MailCheck className="mx-auto h-12 w-12 text-emerald-700" />
-          <CardTitle className="mt-4">Check your email</CardTitle>
+          <CardTitle className="mt-4">Check your inbox</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
           <p className="text-sm text-neutral-600">
-            If the address can be registered, Tutela has sent a verification
-            link. The link expires after 24 hours.
+            If this email is new to TUTELA, we’ve sent a verification link to
+            complete your registration. If you already have an account, sign
+            in or reset your password.
           </p>
           <Button asChild className="w-full">
-            <Link href="/login">Return to sign in</Link>
+            <Link href="/login">Sign in</Link>
           </Button>
         </CardContent>
       </Card>

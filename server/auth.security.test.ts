@@ -8,6 +8,7 @@ import { TEMPORARY_DIRECT_REGISTRATION_PROVENANCE } from "@shared/auth";
 import {
   getSessionCookieSettings,
   isLocallyAuthenticatable,
+  isPendingEmailVerification,
   setupAuth,
   toCurrentUserDto,
 } from "./auth.js";
@@ -70,6 +71,28 @@ test("verified self-registered traders authenticate without recovery authority",
     ),
     false,
   );
+});
+
+test("only an exact pending local registration is eligible for unverified-account UX", () => {
+  const pending = recoveryIdentity({
+    email: "trader@acme.example",
+    loginEnabled: false,
+    recoveryProvenance: null,
+    emailVerifiedAt: null,
+  });
+  assert.equal(isPendingEmailVerification(pending), true);
+  assert.equal(isLocallyAuthenticatable(pending), false);
+
+  for (const override of [
+    { passwordHash: null },
+    { authProvider: "legacy" },
+    { loginEnabled: true },
+    { credentialStatus: "revoked" },
+    { recoveryProvenance: TEMPORARY_DIRECT_REGISTRATION_PROVENANCE },
+    { emailVerifiedAt: new Date("2026-01-01T00:00:00.000Z") },
+  ] satisfies Array<Partial<AuthenticationIdentity>>) {
+    assert.equal(isPendingEmailVerification({ ...pending, ...override }), false);
+  }
 });
 
 test("temporary direct registration is authenticatable but remains email-unknown", () => {
@@ -163,6 +186,29 @@ test("public registration rejects invalid account input before persistence", asy
     assert.deepEqual(await response.json(), {
       message:
         "Enter a valid name, email, and a 12-character password containing uppercase, lowercase, and numeric characters.",
+    });
+
+    const publicEmailResponse = await fetch(
+      `http://127.0.0.1:${address.port}/api/auth/register`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          firstName: "Public",
+          lastName: "Trader",
+          email: "Trader@GMAIL.com",
+          password: "SafePassword123",
+        }),
+      },
+    );
+    assert.equal(publicEmailResponse.status, 400);
+    assert.deepEqual(await publicEmailResponse.json(), {
+      code: "BUSINESS_EMAIL_REQUIRED",
+      title: "Please use your company email address",
+      message:
+        "TUTELA is a B2B trading platform. Registration requires an official business email associated with your organization. Public email services such as Gmail, Outlook, Yahoo, and similar providers are not accepted.",
+      supportText:
+        "If your organization does not yet have a business email domain, contact TUTELA support.",
     });
   } finally {
     await new Promise<void>((resolve, reject) => {

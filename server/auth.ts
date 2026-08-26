@@ -29,6 +29,10 @@ import {
   type AuthenticationIdentity,
   type CurrentUserDto,
 } from "@shared/auth";
+import {
+  BUSINESS_EMAIL_REJECTION,
+  usesBlockedPublicEmailDomain,
+} from "@shared/businessEmail";
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const COOKIE_NAME = "tutela.sid";
@@ -92,6 +96,20 @@ export function isLocallyAuthenticatable(
       user.passwordHash &&
       user.role === "trader" &&
       hasApprovedAuthority,
+  );
+}
+
+export function isPendingEmailVerification(
+  user: AuthenticationIdentity | undefined,
+): user is AuthenticationIdentity & { passwordHash: string } {
+  return Boolean(
+    user?.authProvider === LOCAL_AUTH_PROVIDER &&
+      user.loginEnabled === false &&
+      user.credentialStatus === ACTIVE_CREDENTIAL_STATUS &&
+      user.passwordHash &&
+      user.role === "trader" &&
+      user.recoveryProvenance === null &&
+      (user.emailVerifiedAt === null || user.emailVerifiedAt === undefined),
   );
 }
 
@@ -188,12 +206,18 @@ export async function setupAuth(app: Express) {
     try {
       const user = await storage.getAuthenticationUserByEmail(email);
       const authorized = isLocallyAuthenticatable(user);
+      const pendingEmailVerification = isPendingEmailVerification(user);
       const passwordValid = await verifyPassword(
         password,
-        authorized ? user.passwordHash : await getUnavailableCredentialHash(),
+        authorized || pendingEmailVerification
+          ? user.passwordHash
+          : await getUnavailableCredentialHash(),
       );
+      if (pendingEmailVerification && passwordValid) {
+        return done(null, false, { message: "Email verification required." });
+      }
       if (!authorized || !passwordValid) {
-        return done(null, false, { message: "Invalid email or password." });
+        return done(null, false, { message: "Email or password is incorrect." });
       }
       await storage.updateLastLogin(user.id);
       return done(null, toPassportUser(user));
@@ -217,6 +241,12 @@ export async function setupAuth(app: Express) {
   app.post("/api/auth/register", registrationLimiter, async (req, res, next) => {
     const parsed = registrationSchema.safeParse(req.body);
     if (!parsed.success) {
+      if (
+        typeof req.body?.email === "string" &&
+        usesBlockedPublicEmailDomain(req.body.email)
+      ) {
+        return res.status(400).json(BUSINESS_EMAIL_REJECTION);
+      }
       return res.status(400).json({
         message:
           "Enter a valid name, email, and a 12-character password containing uppercase, lowercase, and numeric characters.",
@@ -295,17 +325,17 @@ export async function setupAuth(app: Express) {
   app.post("/api/auth/login", authLimiter, (req, res, next) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(401).json({ message: "Invalid email or password." });
+      return res.status(401).json({ message: "Email or password is incorrect." });
     }
     req.body = parsed.data;
     passport.authenticate("local", (error: unknown, user: Express.User | false, info?: { message?: string }) => {
       if (error) return next(error);
-      if (!user) return res.status(401).json({ message: info?.message ?? "Invalid email or password." });
+      if (!user) return res.status(401).json({ message: info?.message ?? "Email or password is incorrect." });
       req.login(user, async (loginError) => {
         if (loginError) return next(loginError);
         const storedUser = await storage.getAuthenticationUser(user.id);
         if (!isLocallyAuthenticatable(storedUser)) {
-          return res.status(401).json({ message: "Invalid email or password." });
+          return res.status(401).json({ message: "Email or password is incorrect." });
         }
         res.json(toCurrentUserDto(storedUser));
       });
