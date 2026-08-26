@@ -10,6 +10,10 @@ export const DEMO_ORGANIZATION_CONTEXT: CurrentOrganizationContextDto =
       organizationId: "demo-organization",
       profileRevisionId: "demo-organization-profile",
       displayName: "Tutela Demo Organization",
+      jurisdiction: "Demo jurisdiction",
+      registrationIdentifiers: Object.freeze([
+        Object.freeze({ scheme: "demo", value: "demo-registration" }),
+      ]),
       lifecycle: "active",
       membership: Object.freeze({
         membershipId: "demo-membership",

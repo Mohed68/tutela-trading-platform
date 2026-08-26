@@ -22,6 +22,10 @@ function organization(
       organizationId: "organization-1",
       profileRevisionId: "profile-1",
       displayName: "Acme Commodities",
+      jurisdiction: "SA",
+      registrationIdentifiers: Object.freeze([
+        Object.freeze({ scheme: "company_registration_number", value: "123" }),
+      ]),
       lifecycle: "active",
       membership: Object.freeze({
         membershipId: "membership-1",
@@ -116,4 +120,61 @@ test("setup posts the complete existing Registry contract surface", () => {
     source,
     /createOrganizationVerificationDecision|deriveOrganizationVerificationTrustStatus|eligibilityFingerprint/,
   );
+});
+
+test("verification route delegates Evidence and execution to canonical production endpoints", () => {
+  const source = readFileSync(
+    new URL("../../pages/verification.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    source,
+    /\/api\/organizations\/\$\{encodeURIComponent\(organization\.organizationId\)\}\/profile-revisions\/\$\{encodeURIComponent\(organization\.profileRevisionId\)\}\/evidence/,
+  );
+  assert.match(
+    source,
+    /\/api\/organizations\/\$\{encodeURIComponent\(organization\.organizationId\)\}\/profile-revisions\/\$\{encodeURIComponent\(organization\.profileRevisionId\)\}\/verification/,
+  );
+  assert.match(source, /result\.replayFingerprint/);
+  assert.match(source, /queryKey: \["\/api\/organizations\/current"\]/);
+  assert.doesNotMatch(
+    source,
+    /\/api\/verification\/documents|\/api\/verification\/pending|KybWizard|useKybStatus/,
+  );
+});
+
+test("verification UI cannot manufacture Trust or bypass owner authority", () => {
+  const page = readFileSync(
+    new URL("../../pages/verification.tsx", import.meta.url),
+    "utf8",
+  );
+  const service = readFileSync(
+    new URL(
+      "../../../../server/trade-trust-application/applicationService.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(page, /organization\?\.membership\.role === "owner"/);
+  assert.match(page, /Organization setup required/);
+  assert.match(page, /isDemo\(\)/);
+  assert.doesNotMatch(
+    page,
+    /users\.verified|kybStatus|createOrganizationVerificationDecision|deriveOrganizationVerificationTrustStatus/,
+  );
+  assert.match(service, /executeProductionOrganizationVerification/);
+  assert.match(service, /execution\.replayExecution\.replayFingerprint/);
+  assert.match(service, /repository\.isActiveOwner/);
+});
+
+test("verification page presents Registry identity and Replay-derived canonical status", () => {
+  const page = readFileSync(
+    new URL("../../pages/verification.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(page, /organization\.displayName/);
+  assert.match(page, /organization\.jurisdiction/);
+  assert.match(page, /organization\?\.registrationIdentifiers\[0\]/);
+  assert.match(page, /organizationVerificationLabel\(context\)/);
+  assert.match(page, /Verification and eligibility are separate/);
 });

@@ -8,6 +8,11 @@ export interface CurrentOrganizationContext {
   organizationId: string;
   profileRevisionId: string;
   displayName: string;
+  jurisdiction: string;
+  registrationIdentifiers: readonly {
+    scheme: string;
+    value: string;
+  }[];
   lifecycle: string;
   membership: {
     membershipId: string;

@@ -105,6 +105,13 @@ export const productionTradeTrustApplicationService=Object.freeze({
         organizationId: current.record.organizationId,
         profileRevisionId: current.record.profileRevisionId,
         displayName: profile.value.legalIdentityProjection.legalName,
+        jurisdiction:
+          profile.value.legalIdentityProjection.registrationJurisdiction,
+        registrationIdentifiers: Object.freeze(
+          profile.value.legalIdentityProjection.registrationIdentifiers.map(
+            (identifier) => Object.freeze({ ...identifier }),
+          ),
+        ),
         lifecycle: profile.value.organizationLifecycle,
         membership: Object.freeze({
           membershipId: current.record.membershipId,
