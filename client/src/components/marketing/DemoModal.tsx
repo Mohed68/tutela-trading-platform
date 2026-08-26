@@ -2,10 +2,7 @@ import React from "react";
 import { useLocation } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Play, Mail, Eye } from "lucide-react";
-import { enableDemo } from "@/lib/demo";
+import { Play, Mail } from "lucide-react";
 
 interface DemoModalProps {
   open: boolean;
@@ -14,12 +11,9 @@ interface DemoModalProps {
 
 export function DemoModal({ open, onClose }: DemoModalProps) {
   const [, setLocation] = useLocation();
-  const [startAsVerified, setStartAsVerified] = React.useState<boolean>(true);
-
   const handleStartDemo = () => {
     onClose();
-    enableDemo(startAsVerified ? "verified" : "pending");
-    // enableDemo() will handle the navigation
+    setLocation("/demo/request");
   };
 
   return (
@@ -43,19 +37,8 @@ export function DemoModal({ open, onClose }: DemoModalProps) {
                   Explore with Demo Data
                 </h3>
                 <p className="text-sm text-neutral-600 mb-4">
-                  Experience the full platform with realistic sample data and complete workflows.
+                  Request secure access to an isolated, non-binding commodity trade simulation.
                 </p>
-                
-                <div className="flex items-center space-x-2 mb-4">
-                  <Checkbox
-                    id="verified-start"
-                    checked={startAsVerified}
-                    onCheckedChange={(checked) => setStartAsVerified(checked === true)}
-                  />
-                  <Label htmlFor="verified-start" className="text-sm">
-                    Start as Verified user (recommended)
-                  </Label>
-                </div>
 
                 <Button 
                   onClick={handleStartDemo}
@@ -67,7 +50,7 @@ export function DemoModal({ open, onClose }: DemoModalProps) {
             </div>
           </div>
 
-          {/* Live Demo Option */}
+          {/* Qualified access explanation */}
           <div className="border border-neutral-200 rounded-xl p-6">
             <div className="flex items-start gap-4">
               <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-lg">
@@ -75,54 +58,21 @@ export function DemoModal({ open, onClose }: DemoModalProps) {
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-neutral-900 mb-2">
-                  Book a Live Demo
+                  Business email verification
                 </h3>
                 <p className="text-sm text-neutral-600 mb-4">
-                  Schedule a personalized walkthrough with our team to see how Tutela fits your needs.
+                  A one-time link verifies qualified access. No production trading account is created.
                 </p>
-                <Button 
-                  variant="outline"
-                  className="w-full"
-                  asChild
-                >
-                  <a href="mailto:demo@tutela.com?subject=Book%20a%20Live%20Demo">
-                    Contact Sales Team
-                  </a>
-                </Button>
+                <Button variant="outline" className="w-full" onClick={handleStartDemo}>Request demo access</Button>
               </div>
             </div>
           </div>
 
-          {/* Video Walkthrough Option */}
-          <div className="border border-neutral-200 rounded-xl p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex items-center justify-center w-10 h-10 bg-purple-100 rounded-lg">
-                <Eye className="w-5 h-5 text-purple-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-neutral-900 mb-2">
-                  Watch 90-Second Walkthrough
-                </h3>
-                <p className="text-sm text-neutral-600 mb-4">
-                  See the key features and workflow in a quick video overview.
-                </p>
-                <Button 
-                  variant="outline"
-                  className="w-full"
-                  asChild
-                >
-                  <a href="#" target="_blank" rel="noopener noreferrer">
-                    View Video Guide
-                  </a>
-                </Button>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="text-center pt-4 border-t border-neutral-200">
           <p className="text-xs text-neutral-500">
-            Demo data is temporary and will be cleared when you exit demo mode.
+            Demo data is temporary, isolated, simulated, and non-binding.
           </p>
         </div>
       </DialogContent>

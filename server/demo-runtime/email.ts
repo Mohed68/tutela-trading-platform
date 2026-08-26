@@ -19,7 +19,7 @@ export function createDemoResendEmailSender(
   return Object.freeze({
     async send({ recipient, token }: { recipient: string; token: string }) {
       const verificationUrl = new URL(
-        "/api/demo/access/verify",
+        "/demo/verify",
         configuration.applicationBaseUrl,
       );
       verificationUrl.searchParams.set("token", token);

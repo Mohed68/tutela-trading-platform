@@ -22,7 +22,17 @@ import Home from "@/pages/home";
 import HowItWorks from "@/pages/how-it-works";
 import Pricing from "@/pages/pricing";
 import FAQ from "@/pages/faq";
-import Demo from "@/pages/demo";
+import DemoRequest from "@/pages/demo-request";
+import DemoCheckEmail from "@/pages/demo-check-email";
+import DemoVerify from "@/pages/demo-verify";
+import DemoLanding from "@/pages/demo-landing";
+import DemoMarketplace from "@/pages/demo-marketplace";
+import DemoMissions from "@/pages/demo-missions";
+import DemoOfferPage from "@/pages/demo-offer";
+import DemoOrganizationPage from "@/pages/demo-organization";
+import DemoOrderPage from "@/pages/demo-order";
+import DemoContractPage from "@/pages/demo-contract";
+import { DemoShell } from "@/features/demo/DemoShell";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import RegistrationPending from "@/pages/registration-pending";
@@ -42,7 +52,6 @@ import Verification from "@/pages/verification";
 import Insights from "@/pages/insights";
 import Checkout from "@/pages/checkout";
 import MyDrafts from "@/pages/MyDrafts";
-import DemoContractPreview from "@/pages/demo-contract-preview";
 import CheckoutSuccess from "@/pages/checkout-success";
 import AdminDashboard from "@/pages/AdminDashboard";
 import { AnimationShowcase } from "@/components/demo/AnimationShowcase";
@@ -127,11 +136,16 @@ function Router() {
         </PublicLayout>
       </Route>
       
-      <Route path="/demo">
-        <PublicLayout>
-          <Demo />
-        </PublicLayout>
-      </Route>
+      <Route path="/demo/request"><DemoRequest /></Route>
+      <Route path="/demo/check-email"><DemoCheckEmail /></Route>
+      <Route path="/demo/verify"><DemoVerify /></Route>
+      <Route path="/demo/marketplace"><DemoShell><DemoMarketplace /></DemoShell></Route>
+      <Route path="/demo/missions"><DemoShell><DemoMissions /></DemoShell></Route>
+      <Route path="/demo/offers/:offerId"><DemoShell><DemoOfferPage /></DemoShell></Route>
+      <Route path="/demo/organizations/:organizationId"><DemoShell><DemoOrganizationPage /></DemoShell></Route>
+      <Route path="/demo/orders/:orderId"><DemoShell><DemoOrderPage /></DemoShell></Route>
+      <Route path="/demo/contracts/:contractId"><DemoShell><DemoContractPage /></DemoShell></Route>
+      <Route path="/demo"><DemoShell><DemoLanding /></DemoShell></Route>
 
       {/* Checkout Flow - Available to all users */}
       <Route path="/checkout">
@@ -189,13 +203,6 @@ function Router() {
             </AppLayout>
           </Route>
 
-          {/* Browser-local simulation; never backed by the real contracts API. */}
-          <Route path="/demo/contracts/:reservationId">
-            <AppLayout>
-              <DemoContractPreview />
-            </AppLayout>
-          </Route>
-          
           {/* Personal Offers Management */}
           <Route path="/offers">
             <AppLayout>

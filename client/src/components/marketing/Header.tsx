@@ -62,7 +62,7 @@ export function Header() {
             </div>
             
             <Button variant="outline" asChild>
-              <Link href="/demo">Try Demo</Link>
+              <Link href="/demo/request">Try Demo</Link>
             </Button>
             <Button asChild className="bg-emerald-600 hover:bg-emerald-700">
               <Link href="/verification">Start Verification</Link>
@@ -101,7 +101,7 @@ export function Header() {
               </Link>
               <div className="pt-3 space-y-2">
                 <Button variant="outline" className="w-full" asChild>
-                  <Link href="/demo">Try Demo</Link>
+                  <Link href="/demo/request">Try Demo</Link>
                 </Button>
                 <Button className="w-full bg-emerald-600 hover:bg-emerald-700" asChild>
                   <Link href="/verification">Start Verification</Link>

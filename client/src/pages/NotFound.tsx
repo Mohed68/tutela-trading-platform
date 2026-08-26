@@ -236,7 +236,7 @@ export default function NotFound() {
                 <h5 className="font-medium text-gray-900 mb-2">Platform</h5>
                 <ul className="space-y-1 text-gray-600">
                   <li><Link href="/" className="hover:text-blue-600">Home</Link></li>
-                  <li><Link href="/demo" className="hover:text-blue-600">Demo</Link></li>
+                  <li><Link href="/demo/request" className="hover:text-blue-600">Demo</Link></li>
                   <li><Link href="/how-it-works" className="hover:text-blue-600">How It Works</Link></li>
                   <li><Link href="/pricing" className="hover:text-blue-600">Pricing</Link></li>
                 </ul>

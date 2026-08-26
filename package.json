@@ -12,6 +12,7 @@
     "test:api-request": "tsx --test client/src/lib/queryClient.test.ts",
     "test:demo": "tsx --test client/src/lib/demo.test.ts",
     "test:demo-runtime": "tsx --test server/demo-runtime/demoRuntime.test.ts server/demo-runtime/applicationService.test.ts server/demo-runtime/architecture.test.ts server/demo-runtime/productionBoundaryGuard.test.ts",
+    "test:demo-frontend": "tsx --test client/src/features/demo/demoExperience.test.ts",
     "test:auth-characterization": "node --env-file=.env --import tsx --test server/password.test.ts server/auth.security.test.ts scripts/auth/recovery-user-lib.test.ts scripts/auth/legacy-auth.characterization.test.ts",
     "test:registration": "tsx --test server/registration.test.ts",
     "test:auth-runtime": "node --env-file=.env --import tsx --test scripts/auth/phase-4b.runtime.test.ts",

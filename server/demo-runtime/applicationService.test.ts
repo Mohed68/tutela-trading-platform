@@ -128,6 +128,12 @@ test("verified grant is required and creates one isolated 90-minute session", as
   assert.equal(loaded.ok, true);
   if (!loaded.ok) throw new Error("session missing");
   assert.equal(loaded.value.session.ttlMinutes, 90);
+  assert.deepEqual(loaded.value.visitor, {
+    firstName: "Nadia",
+    lastName: "Hassan",
+    company: "Qualified Trader Example",
+    tradeRole: "buyer",
+  });
   assert.equal(loaded.value.missions.length, 0);
   assert.equal(loaded.value.orders.length, 0);
   assert.equal(loaded.value.contracts.length, 0);

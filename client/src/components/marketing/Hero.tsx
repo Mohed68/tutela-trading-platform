@@ -64,7 +64,7 @@ export function Hero() {
             <p className="text-neutral-500">
               Need a custom walkthrough?{" "}
               <a 
-                href="mailto:demo@tutela.com?subject=Book%20a%20Demo" 
+                href="/demo/request"
                 className="text-emerald-600 hover:text-emerald-700 font-medium underline"
               >
                 Book a demo

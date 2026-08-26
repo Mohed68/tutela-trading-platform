@@ -108,6 +108,7 @@ function plusMilliseconds(iso: string, milliseconds: number): string {
 function freezeState(input: DemoSessionRuntimeState): DemoSessionRuntimeState {
   return Object.freeze({
     session: input.session,
+    visitor: input.visitor,
     missions: Object.freeze([...input.missions]),
     orders: Object.freeze([...input.orders]),
     acceptances: Object.freeze([...input.acceptances]),
@@ -309,6 +310,12 @@ export function createDemoSimulationApplicationService(
       if (!session) return fail("invalid_request");
       const state = freezeState({
         session,
+        visitor: Object.freeze({
+          firstName: record.grant.firstName,
+          lastName: record.grant.lastName,
+          company: record.grant.company,
+          tradeRole: record.grant.participantIntent,
+        }),
         missions: Object.freeze([]),
         orders: Object.freeze([]),
         acceptances: Object.freeze([]),
@@ -468,6 +475,14 @@ export function createDemoSimulationApplicationService(
       return ok(acceptance);
     },
 
+    async getOrder(context: DemoApplicationContext, orderId: unknown): Promise<DemoResult<DemoOrder>> {
+      const loaded = await loadActiveState(context);
+      if (!loaded.ok) return loaded;
+      if (!isDemoIdOfKind(orderId, "order")) return fail("not_found");
+      const order = loaded.value.orders.find((candidate) => candidate.orderId === orderId);
+      return order ? ok(order) : fail("not_found");
+    },
+
     async createContract(context: DemoApplicationContext, orderId: unknown): Promise<DemoResult<DemoContract>> {
       const loaded = await loadActiveState(context);
       if (!loaded.ok) return loaded;
@@ -523,6 +538,7 @@ export function createDemoSimulationApplicationService(
       if (!reset) return fail("session_forbidden");
       const next = freezeState({
         session: Object.freeze({ ...loaded.value.session, stateVersion: reset.nextStateVersion }),
+        visitor: loaded.value.visitor,
         missions: Object.freeze([]),
         orders: Object.freeze([]),
         acceptances: Object.freeze([]),

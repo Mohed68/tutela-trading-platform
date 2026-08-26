@@ -2,7 +2,6 @@ import React from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Globe, Menu, X } from "lucide-react";
-import { enableDemo } from "@/lib/demo";
 
 export function PublicHeader() {
   const [location, setLocation] = useLocation();
@@ -26,8 +25,7 @@ export function PublicHeader() {
   };
 
   const handleTryDemo = () => {
-    enableDemo("verified");
-    setLocation("/offers");
+    setLocation("/demo/request");
   };
 
   const handleStartVerification = () => {

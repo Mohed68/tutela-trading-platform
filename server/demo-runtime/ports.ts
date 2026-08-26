@@ -53,6 +53,12 @@ export interface DemoAccessGrantStore {
 
 export interface DemoSessionRuntimeState {
   readonly session: DemoSession;
+  readonly visitor: Readonly<{
+    firstName: string;
+    lastName: string;
+    company: string;
+    tradeRole: "buyer" | "seller" | "both";
+  }>;
   readonly missions: readonly DemoHeroMission[];
   readonly orders: readonly DemoOrder[];
   readonly acceptances: readonly DemoOrderAcceptance[];

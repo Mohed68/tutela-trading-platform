@@ -38,7 +38,7 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/demo" className="hover:text-neutral-200 transition-colors">
+                <Link href="/demo/request" className="hover:text-neutral-200 transition-colors">
                   Try Demo
                 </Link>
               </li>

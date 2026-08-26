@@ -71,6 +71,7 @@ function sessionDto(value: Awaited<ReturnType<DemoSimulationApplicationService["
       state: state.session.state,
       stateVersion: state.session.stateVersion,
       simulation: true as const,
+      visitor: state.visitor,
       missionCount: state.missions.length,
       orderCount: state.orders.length,
       contractCount: state.contracts.length,
@@ -154,6 +155,9 @@ export function registerDemoRuntimeRoutes(
   );
   app.post("/api/demo/orders/:orderId/accept", async (req, res) =>
     respond(res, await service.acceptOrder(context(req), req.params.orderId)),
+  );
+  app.get("/api/demo/orders/:orderId", async (req, res) =>
+    respond(res, await service.getOrder(context(req), req.params.orderId)),
   );
   app.post("/api/demo/orders/:orderId/contract", async (req, res) =>
     respond(res, await service.createContract(context(req), req.params.orderId), true),
