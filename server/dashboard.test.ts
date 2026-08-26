@@ -6,6 +6,7 @@ import { buildDashboardOverview } from "./dashboard.js";
 const account: CurrentUserDto = {
   id: "recovery-user",
   displayName: "Recovery trader",
+  email: null,
   role: "trader",
   authenticated: true,
   accountState: "active",
@@ -31,6 +32,7 @@ test("dashboard DTO exposes only the approved account projection", () => {
     "accountState",
     "authenticated",
     "displayName",
+    "email",
     "emailVerified",
     "id",
     "kybState",
@@ -39,7 +41,7 @@ test("dashboard DTO exposes only the approved account projection", () => {
     "role",
     "userVerified",
   ]);
-  assert.equal("email" in (overview.account.data ?? {}), false);
+  assert.equal(overview.account.data?.email, null);
   assert.equal("passwordHash" in (overview.account.data ?? {}), false);
 });
 

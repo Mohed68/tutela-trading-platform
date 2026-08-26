@@ -6,6 +6,7 @@ import type { CurrentUserDto } from "@shared/auth";
 export const DEMO_CURRENT_USER: CurrentUserDto = {
   id: "demo-user",
   displayName: "Demo Trader",
+  email: "demo@tutela.com",
   role: "trader",
   authenticated: true,
   accountState: "active",

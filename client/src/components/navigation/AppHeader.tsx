@@ -25,6 +25,8 @@ import {
 import { getAuth } from "@/lib/session";
 import { isDemo, disableDemo } from "@/lib/demo";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
+import { authenticatedIdentityPresentation } from "@/features/auth/authenticatedIdentity";
 
 interface AppHeaderProps {
   onMenuToggle: () => void;
@@ -34,8 +36,10 @@ interface AppHeaderProps {
 export function AppHeader({ onMenuToggle, isMenuOpen }: AppHeaderProps) {
   const [, setLocation] = useLocation();
   const { verified } = getAuth();
+  const { user } = useAuth();
   const demoMode = isDemo();
   const freezeAnimations = useTypingFreeze();
+  const identity = authenticatedIdentityPresentation(user);
 
   const handleLogout = async () => {
     if (demoMode) {
@@ -175,8 +179,8 @@ export function AppHeader({ onMenuToggle, isMenuOpen }: AppHeaderProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <div className="px-3 py-2">
-                <p className="text-sm font-medium">Demo User</p>
-                <p className="text-xs text-neutral-500">demo@tutela.com</p>
+                <p className="text-sm font-medium">{identity.displayName}</p>
+                <p className="text-xs text-neutral-500">{identity.email}</p>
                 {verified && (
                   <Badge variant="outline" className="mt-1 text-xs">
                     Verified

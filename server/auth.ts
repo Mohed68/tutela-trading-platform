@@ -128,6 +128,7 @@ export function toCurrentUserDto(
   return {
     id: user.id,
     displayName,
+    email: user.email ?? null,
     role: "trader",
     authenticated: true,
     accountState: "active",

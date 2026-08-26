@@ -118,6 +118,7 @@ test("current-user DTO is an explicit minimal allow-list", () => {
   assert.deepEqual(dto, {
     id: "opaque-recovery-id",
     displayName: "Recovery trader",
+    email: null,
     role: "trader",
     authenticated: true,
     accountState: "active",
@@ -129,7 +130,6 @@ test("current-user DTO is an explicit minimal allow-list", () => {
   });
 
   for (const prohibited of [
-    "email",
     "password",
     "passwordHash",
     "authProvider",
@@ -143,6 +143,21 @@ test("current-user DTO is an explicit minimal allow-list", () => {
   ]) {
     assert.equal(prohibited in dto, false);
   }
+});
+
+test("current-user DTO exposes the authenticated user's name and email", () => {
+  const dto = toCurrentUserDto(
+    recoveryIdentity({
+      email: "trader@acme.example",
+      firstName: "Ada",
+      lastName: "Trader",
+      recoveryProvenance: null,
+      emailVerifiedAt: new Date("2026-01-01T00:00:00.000Z"),
+    }) as AuthenticationIdentity & { passwordHash: string },
+  );
+
+  assert.equal(dto.displayName, "Ada Trader");
+  assert.equal(dto.email, "trader@acme.example");
 });
 
 test("session cookie defaults stay secure by environment", () => {

@@ -25,6 +25,7 @@ export interface AuthenticationIdentity {
 export interface CurrentUserDto {
   id: string;
   displayName: string | null;
+  email: string | null;
   role: "trader";
   authenticated: true;
   accountState: "active";

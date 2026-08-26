@@ -15,6 +15,7 @@ import {
   CreditCard
 } from "lucide-react";
 import { ClientEvents, UserContext } from "@/lib/monitoring";
+import { isDemo } from "@/lib/demo";
 
 interface MonitoringStats {
   totalEvents: number;
@@ -143,6 +144,13 @@ export function MonitoringDashboard() {
     },
     
     setUserContext: () => {
+      if (!isDemo()) {
+        toast({
+          title: "Demo context unavailable",
+          description: "Synthetic user context is available only in demo mode.",
+        });
+        return;
+      }
       UserContext.setUser('demo-user', 'demo@tutela.com', 'Market Analyzer');
       toast({ title: "User Context Set", description: "User context updated in monitoring" });
     }

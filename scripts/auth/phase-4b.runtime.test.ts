@@ -231,6 +231,7 @@ test(
       assert.deepEqual(loginDto, {
         id: loginDto.id,
         displayName: "Recovery trader",
+        email: credential.email,
         role: "trader",
         authenticated: true,
         accountState: "active",
@@ -240,7 +241,7 @@ test(
         kybState: "unknown",
         organizationVerification: "unknown",
       });
-      assert.equal(Object.keys(loginDto).length, 10);
+      assert.equal(Object.keys(loginDto).length, 11);
       const cookie = cookieFrom(valid);
       assert.equal(await sessionCount(client), "1");
 
