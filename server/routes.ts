@@ -46,6 +46,9 @@ import { buildDashboardOverview } from "./dashboard";
 import { registerDraftRoutes } from "./drafts/routes";
 import { productionTradingFlowService } from "./trading-flow/productionService";
 import { registerTradeTrustApplicationRoutes } from "./trade-trust-application/routes";
+import { registerDemoRuntimeRoutes } from "./demo-runtime/routes";
+import { createInMemoryDemoRuntime } from "./demo-runtime/runtimeComposition";
+import { containsDemoIdentifier } from "./demo-runtime/productionBoundaryGuard";
 
 // Initialize Stripe
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -65,6 +68,7 @@ const PRICE_MAP: Record<string, string> = {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+  registerDemoRuntimeRoutes(app, createInMemoryDemoRuntime());
   registerDraftRoutes(app);
   registerTradeTrustApplicationRoutes(app);
 
@@ -648,6 +652,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/orders', isAuthenticated, async (req: any, res) => {
     try {
+      if (containsDemoIdentifier([req.body?.offerId, req.body?.buyerOrganizationId])) {
+        return res.status(400).json({ message: "Demo identifiers are not accepted by production trading endpoints.", code: "demo_identifier_not_allowed" });
+      }
       const userId = req.user.claims.sub;
       const result = await productionTradingFlowService.createOrder({
         offerId: req.body?.offerId,
@@ -670,6 +677,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch('/api/orders/:id/status', isAuthenticated, async (req: any, res) => {
     try {
+      if (containsDemoIdentifier([req.params.id])) {
+        return res.status(400).json({ message: "Demo identifiers are not accepted by production trading endpoints.", code: "demo_identifier_not_allowed" });
+      }
       const { status } = req.body;
       if (status !== "accepted") {
         return res.status(409).json({ message: "This order transition is not available in the first-cycle trading flow." });
@@ -705,6 +715,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/contracts/:id', isAuthenticated, async (req: any, res) => {
     try {
+      if (containsDemoIdentifier([req.params.id])) {
+        return res.status(400).json({ message: "Demo identifiers are not accepted by production contract endpoints.", code: "demo_identifier_not_allowed" });
+      }
       const contract = await storage.getContractById(req.params.id);
       if (!contract) {
         return res.status(404).json({ message: "Contract not found" });
@@ -722,6 +735,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/contracts', isAuthenticated, async (req: any, res) => {
     try {
+      if (containsDemoIdentifier([req.body?.orderId])) {
+        return res.status(400).json({ message: "Demo identifiers are not accepted by production contract endpoints.", code: "demo_identifier_not_allowed" });
+      }
       const userId = req.user.claims.sub;
       const result = await productionTradingFlowService.createContract(
         req.body?.orderId,
@@ -741,11 +757,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch('/api/contracts/:id/status', isAuthenticated, async (req, res) => {
+    if (containsDemoIdentifier([req.params.id])) {
+      return res.status(400).json({ message: "Demo identifiers are not accepted by production contract endpoints.", code: "demo_identifier_not_allowed" });
+    }
     res.status(409).json({ message: "Contract lifecycle transitions are outside the first-cycle trading flow." });
   });
 
   app.get('/api/contracts/:id/blockchain-status', isAuthenticated, async (req, res) => {
     try {
+      if (containsDemoIdentifier([req.params.id])) {
+        return res.status(400).json({ message: "Demo identifiers are not accepted by production contract endpoints.", code: "demo_identifier_not_allowed" });
+      }
       const contract = await storage.getContractById(req.params.id);
       if (!contract) {
         return res.status(404).json({ message: "Contract not found" });

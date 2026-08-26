@@ -20,6 +20,10 @@ export function isDemoId(value: unknown): value is DemoId {
   return typeof value === "string" && DEMO_ID_PATTERN.test(value);
 }
 
+export function hasDemoNamespacePrefix(value: unknown): value is string {
+  return typeof value === "string" && value.startsWith("demo:");
+}
+
 export function isDemoIdOfKind<Kind extends DemoIdKind>(
   value: unknown,
   kind: Kind,
@@ -34,5 +38,6 @@ export function isDemoIdOfKind<Kind extends DemoIdKind>(
 export function isProductionIdCandidate(value: unknown): value is string {
   return (
     typeof value === "string" && value.trim().length > 0 && !isDemoId(value)
+    && !hasDemoNamespacePrefix(value)
   );
 }

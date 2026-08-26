@@ -34,9 +34,11 @@ export {
 } from "./heroMissions.js";
 export {
   DEMO_ID_KINDS,
+  hasDemoNamespacePrefix,
   isDemoId,
   isDemoIdOfKind,
   isProductionIdCandidate,
   type DemoId,
   type DemoIdKind,
 } from "./ids.js";
+export { containsDemoIdentifier } from "./productionBoundaryGuard.js";

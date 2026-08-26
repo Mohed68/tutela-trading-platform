@@ -190,6 +190,7 @@ test("demo order, acceptance, and contract are always simulation and non-binding
 test("demo identifiers are rejected by the production-candidate boundary", () => {
   assert.equal(isDemoId("demo:offer:wti-houston"), true);
   assert.equal(isProductionIdCandidate("demo:offer:wti-houston"), false);
+  assert.equal(isProductionIdCandidate("demo:unknown:forged"), false);
   assert.equal(isProductionIdCandidate("production-offer-123"), true);
   assert.equal(isDemoId("production-offer-123"), false);
   assert.equal(isDemoId("demo:unknown:value"), false);

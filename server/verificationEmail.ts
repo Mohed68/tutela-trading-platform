@@ -12,6 +12,34 @@ export interface VerificationEmailContent {
   html: string;
 }
 
+export interface ResendEmailMessage {
+  recipient: string;
+  subject: string;
+  text: string;
+  html: string;
+}
+
+export async function sendResendEmail(
+  configuration: Pick<VerificationEmailConfiguration, "apiKey" | "sender">,
+  message: ResendEmailMessage,
+): Promise<void> {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${configuration.apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      from: configuration.sender,
+      to: [message.recipient],
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    }),
+  });
+  if (!response.ok) throw new Error("EMAIL_VERIFICATION_DELIVERY_FAILED");
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -123,22 +151,7 @@ export function createResendVerificationEmailSender(
         configuration,
         verificationUrl,
       );
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${configuration.apiKey}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          from: configuration.sender,
-          to: [recipient],
-          ...content,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("EMAIL_VERIFICATION_DELIVERY_FAILED");
-      }
+      await sendResendEmail(configuration, { recipient, ...content });
     },
   };
 }

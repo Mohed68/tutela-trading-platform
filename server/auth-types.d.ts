@@ -1,5 +1,12 @@
 import "express-session";
 
+declare module "express-session" {
+  interface SessionData {
+    demoAccessGrantId?: string;
+    demoSessionId?: string;
+  }
+}
+
 declare global {
   namespace Express {
     interface User {
