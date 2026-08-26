@@ -1,12 +1,15 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Building2, CheckCircle2 } from "lucide-react";
 import { RecoveryDashboard } from "@/components/dashboard/RecoveryDashboard";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganizationContext } from "@/hooks/useOrganizationContext";
 import { DEMO_CURRENT_USER } from "@/hooks/useAuth";
+import { organizationVerificationLabel } from "@/features/organization/organizationOnboarding";
 import { getDemoMarketplaceOffers, isDemo } from "@/lib/demo";
 import type { DashboardOverviewDto } from "@shared/dashboard";
 
@@ -37,7 +40,16 @@ function demoDashboardOverview(): DashboardOverviewDto {
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
+  const { context: organizationContext } =
+    useOrganizationContext(isAuthenticated);
   const demoMode = isDemo();
+  const organization =
+    organizationContext?.state === "available"
+      ? organizationContext.organization
+      : null;
+  const organizationCreated =
+    new URLSearchParams(window.location.search).get("organizationCreated") ===
+    "1";
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -91,9 +103,53 @@ export default function Dashboard() {
   }
 
   return (
-    <RecoveryDashboard
-      overview={displayedOverview!}
-      onBrowseMarketplace={() => setLocation("/marketplace")}
-    />
+    <div className="space-y-6">
+      {organizationCreated && organization && (
+        <Alert className="border-emerald-200 bg-emerald-50">
+          <CheckCircle2
+            className="h-4 w-4 text-emerald-700"
+            aria-hidden="true"
+          />
+          <AlertTitle>Organization created</AlertTitle>
+          <AlertDescription>
+            Your organization profile has been created. Complete organization
+            verification to progress toward trading eligibility.
+          </AlertDescription>
+        </Alert>
+      )}
+      {organization && (
+        <Card>
+          <CardContent className="flex flex-col justify-between gap-4 p-6 sm:flex-row sm:items-center">
+            <div className="flex items-start gap-3">
+              <Building2
+                className="mt-0.5 h-5 w-5 text-emerald-700"
+                aria-hidden="true"
+              />
+              <div>
+                <p className="font-semibold text-neutral-950">
+                  {organization.displayName}
+                </p>
+                <p className="mt-1 text-sm capitalize text-neutral-600">
+                  {organization.membership.role} · {organization.lifecycle}
+                </p>
+                <p className="mt-1 text-sm text-neutral-600">
+                  {organizationVerificationLabel(organizationContext)}
+                </p>
+              </div>
+            </div>
+            {organization.verification.canonicalTrustStatus !== "trusted" &&
+              !demoMode && (
+                <Button onClick={() => setLocation("/verification")}>
+                  Complete Organization Verification
+                </Button>
+              )}
+          </CardContent>
+        </Card>
+      )}
+      <RecoveryDashboard
+        overview={displayedOverview!}
+        onBrowseMarketplace={() => setLocation("/marketplace")}
+      />
+    </div>
   );
 }

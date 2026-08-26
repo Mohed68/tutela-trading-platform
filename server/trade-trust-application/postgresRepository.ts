@@ -20,6 +20,80 @@ export interface PlatformEvidenceRecord {
   evidenceFingerprint: string;
 }
 
+export interface CurrentOrganizationContextRecord {
+  organizationId: string;
+  profileRevisionId: string;
+  profilePayload: Record<string, unknown>;
+  membershipId: string;
+  membershipRole: "owner" | "member";
+  verificationStreamExists: boolean;
+}
+
+export type CurrentOrganizationContextResolution =
+  | Readonly<{ status: "resolved"; record: CurrentOrganizationContextRecord }>
+  | Readonly<{ status: "not_found" }>
+  | Readonly<{ status: "conflict" }>;
+
+export async function loadCurrentOrganizationContext(
+  userId: string,
+): Promise<CurrentOrganizationContextResolution> {
+  const result = await pool.query<QueryResultRow>(
+    `SELECT membership.membership_id, membership.organization_id,
+            membership.role, profile.organization_profile_revision_id,
+            profile.contract_payload,
+            EXISTS (
+              SELECT 1
+              FROM public.organization_verification_persistence_streams AS stream
+              WHERE stream.organization_id = membership.organization_id
+            ) AS verification_stream_exists
+     FROM public.organization_memberships AS membership
+     INNER JOIN LATERAL (
+       SELECT organization_profile_revision_id, contract_payload
+       FROM public.organization_registry_profile_revisions
+       WHERE organization_id = membership.organization_id
+       ORDER BY created_at DESC, organization_profile_revision_id DESC
+       LIMIT 1
+     ) AS profile ON true
+     WHERE membership.user_id = $1
+       AND membership.status = 'active'
+       AND membership.role IN ('owner', 'member')
+     ORDER BY CASE membership.role WHEN 'owner' THEN 0 ELSE 1 END,
+              membership.created_at ASC`,
+    [userId],
+  );
+  if (result.rowCount === 0) {
+    return Object.freeze({ status: "not_found" as const });
+  }
+  const owners = result.rows.filter((row) => row.role === "owner");
+  if (owners.length > 1 || (owners.length === 0 && result.rows.length > 1)) {
+    return Object.freeze({ status: "conflict" as const });
+  }
+  const row = owners[0] ?? result.rows[0];
+  if (
+    row === undefined ||
+    typeof row.membership_id !== "string" ||
+    typeof row.organization_id !== "string" ||
+    typeof row.organization_profile_revision_id !== "string" ||
+    (row.role !== "owner" && row.role !== "member") ||
+    typeof row.contract_payload !== "object" ||
+    row.contract_payload === null ||
+    typeof row.verification_stream_exists !== "boolean"
+  ) {
+    return Object.freeze({ status: "conflict" as const });
+  }
+  return Object.freeze({
+    status: "resolved" as const,
+    record: Object.freeze({
+      organizationId: row.organization_id,
+      profileRevisionId: row.organization_profile_revision_id,
+      profilePayload: row.contract_payload as Record<string, unknown>,
+      membershipId: row.membership_id,
+      membershipRole: row.role,
+      verificationStreamExists: row.verification_stream_exists,
+    }),
+  });
+}
+
 export async function registerOrganizationAndOwner(input: Readonly<{
   actorUserId: string;
   profile: OrganizationProfileRevisionContract;

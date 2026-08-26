@@ -20,6 +20,22 @@ test("Organization registration is atomic and the one-Organization rule is launc
   assert.match(repository,/BEGIN[\s\S]*organization_registry_profile_revisions[\s\S]*organization_memberships[\s\S]*COMMIT/);
   assert.match(repository,/role='owner' AND status='active'/);
   assert.doesNotMatch(migration,/UNIQUE\s*\(\s*user_id\s*\)/i);
+  assert.match(repository,/pg_advisory_xact_lock[\s\S]*owner_exists/);
+  assert.match(source("server/trade-trust-application/applicationService.ts"),/membershipRole:"owner",membershipStatus:"active"/);
+});
+
+test("Organization onboarding reads Registry, Membership, and Replay-derived Trust without a parallel authority",()=>{
+  const repository=source("server/trade-trust-application/postgresRepository.ts");
+  const service=source("server/trade-trust-application/applicationService.ts");
+  const routes=source("server/trade-trust-application/routes.ts");
+  assert.match(repository,/organization_registry_profile_revisions/);
+  assert.match(repository,/organization_memberships/);
+  assert.match(repository,/organization_verification_persistence_streams/);
+  assert.match(service,/parseOrganizationProfileRevisionContract/);
+  assert.match(service,/productionOrganizationParticipationEligibilityReadAdapter/);
+  assert.match(service,/verificationReference\.trustStatus/);
+  assert.match(routes,/GET|app\.get\("\/api\/organizations\/current"/i);
+  assert.doesNotMatch(service,/users\.verified|kyb_status|seller_org_verified/i);
 });
 
 test("durable persistence accepts both authenticated domain fingerprint representations",()=>{

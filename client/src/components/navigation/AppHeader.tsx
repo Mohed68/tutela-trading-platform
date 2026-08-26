@@ -22,11 +22,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getAuth } from "@/lib/session";
 import { isDemo, disableDemo } from "@/lib/demo";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganizationContext } from "@/hooks/useOrganizationContext";
 import { authenticatedIdentityPresentation } from "@/features/auth/authenticatedIdentity";
+import { organizationVerificationLabel } from "@/features/organization/organizationOnboarding";
 
 interface AppHeaderProps {
   onMenuToggle: () => void;
@@ -35,11 +36,16 @@ interface AppHeaderProps {
 
 export function AppHeader({ onMenuToggle, isMenuOpen }: AppHeaderProps) {
   const [, setLocation] = useLocation();
-  const { verified } = getAuth();
   const { user } = useAuth();
+  const { context: organizationContext } = useOrganizationContext(Boolean(user));
   const demoMode = isDemo();
   const freezeAnimations = useTypingFreeze();
   const identity = authenticatedIdentityPresentation(user);
+  const organization =
+    organizationContext?.state === "available"
+      ? organizationContext.organization
+      : null;
+  const verificationLabel = organizationVerificationLabel(organizationContext);
 
   const handleLogout = async () => {
     if (demoMode) {
@@ -48,6 +54,7 @@ export function AppHeader({ onMenuToggle, isMenuOpen }: AppHeaderProps) {
     } else {
       await apiRequest("POST", "/api/auth/logout");
       queryClient.setQueryData(["/api/auth/user"], null);
+      queryClient.setQueryData(["/api/organizations/current"], null);
       setLocation("/home");
     }
   };
@@ -94,16 +101,30 @@ export function AppHeader({ onMenuToggle, isMenuOpen }: AppHeaderProps) {
         {/* Right side - Actions */}
         <div className="flex items-center space-x-3">
           {/* Verification Status */}
-          {!verified && (
+          {organizationContext?.state === "setup_required" && !demoMode && (
             <Button 
               size="sm" 
               variant="outline"
               className="hidden sm:flex"
               asChild
             >
-              <Link href="/verification">Complete Verification</Link>
+              <Link href="/organization/setup">Set up Organization</Link>
             </Button>
           )}
+          {organization &&
+            organization.verification.canonicalTrustStatus !== "trusted" &&
+            !demoMode && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="hidden sm:flex"
+                asChild
+              >
+                <Link href="/verification">
+                  Complete Organization Verification
+                </Link>
+              </Button>
+            )}
           
           {/* Notifications */}
           <DropdownMenu>
@@ -181,10 +202,37 @@ export function AppHeader({ onMenuToggle, isMenuOpen }: AppHeaderProps) {
               <div className="px-3 py-2">
                 <p className="text-sm font-medium">{identity.displayName}</p>
                 <p className="text-xs text-neutral-500">{identity.email}</p>
-                {verified && (
+                {user?.emailVerified === "verified" && (
                   <Badge variant="outline" className="mt-1 text-xs">
-                    Verified
+                    Email verified
                   </Badge>
+                )}
+              </div>
+              <DropdownMenuSeparator />
+              <div className="px-3 py-2 text-sm">
+                {organization ? (
+                  <>
+                    <p className="font-medium text-neutral-900">
+                      {organization.displayName}
+                    </p>
+                    <p className="mt-1 capitalize text-neutral-600">
+                      {organization.membership.role}
+                    </p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      {verificationLabel}
+                    </p>
+                  </>
+                ) : organizationContext?.state === "setup_required" ? (
+                  <Link
+                    href="/organization/setup"
+                    className="text-emerald-700 underline"
+                  >
+                    Organization setup required
+                  </Link>
+                ) : (
+                  <p className="text-neutral-500">
+                    Organization context unavailable
+                  </p>
                 )}
               </div>
               <DropdownMenuSeparator />

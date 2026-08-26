@@ -1,4 +1,5 @@
-import { Switch, Route } from "wouter";
+import { useEffect } from "react";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,8 +7,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { StatusBar } from "@/components/ui/status-bar";
 import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganizationContext } from "@/hooks/useOrganizationContext";
 
 import { getAuth } from "@/lib/session";
+import { isDemo } from "@/lib/demo";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { RouteGuard, VerifiedRoute, PartnerRoute, AdminRoute } from "@/components/navigation/RouteGuard";
@@ -24,6 +27,7 @@ import Login from "@/pages/login";
 import Register from "@/pages/register";
 import RegistrationPending from "@/pages/registration-pending";
 import VerifyEmail from "@/pages/verify-email";
+import OrganizationSetup from "@/pages/organization-setup";
 
 // App Pages  
 import Landing from "@/pages/landing";
@@ -46,10 +50,48 @@ import { MonitoringDashboard } from "@/components/MonitoringDashboard";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
+  const [location, navigate] = useLocation();
+  const demoMode = isDemo();
+  const { context: organizationContext, isLoading: organizationLoading } =
+    useOrganizationContext(isAuthenticated);
   const { verified } = getAuth();
   
   // Determine if user should see app interface
   const showAppInterface = isAuthenticated;
+
+  useEffect(() => {
+    const publicPath = [
+      "/login",
+      "/register",
+      "/registration-pending",
+      "/verify-email",
+      "/home",
+      "/how-it-works",
+      "/pricing",
+      "/faq",
+      "/demo",
+      "/checkout",
+    ].some((path) => location === path || location.startsWith(`${path}/`));
+    if (
+      !isLoading &&
+      !organizationLoading &&
+      !publicPath &&
+      location !== "/organization/setup" &&
+      organizationContext?.state === "setup_required" &&
+      isAuthenticated &&
+      !demoMode
+    ) {
+      navigate("/organization/setup");
+    }
+  }, [
+    demoMode,
+    isAuthenticated,
+    isLoading,
+    location,
+    navigate,
+    organizationContext,
+    organizationLoading,
+  ]);
 
   return (
     <Switch>
@@ -114,6 +156,12 @@ function Router() {
       {/* App Interface Routes */}
       {showAppInterface ? (
         <>
+          <Route path="/organization/setup">
+            <AppLayout>
+              <OrganizationSetup />
+            </AppLayout>
+          </Route>
+
           {/* Dashboard - accessible to all logged in users */}
           <Route path="/">
             <AppLayout>

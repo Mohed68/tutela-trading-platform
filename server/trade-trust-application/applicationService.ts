@@ -7,6 +7,7 @@ import { REGISTRY_CONTRACT_VERSION, createOrganizationId, parseOrganizationProfi
 import { createMinimumTradeTrustProductionWiring } from "../trade-trust-policy/productionWiring.js";
 import * as repository from "./postgresRepository.js";
 import { executeProductionOrganizationVerification } from "./organizationVerificationOrchestrator.js";
+import type { CurrentOrganizationContextDto } from "@shared/organizationOnboarding";
 
 export interface RegistrationInput { legalName:string; tradingNames:readonly string[]; organizationType:string; jurisdiction:string; registrationIdentifiers:readonly {scheme:string;value:string}[]; declaredActivities:readonly {code:string;description?:string}[]; }
 export interface EvidenceInput { readonly assertions: readonly ProviderEvidenceAssertion[]; }
@@ -44,6 +45,76 @@ const provider=createLocalPlatformEvidenceProvider(repository.platformEvidenceRe
 const tradeTrust=createMinimumTradeTrustProductionWiring(provider);
 
 export const productionTradeTrustApplicationService=Object.freeze({
+  async getCurrentOrganization(
+    actorUserId: string,
+  ): Promise<CurrentOrganizationContextDto> {
+    const current = await repository.loadCurrentOrganizationContext(actorUserId);
+    if (current.status === "not_found") {
+      return Object.freeze({ state: "setup_required", organization: null });
+    }
+    if (current.status !== "resolved") {
+      return Object.freeze({ state: "unavailable", organization: null });
+    }
+    const profile = parseOrganizationProfileRevisionContract(
+      current.record.profilePayload,
+    );
+    if (
+      !profile.ok ||
+      profile.value.organizationId !== current.record.organizationId ||
+      profile.value.organizationProfileRevisionId !==
+        current.record.profileRevisionId
+    ) {
+      return Object.freeze({ state: "unavailable", organization: null });
+    }
+
+    const participation =
+      await productionOrganizationParticipationEligibilityReadAdapter.resolveCurrentOrganizationParticipationEligibility(
+        {
+          organizationId: current.record.organizationId,
+          userId: actorUserId,
+        },
+      );
+    const verificationReference =
+      participation.status === "resolved"
+        ? participation.result.verificationReference
+        : undefined;
+    const verification = verificationReference
+      ? Object.freeze({
+          phase: "completed" as const,
+          canonicalTrustStatus: verificationReference.trustStatus,
+        })
+      : participation.status === "unavailable" ||
+          participation.status === "integrity_failure"
+        ? Object.freeze({
+            phase: "unavailable" as const,
+            canonicalTrustStatus: null,
+          })
+        : current.record.verificationStreamExists
+          ? Object.freeze({
+              phase: "in_progress" as const,
+              canonicalTrustStatus: null,
+            })
+          : Object.freeze({
+              phase: "not_started" as const,
+              canonicalTrustStatus: null,
+            });
+
+    return Object.freeze({
+      state: "available" as const,
+      organization: Object.freeze({
+        organizationId: current.record.organizationId,
+        profileRevisionId: current.record.profileRevisionId,
+        displayName: profile.value.legalIdentityProjection.legalName,
+        lifecycle: profile.value.organizationLifecycle,
+        membership: Object.freeze({
+          membershipId: current.record.membershipId,
+          role: current.record.membershipRole,
+          status: "active" as const,
+        }),
+        verification,
+      }),
+    });
+  },
   async createOrganization(actorUserId:string,input:RegistrationInput){
     const at=now(),organizationId=id("organization"),revisionId=id("organization-profile-revision");
     const semantic={legal_identity_projection:{legal_name:input.legalName,trading_names:[...input.tradingNames],registration_jurisdiction:input.jurisdiction,registration_identifiers:input.registrationIdentifiers.map(v=>({...v}))},organization_type:input.organizationType,jurisdiction:input.jurisdiction,declared_activity_projection:{activities:input.declaredActivities.map(v=>({...v}))},organization_lifecycle:"active"} as const;
