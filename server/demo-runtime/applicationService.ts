@@ -423,13 +423,15 @@ export function createDemoSimulationApplicationService(
       const minimum = compareDecimal(input.quantity, offer.minimumQuantity);
       const available = compareDecimal(input.quantity, offer.quantity);
       if (minimum === undefined || minimum < 0 || available === undefined || available > 0) return fail("invalid_quantity");
-      const mission = missionDefinitionForOffer(offer.offerId);
-      const scenarioId = mission?.missionId ?? "demo:mission:marketplace-exploration";
+      const mission = loaded.value.missions.find(
+        (candidate) => candidate.offerId === offer.offerId,
+      );
+      const scenarioId = mission?.missionId;
       const participant = sessionParticipantOrganizationId(loaded.value.session.demoSessionId);
       const order = createDemoOrder({
         orderId: dependencies.ids.next("order"),
         demoSessionId: loaded.value.session.demoSessionId,
-        scenarioId,
+        ...(scenarioId ? { scenarioId } : {}),
         offerId: offer.offerId,
         buyerOrganizationId: offer.side === "sell" ? participant : offer.organizationId,
         sellerOrganizationId: offer.side === "sell" ? offer.organizationId : participant,
@@ -458,7 +460,7 @@ export function createDemoSimulationApplicationService(
       const acceptance = createDemoOrderAcceptance({
         acceptanceId: dependencies.ids.next("acceptance"),
         demoSessionId: order.demoSessionId,
-        scenarioId: order.scenarioId,
+        ...(order.scenarioId ? { scenarioId: order.scenarioId } : {}),
         orderId: order.orderId,
         acceptedAt: dependencies.clock.now(),
       });
@@ -498,7 +500,7 @@ export function createDemoSimulationApplicationService(
       const contract = createDemoContract({
         contractId: dependencies.ids.next("contract"),
         demoSessionId: order.demoSessionId,
-        scenarioId: order.scenarioId,
+        ...(order.scenarioId ? { scenarioId: order.scenarioId } : {}),
         orderId: order.orderId,
         acceptanceId: acceptance.acceptanceId,
         offerId: order.offerId,

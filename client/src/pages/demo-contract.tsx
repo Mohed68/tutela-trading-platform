@@ -11,7 +11,7 @@ import type { DemoContract, DemoMissionView, DemoOffer, DemoOrganization } from 
 export default function DemoContractPage() {
   const [,params]=useRoute("/demo/contracts/:contractId"); const [,navigate]=useLocation(); const {session,reset}=useDemoSession();
   const [contract,setContract]=React.useState<DemoContract|null>(null); const [offer,setOffer]=React.useState<DemoOffer|null>(null); const [counterparty,setCounterparty]=React.useState<DemoOrganization|null>(null); const [mission,setMission]=React.useState<DemoMissionView|null>(null);
-  React.useEffect(()=>{if(!params?.contractId)return;void(async()=>{const value=await demoApi.getContract(params.contractId);setContract(value);const item=await demoApi.getOffer(value.offerId);setOffer(item);setCounterparty(await demoApi.getOrganization(item.organizationId));setMission(await demoApi.getMission(value.scenarioId).catch(()=>null));})();},[params?.contractId]);
+  React.useEffect(()=>{if(!params?.contractId)return;void(async()=>{const value=await demoApi.getContract(params.contractId);setContract(value);const item=await demoApi.getOffer(value.offerId);setOffer(item);setCounterparty(await demoApi.getOrganization(item.organizationId));setMission(value.scenarioId ? await demoApi.getMission(value.scenarioId).catch(()=>null) : null);})();},[params?.contractId]);
   if(!contract||!offer||!session)return <div className="p-12 text-center text-slate-500">Loading contract preview…</div>;
   const participantId=`demo:org:session-${session.demoSessionId.slice("demo:session:".length)}`; const party=(id:string)=>id===participantId?session.visitor.company:(counterparty?.legalName??"Synthetic counterparty");
   const resetAll=async()=>{await reset();navigate("/demo");};

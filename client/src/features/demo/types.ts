@@ -86,7 +86,7 @@ export interface DemoMissionView {
 
 export interface DemoOrder {
   orderId: string;
-  scenarioId: string;
+  scenarioId?: string;
   offerId: string;
   buyerOrganizationId: string;
   sellerOrganizationId: string;
@@ -107,7 +107,7 @@ export interface DemoAcceptance {
 
 export interface DemoContract {
   contractId: string;
-  scenarioId: string;
+  scenarioId?: string;
   orderId: string;
   offerId: string;
   buyerOrganizationId: string;

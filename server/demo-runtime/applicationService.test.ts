@@ -208,6 +208,95 @@ test("contract fails closed before deterministic seller acceptance", async () =>
   assert.deepEqual(await value.service.createContract(context, order.value.orderId), { ok:false, code:"order_not_accepted" });
 });
 
+test("free marketplace exploration reaches a non-binding contract without a fake Hero mission", async () => {
+  const value = harness();
+  const context = await qualifyAndStart(value);
+
+  const order = await value.service.createOrder(context, {
+    offerId: "demo:offer:soybeans-chicago",
+    quantity: "1000",
+  });
+  assert.equal(order.ok, true);
+  if (!order.ok) throw new Error("order missing");
+  assert.equal(order.value.scenarioId, undefined);
+  assert.equal(Object.hasOwn(order.value, "scenarioId"), false);
+  assert.equal(order.value.simulation, true);
+  assert.equal(order.value.nonBinding, true);
+
+  const acceptance = await value.service.acceptOrder(context, order.value.orderId);
+  assert.equal(acceptance.ok, true);
+  if (!acceptance.ok) throw new Error("acceptance missing");
+  assert.equal(acceptance.value.scenarioId, undefined);
+  assert.equal(Object.hasOwn(acceptance.value, "scenarioId"), false);
+
+  const contract = await value.service.createContract(context, order.value.orderId);
+  assert.equal(contract.ok, true);
+  if (!contract.ok) throw new Error("contract missing");
+  assert.equal(contract.value.scenarioId, undefined);
+  assert.equal(Object.hasOwn(contract.value, "scenarioId"), false);
+  assert.equal(contract.value.simulation, true);
+  assert.equal(contract.value.nonBinding, true);
+  assert.equal(contract.value.legalMarker, "SIMULATION — NON-BINDING");
+
+  const state = await value.service.getSession(context);
+  assert.equal(state.ok, true);
+  assert.equal(state.ok && state.value.missions.length, 0);
+  assert.deepEqual(
+    await value.service.getMission(context, "demo:mission:marketplace-exploration"),
+    { ok:false, code:"not_found" },
+  );
+});
+
+test("WTI, Urea, and Copper orders retain only their started Hero mission IDs", async () => {
+  const heroes = [
+    {
+      missionId: "demo:mission:wti-complete-trade",
+      offerId: "demo:offer:wti-houston",
+      organizationId: "demo:org:aster-gulf-energy",
+      quantity: "1000",
+    },
+    {
+      missionId: "demo:mission:urea-progressive-trust",
+      offerId: "demo:offer:urea-mombasa",
+      organizationId: "demo:org:cedarbridge-chemicals",
+      quantity: "1000",
+    },
+    {
+      missionId: "demo:mission:copper-inspection-assurance",
+      offerId: "demo:offer:copper-cathode-shanghai",
+      organizationId: "demo:org:atlas-vale-metals",
+      quantity: "25",
+    },
+  ] as const;
+
+  for (const hero of heroes) {
+    const value = harness();
+    const context = await qualifyAndStart(value);
+    assert.equal((await value.service.startMission(context, hero.missionId)).ok, true);
+    await value.service.getOffer(context, hero.offerId);
+    await value.service.getOrganization(context, hero.organizationId);
+    await value.service.getOffer(context, hero.offerId);
+    await value.service.getOfferEvidence(context, hero.offerId);
+
+    const order = await value.service.createOrder(context, {
+      offerId: hero.offerId,
+      quantity: hero.quantity,
+    });
+    assert.equal(order.ok, true);
+    if (!order.ok) throw new Error("Hero order missing");
+    assert.equal(order.value.scenarioId, hero.missionId);
+
+    assert.equal((await value.service.acceptOrder(context, order.value.orderId)).ok, true);
+    const contract = await value.service.createContract(context, order.value.orderId);
+    assert.equal(contract.ok, true);
+    if (!contract.ok) throw new Error("Hero contract missing");
+    assert.equal(contract.value.scenarioId, hero.missionId);
+    await value.service.getContract(context, contract.value.contractId);
+    const mission = await value.service.getMission(context, hero.missionId);
+    assert.equal(mission.ok && mission.value.progress?.completionState, "completed");
+  }
+});
+
 test("session ownership blocks cross-session order and contract access", async () => {
   const value = harness();
   const first = await qualifyAndStart(value, "first");

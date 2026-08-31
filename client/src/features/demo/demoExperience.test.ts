@@ -140,3 +140,25 @@ test("all production-facing Demo navigation consumes the raw route builder", () 
   assert.match(source, /demoRoutes\.order/);
   assert.match(source, /demoRoutes\.contract/);
 });
+
+test("free marketplace exploration never fabricates or looks up a Hero mission", () => {
+  const runtime = read("server/demo-runtime/applicationService.ts");
+  const orderPage = read("client/src/pages/demo-order.tsx");
+  const contractPage = read("client/src/pages/demo-contract.tsx");
+  const clientTypes = read("client/src/features/demo/types.ts");
+
+  assert.doesNotMatch(runtime, /demo:mission:marketplace-exploration/);
+  assert.match(runtime, /loaded\.value\.missions\.find/);
+  assert.match(orderPage, /if\(missionId\)setMission\(await demoApi\.getMission\(missionId\)\)/);
+  assert.match(contractPage, /value\.scenarioId \? await demoApi\.getMission\(value\.scenarioId\)/);
+  assert.match(clientTypes, /scenarioId\?: string/);
+
+  assert.equal(
+    demoRoutes.order("demo:order:free-exploration"),
+    "/demo/orders/demo:order:free-exploration",
+  );
+  assert.equal(
+    demoRoutes.contract("demo:contract:free-exploration"),
+    "/demo/contracts/demo:contract:free-exploration",
+  );
+});

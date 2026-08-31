@@ -97,7 +97,7 @@ export interface DemoOrder {
   readonly contractVersion: typeof DEMO_RUNTIME_CONTRACT_VERSION;
   readonly orderId: DemoId<"order">;
   readonly demoSessionId: DemoId<"session">;
-  readonly scenarioId: DemoId<"mission">;
+  readonly scenarioId?: DemoId<"mission">;
   readonly offerId: DemoId<"offer">;
   readonly buyerOrganizationId: DemoId<"org">;
   readonly sellerOrganizationId: DemoId<"org">;
@@ -115,7 +115,7 @@ export interface DemoOrderAcceptance {
   readonly contractVersion: typeof DEMO_RUNTIME_CONTRACT_VERSION;
   readonly acceptanceId: DemoId<"acceptance">;
   readonly demoSessionId: DemoId<"session">;
-  readonly scenarioId: DemoId<"mission">;
+  readonly scenarioId?: DemoId<"mission">;
   readonly orderId: DemoId<"order">;
   readonly acceptedAt: string;
   readonly mode: "deterministic_simulation";
@@ -127,7 +127,7 @@ export interface DemoContract {
   readonly contractVersion: typeof DEMO_RUNTIME_CONTRACT_VERSION;
   readonly contractId: DemoId<"contract">;
   readonly demoSessionId: DemoId<"session">;
-  readonly scenarioId: DemoId<"mission">;
+  readonly scenarioId?: DemoId<"mission">;
   readonly orderId: DemoId<"order">;
   readonly acceptanceId: DemoId<"acceptance">;
   readonly offerId: DemoId<"offer">;
@@ -265,7 +265,7 @@ export function createDemoOrder(
   if (
     !isDemoIdOfKind(input.orderId, "order") ||
     !isDemoIdOfKind(input.demoSessionId, "session") ||
-    !isDemoIdOfKind(input.scenarioId, "mission") ||
+    (input.scenarioId !== undefined && !isDemoIdOfKind(input.scenarioId, "mission")) ||
     !isDemoIdOfKind(input.offerId, "offer") ||
     !isDemoIdOfKind(input.buyerOrganizationId, "org") ||
     !isDemoIdOfKind(input.sellerOrganizationId, "org") ||
@@ -293,7 +293,7 @@ export function createDemoOrderAcceptance(
   if (
     !isDemoIdOfKind(input.acceptanceId, "acceptance") ||
     !isDemoIdOfKind(input.demoSessionId, "session") ||
-    !isDemoIdOfKind(input.scenarioId, "mission") ||
+    (input.scenarioId !== undefined && !isDemoIdOfKind(input.scenarioId, "mission")) ||
     !isDemoIdOfKind(input.orderId, "order") ||
     !validIso(input.acceptedAt)
   ) {
@@ -314,7 +314,7 @@ export function createDemoContract(
   if (
     !isDemoIdOfKind(input.contractId, "contract") ||
     !isDemoIdOfKind(input.demoSessionId, "session") ||
-    !isDemoIdOfKind(input.scenarioId, "mission") ||
+    (input.scenarioId !== undefined && !isDemoIdOfKind(input.scenarioId, "mission")) ||
     !isDemoIdOfKind(input.orderId, "order") ||
     !isDemoIdOfKind(input.acceptanceId, "acceptance") ||
     !isDemoIdOfKind(input.offerId, "offer") ||
