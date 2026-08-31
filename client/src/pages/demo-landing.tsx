@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { demoApi } from "@/features/demo/api";
 import { useDemoSession } from "@/features/demo/DemoContext";
+import { demoRoutes } from "@/features/demo/routes";
 import type { DemoMissionView } from "@/features/demo/types";
 
 export default function DemoLanding() {
@@ -17,7 +18,7 @@ export default function DemoLanding() {
     const mission = missions.find((item) => item.definition.offerId === "demo:offer:wti-houston") ?? missions[0];
     if (!mission) return;
     await demoApi.startMission(mission.definition.missionId);
-    navigate(`/demo/organizations/demo:org:aster-gulf-energy?mission=${encodeURIComponent(mission.definition.missionId)}`);
+    navigate(demoRoutes.organization("demo:org:aster-gulf-energy", mission.definition.missionId));
   };
   return <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
     <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 px-7 py-10 text-white sm:px-12 sm:py-14">

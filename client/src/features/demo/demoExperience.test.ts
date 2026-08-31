@@ -5,6 +5,8 @@ import test from "node:test";
 
 import { DEMO_OFFER_CATALOG } from "../../../../server/demo-runtime/fixtureCatalog.js";
 import { ASSURANCE_COPY, filterDemoOffers, HERO_OFFER_IDS } from "./presentation.js";
+import { demoRoutes } from "./routes.js";
+import { demoApi } from "./api.js";
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), "utf8");
@@ -66,4 +68,75 @@ test("verification links enter frontend UX and the session DTO exposes only qual
   const routes = read("server/demo-runtime/routes.ts");
   assert.match(routes, /visitor: state\.visitor/);
   assert.doesNotMatch(routes, /verifiedBusinessEmail/);
+});
+
+test("demo navigation keeps entity and Hero mission IDs raw", () => {
+  const paths = [
+    demoRoutes.offer("demo:offer:wti-houston"),
+    demoRoutes.organization("demo:org:aster-gulf-energy"),
+    demoRoutes.order("demo:order:generated-1"),
+    demoRoutes.contract("demo:contract:generated-1"),
+    demoRoutes.organization(
+      "demo:org:aster-gulf-energy",
+      "demo:mission:wti-complete-trade",
+    ),
+  ];
+
+  assert.deepEqual(paths, [
+    "/demo/offers/demo:offer:wti-houston",
+    "/demo/organizations/demo:org:aster-gulf-energy",
+    "/demo/orders/demo:order:generated-1",
+    "/demo/contracts/demo:contract:generated-1",
+    "/demo/organizations/demo:org:aster-gulf-energy?mission=demo:mission:wti-complete-trade",
+  ]);
+  assert.ok(paths.every((path) => !path.includes("%3A") && !path.includes("%253A")));
+});
+
+test("Demo API encodes raw route IDs exactly once, including unsafe URL characters", async () => {
+  const originalFetch = globalThis.fetch;
+  const requested: string[] = [];
+  globalThis.fetch = async (input) => {
+    requested.push(String(input));
+    return new Response("{}", {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  try {
+    await demoApi.getOffer("demo:offer:wti houston/unsafe?");
+    await demoApi.getOrganization("demo:org:aster-gulf-energy");
+    await demoApi.getMission("demo:mission:wti-complete-trade");
+    await demoApi.getOrder("demo:order:generated-1");
+    await demoApi.getContract("demo:contract:generated-1");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(requested, [
+    "/api/demo/offers/demo%3Aoffer%3Awti%20houston%2Funsafe%3F",
+    "/api/demo/organizations/demo%3Aorg%3Aaster-gulf-energy",
+    "/api/demo/missions/demo%3Amission%3Awti-complete-trade",
+    "/api/demo/orders/demo%3Aorder%3Agenerated-1",
+    "/api/demo/contracts/demo%3Acontract%3Agenerated-1",
+  ]);
+  assert.ok(requested.every((path) => !path.includes("%253A")));
+});
+
+test("all production-facing Demo navigation consumes the raw route builder", () => {
+  const source = [
+    "client/src/pages/demo-landing.tsx",
+    "client/src/pages/demo-marketplace.tsx",
+    "client/src/pages/demo-missions.tsx",
+    "client/src/pages/demo-organization.tsx",
+    "client/src/pages/demo-offer.tsx",
+    "client/src/pages/demo-order.tsx",
+  ].map(read).join("\n");
+
+  assert.doesNotMatch(source, /encodeURIComponent\(/);
+  assert.doesNotMatch(source, /%253A|demo%3A/);
+  assert.match(source, /demoRoutes\.offer/);
+  assert.match(source, /demoRoutes\.organization/);
+  assert.match(source, /demoRoutes\.order/);
+  assert.match(source, /demoRoutes\.contract/);
 });
