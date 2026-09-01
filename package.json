@@ -17,6 +17,7 @@
     "test:registration": "tsx --test server/registration.test.ts",
     "test:auth-runtime": "node --env-file=.env --import tsx --test scripts/auth/phase-4b.runtime.test.ts",
     "test:security-containment": "tsx --test server/security/criticalContainment.test.ts",
+    "test:platform-authority": "tsx --test server/platform-authority/platformAuthority.test.ts server/platform-authority/architecture.test.ts",
     "test:dashboard": "tsx --test server/dashboard.test.ts",
     "test:dashboard-runtime": "node --env-file=.env --import tsx --test scripts/dashboard/phase-4c.runtime.test.ts",
     "auth:migration": "node --env-file=.env --import tsx scripts/auth/auth-migration.ts",
