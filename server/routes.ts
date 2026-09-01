@@ -15,7 +15,6 @@ import { logAdminAction, AUDIT_ACTIONS } from "./auditLogger";
 import { 
   insertOfferSchema, 
   insertVerificationDocumentSchema,
-  insertCommoditySchema,
   insertInterestedOfferSchema 
 } from "@shared/schema";
 import { validateDocument } from "./services/aiValidation";
@@ -49,6 +48,14 @@ import { registerTradeTrustApplicationRoutes } from "./trade-trust-application/r
 import { registerDemoRuntimeRoutes } from "./demo-runtime/routes";
 import { createInMemoryDemoRuntime } from "./demo-runtime/runtimeComposition";
 import { containsDemoIdentifier } from "./demo-runtime/productionBoundaryGuard";
+import {
+  canCloseOwnedOffer,
+  canResolvePartnerRequest,
+  registerRetiredLegacyAuthorityRoutes,
+  toSafeContractResponse,
+  toSafeOfferResponse,
+  toSafePartnerResponse,
+} from "./security/criticalContainment";
 
 // Initialize Stripe
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -144,7 +151,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency
       });
       
-      res.json(updatedUser);
+      res.json({
+        language: updatedUser.language,
+        timezone: updatedUser.timezone,
+        notifications: updatedUser.notifications,
+        currency: updatedUser.currency,
+      });
     } catch (error) {
       console.error("Error updating preferences:", error);
       res.status(500).json({ message: "Failed to update preferences" });
@@ -306,21 +318,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/commodities', isAuthenticated, async (req: any, res) => {
-    try {
-      const validatedData = insertCommoditySchema.parse(req.body);
-      const commodity = await storage.createCommodity(validatedData);
-      
-      const userId = req.user.claims.sub;
-      await storage.logActivity(userId, "create_commodity", "commodity", commodity.id);
-      
-      res.status(201).json(commodity);
-    } catch (error) {
-      console.error("Error creating commodity:", error);
-      res.status(400).json({ message: "Failed to create commodity" });
-    }
-  });
-
   // Public marketplace reads use a dedicated, minimal projection. When either
   // authoritative verification field is unavailable, the repository returns
   // no rows rather than inferring trust from legacy data.
@@ -398,11 +395,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const userId = req.user.claims.sub;
         if (filter === 'my') {
-          return res.json(await storage.getOffers(userId));
+          return res.json((await storage.getOffers(userId)).map(toSafeOfferResponse));
         }
         const offers = (
           await storage.getUserInterestedOffers(userId)
-        ).map((item) => item.offer);
+        ).map((item) => toSafeOfferResponse(item.offer));
         return res.json(offers);
       }
 
@@ -449,33 +446,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Offer verification submission endpoint
-  app.post('/api/offers/:offerId/verify', isAuthenticated, async (req: any, res) => {
-    try {
-      const { offerId } = req.params;
-      const { documents, notes } = req.body;
-      const userId = req.user.claims.sub;
-
-      // Store verification submission
-      const verification = await storage.createOfferVerification({
-        offerId,
-        submittedBy: userId,
-        documents: JSON.stringify(documents),
-        notes: notes || '',
-        status: 'pending',
-        submittedAt: new Date(),
-      });
-
-      // Log business event
-      BusinessEvents.offerVerificationSubmitted(userId, offerId, Object.keys(documents).length);
-
-      res.status(201).json(verification);
-    } catch (error) {
-      console.error("Error submitting offer verification:", error);
-      res.status(500).json({ error: "Failed to submit verification" });
-    }
-  });
-
   app.get('/api/offers/search', async (req, res) => {
     try {
       const records = filterPublishedMarketplaceOffers(
@@ -497,18 +467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/offers/:id', isAuthenticated, async (req, res) => {
-    try {
-      const offer = await storage.getOfferById(req.params.id);
-      if (!offer) {
-        return res.status(404).json({ message: "Offer not found" });
-      }
-      res.json(offer);
-    } catch (error) {
-      console.error("Error fetching offer:", error);
-      res.status(500).json({ message: "Failed to fetch offer" });
-    }
-  });
+  registerRetiredLegacyAuthorityRoutes(app);
 
   app.post('/api/offers', isAuthenticated, async (req: any, res) => {
     try {
@@ -569,6 +528,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/offers/:id/status', isAuthenticated, async (req, res) => {
     try {
       const { status } = req.body;
+      const actorUserId = req.user!.claims.sub;
+      const offer = await storage.getOfferById(req.params.id);
+      if (!offer || !canCloseOwnedOffer(offer, actorUserId, status)) {
+        return res.status(404).json({ message: "Offer not found" });
+      }
       await storage.updateOfferStatus(req.params.id, status);
       res.json({ message: "Offer status updated successfully" });
     } catch (error) {
@@ -582,7 +546,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const interestedOffers = await storage.getUserInterestedOffers(userId);
-      res.json(interestedOffers);
+      res.json(interestedOffers.map((item) => ({
+        ...item,
+        offer: toSafeOfferResponse(item.offer),
+      })));
     } catch (error) {
       console.error("Error fetching interested offers:", error);
       res.status(500).json({ message: "Failed to fetch interested offers" });
@@ -706,7 +673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const contracts = await storage.getContracts(userId);
-      res.json(contracts);
+      res.json(contracts.map(toSafeContractResponse));
     } catch (error) {
       console.error("Error fetching contracts:", error);
       res.status(500).json({ message: "Failed to fetch contracts" });
@@ -726,7 +693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (contract.buyerId !== userId && contract.sellerId !== userId) {
         return res.status(404).json({ message: "Contract not found" });
       }
-      res.json(contract);
+      res.json(toSafeContractResponse(contract));
     } catch (error) {
       console.error("Error fetching contract:", error);
       res.status(500).json({ message: "Failed to fetch contract" });
@@ -770,6 +737,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const contract = await storage.getContractById(req.params.id);
       if (!contract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+      const userId = req.user!.claims.sub;
+      if (contract.buyerId !== userId && contract.sellerId !== userId) {
         return res.status(404).json({ message: "Contract not found" });
       }
       
@@ -910,33 +881,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/verification/pending', isAuthenticated, async (req, res) => {
-    try {
-      const pendingDocs = await storage.getPendingVerifications();
-      res.json(pendingDocs);
-    } catch (error) {
-      console.error("Error fetching pending verifications:", error);
-      res.status(500).json({ message: "Failed to fetch pending verifications" });
-    }
-  });
-
-  app.patch('/api/verification/:id/status', isAuthenticated, async (req, res) => {
-    try {
-      const { status, notes } = req.body;
-      await storage.updateVerificationStatus(req.params.id, status, undefined, notes);
-      res.json({ message: "Verification status updated successfully" });
-    } catch (error) {
-      console.error("Error updating verification status:", error);
-      res.status(500).json({ message: "Failed to update verification status" });
-    }
-  });
-
   // Partner routes
   app.get('/api/partners', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const partners = await storage.getPartnerRelations(userId);
-      res.json(partners);
+      res.json(partners.map(toSafePartnerResponse));
     } catch (error) {
       console.error("Error fetching partners:", error);
       res.status(500).json({ message: "Failed to fetch partners" });
@@ -959,6 +909,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/partners/:id/status', isAuthenticated, async (req, res) => {
     try {
       const { status } = req.body;
+      const relation = await storage.getPartnerRelationById(req.params.id);
+      const actorUserId = req.user!.claims.sub;
+      if (!relation || !canResolvePartnerRequest(relation, actorUserId, status)) {
+        return res.status(404).json({ message: "Partner relation not found" });
+      }
       await storage.updatePartnerRelationStatus(req.params.id, status);
       res.json({ message: "Partner relation status updated successfully" });
     } catch (error) {

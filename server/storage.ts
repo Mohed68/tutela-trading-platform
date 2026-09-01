@@ -127,6 +127,7 @@ export interface IStorage {
   
   // Partner operations
   getPartnerRelations(userId: string): Promise<(PartnerRelation & { requester: User; partner: User })[]>;
+  getPartnerRelationById(id: string): Promise<PartnerRelation | undefined>;
   createPartnerRelation(requesterId: string, partnerId: string, notes?: string): Promise<PartnerRelation>;
   updatePartnerRelationStatus(id: string, status: PartnerRelationStatus): Promise<void>;
   
@@ -709,6 +710,14 @@ export class DatabaseStorage implements IStorage {
     );
     
     return enrichedRelations;
+  }
+
+  async getPartnerRelationById(id: string): Promise<PartnerRelation | undefined> {
+    const [relation] = await db
+      .select()
+      .from(partnerRelations)
+      .where(eq(partnerRelations.id, id));
+    return relation;
   }
 
   async createPartnerRelation(requesterId: string, partnerId: string, notes?: string): Promise<PartnerRelation> {

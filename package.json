@@ -16,6 +16,7 @@
     "test:auth-characterization": "node --env-file=.env --import tsx --test server/password.test.ts server/auth.security.test.ts scripts/auth/recovery-user-lib.test.ts scripts/auth/legacy-auth.characterization.test.ts",
     "test:registration": "tsx --test server/registration.test.ts",
     "test:auth-runtime": "node --env-file=.env --import tsx --test scripts/auth/phase-4b.runtime.test.ts",
+    "test:security-containment": "tsx --test server/security/criticalContainment.test.ts",
     "test:dashboard": "tsx --test server/dashboard.test.ts",
     "test:dashboard-runtime": "node --env-file=.env --import tsx --test scripts/dashboard/phase-4c.runtime.test.ts",
     "auth:migration": "node --env-file=.env --import tsx scripts/auth/auth-migration.ts",
