@@ -4,9 +4,9 @@ import test from "node:test";
 import { Client } from "pg";
 import {
   applicationSchemaFingerprint,
-  requireRawDatabaseUrl,
   verifyRecoveryMarker,
 } from "../migrations/rehearsal-lib.js";
+import { requireTestDatabase } from "./test-database.js";
 
 const EXPECTED_FINGERPRINT =
   "1654ed34b5a19cef9edc6fe3e996553e59c370f311207a89348811f969e3def8";
@@ -69,10 +69,11 @@ async function stopServer(
 
 test(
   "controlled recovery exposes only anonymous auth characterization without writes",
-  { skip: !process.env.DATABASE_URL, timeout: 100_000 },
+  { timeout: 100_000 },
   async () => {
+    const testDatabase = requireTestDatabase();
     const client = new Client({
-      connectionString: requireRawDatabaseUrl(process.env.DATABASE_URL),
+      connectionString: testDatabase.connectionString,
     });
     let child: ReturnType<typeof spawn> | null = null;
     let step = "initialize";
@@ -92,6 +93,7 @@ test(
         cwd: process.cwd(),
         env: {
           ...process.env,
+          DATABASE_URL: testDatabase.connectionString,
           NODE_ENV: "test",
           TUTELA_RECOVERY_MODE: "true",
           DEMO_AUTH_BYPASS: "false",
@@ -167,4 +169,3 @@ test(
     }
   },
 );
-

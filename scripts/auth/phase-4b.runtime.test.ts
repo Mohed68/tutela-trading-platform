@@ -6,13 +6,13 @@ import { Client, type QueryResultRow } from "pg";
 import type { CurrentUserDto } from "../../shared/auth.js";
 import {
   applicationSchemaFingerprint,
-  requireRawDatabaseUrl,
   verifyRecoveryMarker,
 } from "../migrations/rehearsal-lib.js";
 import {
   readRecoveryCredentialInput,
   verifyRecoveryUserState,
 } from "./recovery-user-lib.js";
+import { requireTestDatabase } from "./test-database.js";
 
 const EXPECTED_FINGERPRINT =
   "aeb77478a423b407e5e69705f78b7948e8020411b7defa26f605568f616fc401";
@@ -114,11 +114,12 @@ async function stopServer(
   if (child.exitCode === null) child.kill("SIGKILL");
 }
 
-function startServer(): ReturnType<typeof spawn> {
+function startServer(connectionString: string): ReturnType<typeof spawn> {
   return spawn(process.execPath, ["dist/index.js"], {
     cwd: process.cwd(),
     env: {
       ...process.env,
+      DATABASE_URL: connectionString,
       NODE_ENV: "test",
       TUTELA_RECOVERY_MODE: "true",
       DEMO_AUTH_BYPASS: "false",
@@ -162,9 +163,10 @@ test(
   "real Passport session survives restart and is revoked by logout",
   { timeout: 300_000 },
   async () => {
+    const testDatabase = requireTestDatabase();
     const credential = readRecoveryCredentialInput(process.env);
     const client = new Client({
-      connectionString: requireRawDatabaseUrl(process.env.DATABASE_URL),
+      connectionString: testDatabase.connectionString,
     });
     let child: ReturnType<typeof spawn> | null = null;
     let step = "initialize";
@@ -194,7 +196,7 @@ test(
       await client.query("ROLLBACK");
 
       step = "startup";
-      child = startServer();
+      child = startServer(testDatabase.connectionString);
       await waitForServer(child);
 
       step = "anonymous";
@@ -262,7 +264,7 @@ test(
 
       step = "restart";
       await stopServer(child);
-      child = startServer();
+      child = startServer(testDatabase.connectionString);
       await waitForServer(child);
       const persisted = await authenticatedGet("/api/auth/user", cookie);
       assert.equal(persisted.status, 200);

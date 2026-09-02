@@ -3,9 +3,9 @@ import test from "node:test";
 import { Client } from "pg";
 import {
   applicationSchemaFingerprint,
-  requireRawDatabaseUrl,
   verifyRecoveryMarker,
 } from "../migrations/rehearsal-lib.js";
+import { requireTestDatabase } from "./test-database.js";
 
 const EXPECTED_FINGERPRINT =
   "aeb77478a423b407e5e69705f78b7948e8020411b7defa26f605568f616fc401";
@@ -20,10 +20,11 @@ const AUTH_COLUMNS = [
 
 test(
   "additive auth schema preserves disabled legacy identities",
-  { skip: !process.env.DATABASE_URL, timeout: 30_000 },
+  { timeout: 30_000 },
   async () => {
+    const testDatabase = requireTestDatabase();
     const client = new Client({
-      connectionString: requireRawDatabaseUrl(process.env.DATABASE_URL),
+      connectionString: testDatabase.connectionString,
     });
 
     try {
