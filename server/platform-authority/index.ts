@@ -19,6 +19,8 @@ export {
   type SessionAssurance,
 } from "./contracts.js";
 export {
+  type AuditedPlatformRoleGrant,
+  type AuditedPlatformRoleRevocation,
   type PlatformAuthorityMutationPort,
   type PlatformAuthorityReadPort,
   type PlatformOwnershipGovernancePolicy,

@@ -21,6 +21,8 @@
     "test:mfa": "tsx --test server/mfa/mfa.test.ts server/mfa/architecture.test.ts",
     "test:mfa:integration": "node --env-file=.env --import tsx --test scripts/auth/mfa.integration.test.ts",
     "test:admin-security": "tsx --test server/admin-security/adminSecurity.test.ts server/admin-security/architecture.test.ts",
+    "test:admin-data-plane": "tsx --test server/admin-security/dataPlane.test.ts",
+    "db:migrate:admin-security:test": "node --env-file=.env scripts/run-admin-security-migration.mjs --test",
     "db:migrate:mfa": "node scripts/run-mfa-migration.mjs",
     "db:migrate:mfa:test": "node --env-file=.env scripts/run-mfa-migration.mjs --test",
     "test:registration": "tsx --test server/registration.test.ts",

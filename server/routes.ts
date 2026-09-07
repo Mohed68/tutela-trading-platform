@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { randomUUID } from "node:crypto";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import {
@@ -10,7 +11,9 @@ import {
 } from "./auth";
 import { BusinessEvents } from "./monitoring";
 import Stripe from "stripe";
-import { requireAdminAuth, requirePermission, adminRateLimit } from "./adminAuth";
+import { configurePrivilegedAdminAuthorization, requireAdminAuth, requirePermission, adminRateLimit } from "./adminAuth";
+import { pool } from "./db";
+import { createPostgresPlatformAuthorityRepository, createSecurityAuditWriter, toAdminCompanySummary, toAdminOfferSummary, toSecurityAuditSummary } from "./admin-security";
 import { logAdminAction, AUDIT_ACTIONS } from "./auditLogger";
 import { 
   insertOfferSchema, 
@@ -75,6 +78,9 @@ const PRICE_MAP: Record<string, string> = {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+  const platformAuthorityRepository = createPostgresPlatformAuthorityRepository(pool);
+  configurePrivilegedAdminAuthorization(platformAuthorityRepository);
+  const securityAudit = createSecurityAuditWriter(pool);
   registerDemoRuntimeRoutes(app, createInMemoryDemoRuntime());
   registerDraftRoutes(app);
   registerTradeTrustApplicationRoutes(app);
@@ -1110,7 +1116,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.kybStatus && ['pending', 'in_review'].includes(user.kybStatus)
       );
       
-      res.json(kybQueue);
+      await securityAudit.recordAccess({ admin: req.adminSession, permission: "verification.queue.view", action: "verification_queue_viewed", targetType: "verification_queue", targetId: "current", reason: "Authorized verification queue access", requestId: randomUUID(), correlationId: randomUUID(), ip: req.ip, userAgent: req.get('User-Agent'), severity: "medium" });
+      res.json(kybQueue.map(toAdminCompanySummary));
     } catch (error) {
       console.error("KYB queue error:", error);
       res.status(500).json({ message: "Failed to fetch KYB queue" });
@@ -1119,6 +1126,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/admin/kyb/:companyId/decision', isAuthenticated, requireAdminAuth, requirePermission('verification.review.submit'), async (req: any, res) => {
     try {
+      return res.status(410).json({ message: "Legacy direct KYB decisions are retired; use the verification application service." });
+      /* c8 ignore next 45 -- retained temporarily as unreachable legacy reference pending isolated removal approval */
       const { companyId } = req.params;
       const { decision, reason, verificationLevel } = req.body;
       const adminSession = req.adminSession;
@@ -1143,7 +1152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 AUDIT_ACTIONS.KYB_REJECTED,
         entityType: "company",
         entityId: companyId,
-        beforeValue: { kybStatus: beforeUser.kybStatus, verificationLevel: beforeUser.verificationLevel },
+        beforeValue: { kybStatus: beforeUser!.kybStatus, verificationLevel: beforeUser!.verificationLevel },
         afterValue: { kybStatus: decision, verificationLevel },
         reason,
         ipAddress: req.ip,
@@ -1174,7 +1183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filteredOffers = filteredOffers.filter(offer => offer.moderationStatus === moderationStatus);
       }
 
-      res.json(filteredOffers);
+      res.json(filteredOffers.map(toAdminOfferSummary));
     } catch (error) {
       console.error("Admin offers error:", error);
       res.status(500).json({ message: "Failed to fetch offers" });
@@ -1183,6 +1192,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/admin/offers/:id/moderate', isAuthenticated, requireAdminAuth, requirePermission('offers.moderate'), async (req: any, res) => {
     try {
+      return res.status(410).json({ message: "Legacy moderation mutation is unavailable pending atomic security audit integration." });
+      /* c8 ignore next 42 -- retained temporarily as unreachable legacy reference pending isolated removal approval */
       const { id } = req.params;
       const { action, reason } = req.body;
       const adminSession = req.adminSession;
@@ -1209,7 +1220,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 AUDIT_ACTIONS.OFFER_ARCHIVED,
         entityType: "offer",
         entityId: id,
-        beforeValue: { moderationStatus: beforeOffer.moderationStatus || 'active' },
+        beforeValue: { moderationStatus: beforeOffer!.moderationStatus || 'active' },
         afterValue: { moderationStatus },
         reason,
         ipAddress: req.ip,
@@ -1271,18 +1282,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         startDate, endDate, limit = '50', offset = '0' 
       } = req.query;
       
-      const auditLogs = await storage.getAuditLogs({
-        userId: userId as string,
-        action: action as string,
-        entityType: entityType as string,
-        entityId: entityId as string,
-        startDate: startDate as string,
-        endDate: endDate as string,
-        limit: parseInt(limit as string),
-        offset: parseInt(offset as string)
-      });
+      const auditLogs = await securityAudit.listRecent(parseInt(limit as string), parseInt(offset as string));
 
-      res.json(auditLogs);
+      await securityAudit.recordAccess({ admin: req.adminSession, permission: "security.audit.view", action: "security_audit_viewed", targetType: "security_audit", targetId: "query", reason: "Authorized security audit access", requestId: randomUUID(), correlationId: randomUUID(), ip: req.ip, userAgent: req.get('User-Agent'), severity: "high" });
+      res.json(auditLogs.map(toSecurityAuditSummary));
     } catch (error) {
       console.error("Audit logs error:", error);
       res.status(500).json({ message: "Failed to fetch audit logs" });
@@ -1304,7 +1307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
       }
 
-      res.json(filteredUsers);
+      res.json(filteredUsers.map(toAdminCompanySummary));
     } catch (error) {
       console.error("Companies list error:", error);
       res.status(500).json({ message: "Failed to fetch companies" });
@@ -1313,6 +1316,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/admin/users/:id/toggle', isAuthenticated, requireAdminAuth, requirePermission('users.support.remediate'), async (req: any, res) => {
     try {
+      return res.status(410).json({ message: "Legacy account mutation is unavailable pending atomic security audit integration." });
+      /* c8 ignore next 30 -- retained temporarily as unreachable legacy reference pending isolated removal approval */
       const { id } = req.params;
       const { enabled } = req.body;
       const adminSession = req.adminSession;
