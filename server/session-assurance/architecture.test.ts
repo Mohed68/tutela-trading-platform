@@ -24,7 +24,15 @@ test("only successful server authentication establishes initial assurance", () =
   assert.match(auth, /req\.login\([\s\S]*markAuthenticated\(req\.session\)/);
   assert.doesNotMatch(
     auth,
-    /mark(?:Mfa|StepUp)Satisfied|markAuthenticated\([^)]*(?:body|headers|cookies)/,
+    /mark(?:Authenticated|Mfa|StepUp)Satisfied\([^)]*(?:body|headers|cookies)/,
+  );
+  assert.match(
+    auth,
+    /service\.verifyChallenge\([\s\S]*result\.status === "invalid"[\s\S]*markMfaSatisfied\(req\.session/,
+  );
+  assert.match(
+    auth,
+    /service\.verifyChallenge\([\s\S]*result\.method !== "totp"[\s\S]*markStepUpSatisfied\(req\.session/,
   );
   assert.doesNotMatch(
     auth,

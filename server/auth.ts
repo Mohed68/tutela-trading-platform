@@ -33,12 +33,22 @@ import {
   BUSINESS_EMAIL_REJECTION,
   usesBlockedPublicEmailDomain,
 } from "@shared/businessEmail";
-import { markAuthenticated } from "./session-assurance/index.js";
+import {
+  hasMfaAssurance,
+  markAuthenticated,
+  markMfaSatisfied,
+  markStepUpSatisfied,
+} from "./session-assurance/index.js";
+import {
+  TotpMfaService,
+  requireMfaEncryptionKey,
+} from "./mfa/index.js";
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const COOKIE_NAME = "tutela.sid";
 let sessionPool: PgPool | undefined;
 let unavailableCredentialHash: Promise<string> | undefined;
+let mfaService: TotpMfaService | null | undefined;
 
 export function getSessionCookieSettings(
   environment: NodeJS.ProcessEnv = process.env,
@@ -63,6 +73,19 @@ function getSessionPool(): PgPool {
     connectionTimeoutMillis: 10_000,
   });
   return sessionPool;
+}
+
+function getMfaService(): TotpMfaService | null {
+  if (mfaService !== undefined) return mfaService;
+  try {
+    mfaService = new TotpMfaService({
+      pool: getSessionPool(),
+      encryptionKey: requireMfaEncryptionKey(),
+    });
+  } catch {
+    mfaService = null;
+  }
+  return mfaService;
 }
 
 function toPassportUser(user: AuthenticationIdentity): Express.User {
@@ -197,6 +220,42 @@ const loginSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
   password: z.string().min(1),
 });
+
+const totpCodeSchema = z.string().trim().regex(/^\d{6}$/u);
+const mfaChallengeCodeSchema = z.string().trim().min(6).max(32);
+const enrollmentConfirmationSchema = z.object({
+  credentialId: z.string().uuid(),
+  code: totpCodeSchema,
+});
+
+const mfaLimiter = rateLimit({
+  windowMs: 15 * 60 * 1_000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { message: "Too many MFA attempts. Please try again later." },
+});
+
+function mfaUnavailable(res: Parameters<RequestHandler>[1]) {
+  return res.status(503).json({ message: "MFA is temporarily unavailable." });
+}
+
+function challengeResponse(
+  result: Awaited<ReturnType<TotpMfaService["verifyChallenge"]>>,
+  res: Parameters<RequestHandler>[1],
+) {
+  if (result.status === "locked") {
+    res.setHeader("Retry-After", result.retryAfterSeconds.toString());
+    return res.status(429).json({
+      message: "MFA verification is temporarily locked.",
+    });
+  }
+  if (result.status === "invalid") {
+    return res.status(401).json({ message: "Invalid MFA code." });
+  }
+  return null;
+}
 
 export async function setupAuth(app: Express) {
   if (process.env.NODE_ENV === "production") app.set("trust proxy", 1);
@@ -345,6 +404,136 @@ export async function setupAuth(app: Express) {
       });
     })(req, res, next);
   });
+
+  app.get("/api/auth/mfa/status", isAuthenticated, async (req, res, next) => {
+    const service = getMfaService();
+    if (!service) return mfaUnavailable(res);
+    try {
+      return res.json(await service.getStatus(req.user!.claims.sub));
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post(
+    "/api/auth/mfa/enrollment",
+    isAuthenticated,
+    mfaLimiter,
+    async (req, res, next) => {
+      const service = getMfaService();
+      if (!service) return mfaUnavailable(res);
+      try {
+        const user = await storage.getAuthenticationUser(req.user!.claims.sub);
+        if (!isLocallyAuthenticatable(user) || !user.email) {
+          return res.status(403).json({ message: "MFA enrollment unavailable." });
+        }
+        return res.status(201).json(
+          await service.beginEnrollment(user.id, user.email),
+        );
+      } catch (error) {
+        if (error instanceof Error && error.message === "MFA_ALREADY_ENROLLED") {
+          return res.status(409).json({ message: "MFA is already enrolled." });
+        }
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/auth/mfa/enrollment/confirm",
+    isAuthenticated,
+    mfaLimiter,
+    async (req, res, next) => {
+      const parsed = enrollmentConfirmationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid MFA confirmation." });
+      }
+      const service = getMfaService();
+      if (!service) return mfaUnavailable(res);
+      try {
+        const result = await service.confirmEnrollment({
+          userId: req.user!.claims.sub,
+          ...parsed.data,
+        });
+        if (result.status === "invalid" || result.status === "locked") {
+          return challengeResponse(result, res);
+        }
+        markMfaSatisfied(req.session, new Date());
+        return res.json(result);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "MFA_PENDING_ENROLLMENT_NOT_FOUND"
+        ) {
+          return res.status(404).json({ message: "MFA enrollment not found." });
+        }
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/auth/mfa/challenge",
+    isAuthenticated,
+    mfaLimiter,
+    async (req, res, next) => {
+      const parsed = mfaChallengeCodeSchema.safeParse(req.body?.code);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid MFA challenge." });
+      }
+      const service = getMfaService();
+      if (!service) return mfaUnavailable(res);
+      try {
+        const result = await service.verifyChallenge(
+          req.user!.claims.sub,
+          parsed.data,
+        );
+        if (result.status === "invalid" || result.status === "locked") {
+          return challengeResponse(result, res);
+        }
+        markMfaSatisfied(req.session, new Date());
+        return res.json({ assurance: "mfa", method: result.method });
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "MFA_ACTIVE_CREDENTIAL_NOT_FOUND"
+        ) {
+          return res.status(404).json({ message: "Active MFA not found." });
+        }
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/auth/mfa/step-up",
+    isAuthenticated,
+    mfaLimiter,
+    async (req, res, next) => {
+      const parsed = totpCodeSchema.safeParse(req.body?.code);
+      if (!parsed.success || !hasMfaAssurance(req.session)) {
+        return res.status(403).json({ message: "MFA assurance required." });
+      }
+      const service = getMfaService();
+      if (!service) return mfaUnavailable(res);
+      try {
+        const result = await service.verifyChallenge(
+          req.user!.claims.sub,
+          parsed.data,
+        );
+        if (result.status === "invalid" || result.status === "locked") {
+          return challengeResponse(result, res);
+        }
+        if (result.method !== "totp") {
+          return res.status(403).json({ message: "TOTP step-up required." });
+        }
+        markStepUpSatisfied(req.session, new Date());
+        return res.json({ assurance: "recent_step_up" });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
 
   const logout = (req: any, res: any, redirect: boolean) => {
     req.logout((logoutError: unknown) => {
