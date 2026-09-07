@@ -16,6 +16,8 @@
     "test:auth-characterization": "node --import tsx --import ./scripts/auth/unit-test-environment.ts --test server/password.test.ts server/auth.security.test.ts scripts/auth/recovery-user-lib.test.ts",
     "test:auth-test-db-contract": "tsx --test scripts/auth/test-database.test.ts",
     "test:auth:integration": "node --env-file=.env --import tsx --test scripts/auth/auth-session.integration.test.ts",
+    "test:session-assurance": "tsx --test server/session-assurance/sessionAssurance.test.ts server/session-assurance/architecture.test.ts",
+    "test:session-assurance:integration": "node --env-file=.env --import tsx --test scripts/auth/session-assurance.integration.test.ts",
     "test:registration": "tsx --test server/registration.test.ts",
     "test:auth-runtime": "node --env-file=.env --import tsx --test scripts/auth/phase-4b.runtime.test.ts",
     "test:security-containment": "tsx --test server/security/criticalContainment.test.ts",

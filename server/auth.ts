@@ -33,6 +33,7 @@ import {
   BUSINESS_EMAIL_REJECTION,
   usesBlockedPublicEmailDomain,
 } from "@shared/businessEmail";
+import { markAuthenticated } from "./session-assurance/index.js";
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const COOKIE_NAME = "tutela.sid";
@@ -311,6 +312,7 @@ export async function setupAuth(app: Express) {
       const passportUser = toPassportUser(identity);
       req.login(passportUser, (error) => {
         if (error) return next(error);
+        markAuthenticated(req.session);
         return res.json(toCurrentUserDto(identity));
       });
     } catch (error) {
@@ -334,6 +336,7 @@ export async function setupAuth(app: Express) {
       if (!user) return res.status(401).json({ message: info?.message ?? "Email or password is incorrect." });
       req.login(user, async (loginError) => {
         if (loginError) return next(loginError);
+        markAuthenticated(req.session);
         const storedUser = await storage.getAuthenticationUser(user.id);
         if (!isLocallyAuthenticatable(storedUser)) {
           return res.status(401).json({ message: "Email or password is incorrect." });

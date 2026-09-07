@@ -1,9 +1,11 @@
 import "express-session";
+import type { PrivilegedSessionSecurityContext } from "./session-assurance/contracts.js";
 
 declare module "express-session" {
   interface SessionData {
     demoAccessGrantId?: string;
     demoSessionId?: string;
+    privilegedSecurityContext?: PrivilegedSessionSecurityContext;
   }
 }
 
