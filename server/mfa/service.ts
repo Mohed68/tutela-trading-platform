@@ -323,6 +323,38 @@ export class TotpMfaService {
     }
   }
 
+  async revokeActiveCredential(userId: string, reason: string): Promise<void> {
+    if (!userId.trim() || !reason.trim()) {
+      throw new Error("MFA_REVOCATION_INPUT_INVALID");
+    }
+    const client = await this.#pool.connect();
+    const now = this.#clock.now();
+    try {
+      await client.query("BEGIN");
+      const row = await this.#lockedCredential(client, userId, "active");
+      if (!row) throw new Error("MFA_ACTIVE_CREDENTIAL_NOT_FOUND");
+      const revoked = await client.query(
+        `UPDATE public.user_mfa_credentials
+         SET status = 'revoked', revoked_at = $2, updated_at = $2,
+             version = version + 1
+         WHERE id = $1 AND status = 'active'`,
+        [row.id, now],
+      );
+      if (revoked.rowCount !== 1) throw new Error("MFA_REVOCATION_CONFLICT");
+      await client.query(
+        `UPDATE public.users SET is_2fa_enabled = false, updated_at = $2
+         WHERE id = $1`,
+        [userId, now],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async #lockedCredential(
     client: PoolClient,
     userId: string,

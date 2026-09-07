@@ -12,7 +12,7 @@ const source = productionFiles
   .map((name) => fs.readFileSync(path.join(capabilityRoot, name), "utf8"))
   .join("\n");
 
-test("Platform Authority remains server-only, dormant, and infrastructure free", () => {
+test("Platform Authority remains server-only and infrastructure free", () => {
   assert.doesNotMatch(
     source,
     /(?:client|localStorage|express|routes|database|drizzle|postgres|process\.env)/,
@@ -22,8 +22,8 @@ test("Platform Authority remains server-only, dormant, and infrastructure free",
     path.join(root, "server", "adminAuth.ts"),
     "utf8",
   );
-  assert.doesNotMatch(routes, /platform-authority/);
-  assert.doesNotMatch(adminAuth, /platform-authority/);
+  assert.doesNotMatch(routes, /resolvePlatformAuthority|createPlatformAuthority/);
+  assert.match(adminAuth, /platform-authority/);
 });
 
 test("Platform Authority does not consume Organization role or legacy Admin authority", () => {

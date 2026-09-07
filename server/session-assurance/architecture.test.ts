@@ -48,10 +48,10 @@ test("Passport login regenerates the session without preserving prior state", ()
   assert.doesNotMatch(auth, /keepSessionInfo\s*:\s*true/);
 });
 
-test("legacy Admin MFA interpretation remains isolated pending A1.2c", () => {
+test("Admin authorization consumes session assurance and rejects legacy MFA state", () => {
   const adminAuth = source("server/adminAuth.ts");
-  assert.match(adminAuth, /is2FAEnabled/);
-  assert.doesNotMatch(adminAuth, /session-assurance/);
+  assert.doesNotMatch(adminAuth, /is2FAEnabled|adminRole/);
+  assert.match(adminAuth, /session-assurance/);
 });
 
 test("account enrollment remains separate and public surface exposes no MFA implementation", () => {

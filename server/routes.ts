@@ -966,7 +966,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     '/api/admin/seed-demo-data',
     isAuthenticated,
     requireAdminAuth,
-    requirePermission("settings:update"),
+    requirePermission("commodity.catalog.manage"),
     async (req, res) => {
     try {
       await seedDemoData();
@@ -993,7 +993,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     '/api/admin/force-seed-production',
     isAuthenticated,
     requireAdminAuth,
-    requirePermission("settings:update"),
+    requirePermission("commodity.catalog.manage"),
     async (req, res) => {
     try {
       console.log("🔄 FORCE SEEDING: Clearing all existing data...");
@@ -1032,7 +1032,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     '/api/admin/clear-demo-data',
     isAuthenticated,
     requireAdminAuth,
-    requirePermission("settings:update"),
+    requirePermission("commodity.catalog.manage"),
     async (req, res) => {
     try {
       await clearDemoData();
@@ -1086,10 +1086,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         user: {
           id: adminSession.userId,
-          role: adminSession.role,
+          roles: adminSession.roles,
           permissions: adminSession.permissions,
-          requires2FA: adminSession.requires2FA,
-          is2FAVerified: adminSession.is2FAVerified
+          assurance: adminSession.assurance,
         }
       });
     } catch (error) {
@@ -1099,7 +1098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // KYB/KYC Management
-  app.get('/admin/kyb', isAuthenticated, requireAdminAuth, requirePermission('kyb:view'), async (req: any, res) => {
+  app.get('/admin/kyb', isAuthenticated, requireAdminAuth, requirePermission('verification.queue.view'), async (req: any, res) => {
     try {
       const { status, assignedTo } = req.query;
       const users = await storage.getAllUsers({ 
@@ -1118,7 +1117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/admin/kyb/:companyId/decision', isAuthenticated, requireAdminAuth, requirePermission('kyb:approve'), async (req: any, res) => {
+  app.post('/admin/kyb/:companyId/decision', isAuthenticated, requireAdminAuth, requirePermission('verification.review.submit'), async (req: any, res) => {
     try {
       const { companyId } = req.params;
       const { decision, reason, verificationLevel } = req.body;
@@ -1138,7 +1137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Log the admin action
       await logAdminAction({
         userId: adminSession.userId,
-        userRole: adminSession.role,
+        userRole: adminSession.roles.join(','),
         action: decision === 'verified' ? AUDIT_ACTIONS.KYB_APPROVED : 
                 decision === 'enhanced' ? AUDIT_ACTIONS.KYB_ENHANCED :
                 AUDIT_ACTIONS.KYB_REJECTED,
@@ -1162,7 +1161,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin Offers Management
-  app.get('/admin/offers', isAuthenticated, requireAdminAuth, requirePermission('offers:view'), async (req: any, res) => {
+  app.get('/admin/offers', isAuthenticated, requireAdminAuth, requirePermission('offers.moderate'), async (req: any, res) => {
     try {
       const { status, moderationStatus } = req.query;
       const offers = await storage.getOffers(undefined, true); // Include hidden offers
@@ -1182,7 +1181,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/admin/offers/:id/moderate', isAuthenticated, requireAdminAuth, requirePermission('offers:moderate'), async (req: any, res) => {
+  app.post('/admin/offers/:id/moderate', isAuthenticated, requireAdminAuth, requirePermission('offers.moderate'), async (req: any, res) => {
     try {
       const { id } = req.params;
       const { action, reason } = req.body;
@@ -1204,7 +1203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await logAdminAction({
         userId: adminSession.userId,
-        userRole: adminSession.role,
+        userRole: adminSession.roles.join(','),
         action: action === 'hide' ? AUDIT_ACTIONS.OFFER_HIDDEN :
                 action === 'unhide' ? AUDIT_ACTIONS.OFFER_UNHIDDEN :
                 AUDIT_ACTIONS.OFFER_ARCHIVED,
@@ -1228,7 +1227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin Insights
-  app.get('/admin/insights/market', isAuthenticated, requireAdminAuth, requirePermission('insights:view'), async (req: any, res) => {
+  app.get('/admin/insights/market', isAuthenticated, requireAdminAuth, requirePermission('offers.moderate'), async (req: any, res) => {
     try {
       const { export: exportCsv } = req.query;
       const insights = await storage.getMarketInsights();
@@ -1254,7 +1253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/admin/insights/compliance', isAuthenticated, requireAdminAuth, requirePermission('insights:view'), async (req: any, res) => {
+  app.get('/admin/insights/compliance', isAuthenticated, requireAdminAuth, requirePermission('verification.queue.view'), async (req: any, res) => {
     try {
       const insights = await storage.getComplianceInsights();
       res.json(insights);
@@ -1265,7 +1264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Audit Logs
-  app.get('/admin/audit', isAuthenticated, requireAdminAuth, requirePermission('audit:view'), async (req: any, res) => {
+  app.get('/admin/audit', isAuthenticated, requireAdminAuth, requirePermission('security.audit.view'), async (req: any, res) => {
     try {
       const { 
         userId, action, entityType, entityId, 
@@ -1291,7 +1290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Companies Management
-  app.get('/admin/companies', isAuthenticated, requireAdminAuth, requirePermission('users:view'), async (req: any, res) => {
+  app.get('/admin/companies', isAuthenticated, requireAdminAuth, requirePermission('users.support.view'), async (req: any, res) => {
     try {
       const { search, role, kybStatus } = req.query;
       const users = await storage.getAllUsers({ adminRole: role as string, kybStatus: kybStatus as string });
@@ -1312,7 +1311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/admin/users/:id/toggle', isAuthenticated, requireAdminAuth, requirePermission('users:toggle'), async (req: any, res) => {
+  app.post('/admin/users/:id/toggle', isAuthenticated, requireAdminAuth, requirePermission('users.support.remediate'), async (req: any, res) => {
     try {
       const { id } = req.params;
       const { enabled } = req.body;
@@ -1327,7 +1326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await logAdminAction({
         userId: adminSession.userId,
-        userRole: adminSession.role,
+        userRole: adminSession.roles.join(','),
         action: enabled ? AUDIT_ACTIONS.USER_ENABLED : AUDIT_ACTIONS.USER_DISABLED,
         entityType: "user",
         entityId: id,

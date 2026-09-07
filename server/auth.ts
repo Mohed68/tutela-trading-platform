@@ -35,10 +35,12 @@ import {
 } from "@shared/businessEmail";
 import {
   hasMfaAssurance,
+  hasRecentStepUp,
   markAuthenticated,
   markMfaSatisfied,
   markStepUpSatisfied,
 } from "./session-assurance/index.js";
+import { createPostgresSessionInvalidationPort } from "./admin-security/index.js";
 import {
   TotpMfaService,
   requireMfaEncryptionKey,
@@ -227,6 +229,7 @@ const enrollmentConfirmationSchema = z.object({
   credentialId: z.string().uuid(),
   code: totpCodeSchema,
 });
+const mfaRevocationSchema = z.object({ reason: z.string().trim().min(10).max(500) });
 
 const mfaLimiter = rateLimit({
   windowMs: 15 * 60 * 1_000,
@@ -530,6 +533,44 @@ export async function setupAuth(app: Express) {
         markStepUpSatisfied(req.session, new Date());
         return res.json({ assurance: "recent_step_up" });
       } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/auth/mfa/revoke",
+    isAuthenticated,
+    mfaLimiter,
+    async (req, res, next) => {
+      const parsed = mfaRevocationSchema.safeParse(req.body);
+      if (!parsed.success || !hasRecentStepUp(req.session)) {
+        return res.status(403).json({ message: "Recent step-up required." });
+      }
+      const service = getMfaService();
+      if (!service) return mfaUnavailable(res);
+      try {
+        const userId = req.user!.claims.sub;
+        await service.revokeActiveCredential(userId, parsed.data.reason);
+        await createPostgresSessionInvalidationPort(getSessionPool())
+          .invalidateUserSessions(userId);
+        req.logout((logoutError) => {
+          if (logoutError) return next(logoutError);
+          req.session.destroy((sessionError) => {
+            if (sessionError) return next(sessionError);
+            res.clearCookie(COOKIE_NAME, {
+              httpOnly: true,
+              sameSite: "lax",
+              secure: process.env.NODE_ENV === "production",
+              path: "/",
+            });
+            return res.json({ status: "revoked", sessionsInvalidated: true });
+          });
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === "MFA_ACTIVE_CREDENTIAL_NOT_FOUND") {
+          return res.status(404).json({ message: "Active MFA not found." });
+        }
         return next(error);
       }
     },
