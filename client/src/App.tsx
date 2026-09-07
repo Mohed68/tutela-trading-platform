@@ -56,6 +56,7 @@ import CheckoutSuccess from "@/pages/checkout-success";
 import AdminDashboard from "@/pages/AdminDashboard";
 import { AnimationShowcase } from "@/components/demo/AnimationShowcase";
 import { MonitoringDashboard } from "@/components/MonitoringDashboard";
+import { MfaSecuritySettings } from "@/features/security/MfaSecuritySettings";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -388,6 +389,7 @@ function Router() {
                   <div>
                     <h2 className="text-lg font-semibold text-neutral-900 mb-4">Account Settings</h2>
                     <p className="text-neutral-600 mb-4">Manage your account settings and preferences</p>
+                    <MfaSecuritySettings />
                   </div>
                   <PaymentSimulation />
                 </div>
