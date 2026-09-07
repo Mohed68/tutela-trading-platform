@@ -14,3 +14,6 @@ Status is evidence-based. “Planned” never means implemented or activated.
 A1.1 contains no persistence, migration, bootstrap, route, frontend integration,
 or production activation. The next proposed phase is A1.2 and still requires
 separate authorization.
+# A1.4 controlled activation update
+
+Durable Platform Ownership, locked first-owner bootstrap, normal succession, and the final-owner invariant are implemented by migration 0020. No Owner is auto-created and legacy or Organization roles supply no ownership authority. MFA enrollment and the minimal secure Control Plane are the activation boundary; broader operations remain outside this baseline.
