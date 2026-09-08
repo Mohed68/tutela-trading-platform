@@ -14,6 +14,7 @@ import {
   activateLocalAccount,
   registerLocalAccount,
   registerTemporaryDirectLocalAccount,
+  requestAuthenticatedEmailVerification,
   registrationSchema,
 } from "./registration";
 import { getRegistrationActivationMode } from "./registrationPolicy";
@@ -218,6 +219,15 @@ const registrationLimiter = rateLimit({
   },
 });
 
+const verificationResendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 6,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  message: { message: "Too many verification email requests. Please try again later." },
+});
+
 const loginSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
   password: z.string().min(1),
@@ -361,6 +371,44 @@ export async function setupAuth(app: Express) {
       return next(error);
     }
   });
+
+  app.post(
+    "/api/auth/email-verification/request",
+    isAuthenticated,
+    verificationResendLimiter,
+    async (req, res, next) => {
+      const configuration = getVerificationEmailConfiguration();
+      if (!configuration) {
+        return res.status(503).json({ message: "Email verification is temporarily unavailable." });
+      }
+      try {
+        const result = await requestAuthenticatedEmailVerification(
+          req.user!.claims.sub,
+          {
+            storage,
+            sender: createResendVerificationEmailSender(configuration),
+            applicationBaseUrl: configuration.applicationBaseUrl,
+          },
+        );
+        if (result.status === "already_verified") {
+          return res.json({ status: "already_verified" });
+        }
+        if (result.status === "cooldown") {
+          res.setHeader("Retry-After", result.retryAfterSeconds.toString());
+          return res.status(429).json({ message: "A verification email was sent recently. Please wait before trying again." });
+        }
+        if (result.status === "ineligible") {
+          return res.status(403).json({ message: "Email verification is unavailable for this account." });
+        }
+        return res.json({ status: "sent", email: result.email });
+      } catch (error) {
+        if (error instanceof Error && error.message === "EMAIL_VERIFICATION_DELIVERY_FAILED") {
+          return res.status(503).json({ message: "Email verification is temporarily unavailable." });
+        }
+        return next(error);
+      }
+    },
+  );
 
   app.post("/api/auth/verify-email", authLimiter, async (req, res, next) => {
     try {

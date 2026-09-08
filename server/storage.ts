@@ -61,6 +61,12 @@ export interface TemporaryDirectLocalRegistration {
   passwordHash: string;
 }
 
+export type AuthenticatedEmailVerificationAttempt =
+  | { status: "created"; email: string }
+  | { status: "already_verified" }
+  | { status: "cooldown"; retryAfterSeconds: number }
+  | { status: "ineligible" };
+
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
@@ -75,6 +81,17 @@ export interface IStorage {
   createTemporaryDirectLocalRegistration(
     registration: TemporaryDirectLocalRegistration,
   ): Promise<void>;
+  createAuthenticatedEmailVerificationAttempt(input: {
+    userId: string;
+    tokenDigest: string;
+    tokenExpiresAt: Date;
+    requestedAt: Date;
+    cooldownMs: number;
+  }): Promise<AuthenticatedEmailVerificationAttempt>;
+  discardAuthenticatedEmailVerificationAttempt(input: {
+    userId: string;
+    tokenDigest: string;
+  }): Promise<void>;
   activateLocalRegistration(
     tokenDigest: string,
     verifiedAt: Date,
@@ -355,6 +372,62 @@ export class DatabaseStorage implements IStorage {
     `);
   }
 
+  async createAuthenticatedEmailVerificationAttempt(input: {
+    userId: string;
+    tokenDigest: string;
+    tokenExpiresAt: Date;
+    requestedAt: Date;
+    cooldownMs: number;
+  }): Promise<AuthenticatedEmailVerificationAttempt> {
+    return db.transaction(async (transaction) => {
+      const locked = await transaction.execute<{
+        id: string;
+        email: string | null;
+        email_verified_at: Date | null;
+        auth_provider: string | null;
+        login_enabled: boolean | null;
+        credential_status: string | null;
+      }>(sql`
+        SELECT id, email, email_verified_at, auth_provider, login_enabled, credential_status
+        FROM public.users
+        WHERE id = ${input.userId}
+        FOR UPDATE
+      `);
+      const user = locked.rows[0];
+      if (!user || user.auth_provider !== "local" || user.login_enabled !== true || user.credential_status !== "active" || !user.email) {
+        return { status: "ineligible" };
+      }
+      if (user.email_verified_at) return { status: "already_verified" };
+
+      const latest = await transaction
+        .select({ createdAt: emailVerificationTokens.createdAt })
+        .from(emailVerificationTokens)
+        .where(and(eq(emailVerificationTokens.userId, user.id), isNull(emailVerificationTokens.consumedAt)))
+        .orderBy(desc(emailVerificationTokens.createdAt))
+        .limit(1);
+      const elapsed = latest[0]?.createdAt ? input.requestedAt.getTime() - latest[0].createdAt.getTime() : input.cooldownMs;
+      if (elapsed < input.cooldownMs) {
+        return { status: "cooldown", retryAfterSeconds: Math.max(1, Math.ceil((input.cooldownMs - elapsed) / 1000)) };
+      }
+
+      await transaction.insert(emailVerificationTokens).values({
+        userId: user.id,
+        tokenDigest: input.tokenDigest,
+        expiresAt: input.tokenExpiresAt,
+        createdAt: input.requestedAt,
+      });
+      return { status: "created", email: user.email };
+    });
+  }
+
+  async discardAuthenticatedEmailVerificationAttempt(input: { userId: string; tokenDigest: string }): Promise<void> {
+    await db.delete(emailVerificationTokens).where(and(
+      eq(emailVerificationTokens.userId, input.userId),
+      eq(emailVerificationTokens.tokenDigest, input.tokenDigest),
+      isNull(emailVerificationTokens.consumedAt),
+    ));
+  }
+
   async activateLocalRegistration(
     tokenDigest: string,
     verifiedAt: Date,
@@ -395,6 +468,7 @@ export class DatabaseStorage implements IStorage {
           emailVerifiedAt: verifiedAt,
           loginEnabled: true,
           credentialStatus: "active",
+          recoveryProvenance: null,
           updatedAt: verifiedAt,
         })
         .where(eq(users.id, token.userId));

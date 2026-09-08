@@ -9,6 +9,7 @@ import { hashPassword } from "./password.js";
 import type { IStorage } from "./storage.js";
 
 const EMAIL_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+export const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000;
 
 export const registrationSchema = z.object({
   firstName: z.string().trim().min(1).max(80),
@@ -45,6 +46,12 @@ export interface VerificationEmailSender {
 export interface RegistrationResult {
   accepted: true;
 }
+
+export type AuthenticatedEmailVerificationResult =
+  | { status: "sent"; email: string }
+  | { status: "already_verified" }
+  | { status: "cooldown"; retryAfterSeconds: number }
+  | { status: "ineligible" };
 
 export function digestEmailVerificationToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -137,4 +144,41 @@ export async function activateLocalAccount(
     digestEmailVerificationToken(parsed.token),
     dependencies.now ?? new Date(),
   );
+}
+
+export async function requestAuthenticatedEmailVerification(
+  authenticatedUserId: string,
+  dependencies: {
+    storage: Pick<IStorage, "createAuthenticatedEmailVerificationAttempt" | "discardAuthenticatedEmailVerificationAttempt">;
+    sender: VerificationEmailSender;
+    applicationBaseUrl: string;
+    now?: Date;
+  },
+): Promise<AuthenticatedEmailVerificationResult> {
+  if (!authenticatedUserId.trim()) return { status: "ineligible" };
+  const rawToken = randomBytes(32).toString("base64url");
+  const tokenDigest = digestEmailVerificationToken(rawToken);
+  const now = dependencies.now ?? new Date();
+  const attempt = await dependencies.storage.createAuthenticatedEmailVerificationAttempt({
+    userId: authenticatedUserId,
+    tokenDigest,
+    tokenExpiresAt: new Date(now.getTime() + EMAIL_TOKEN_TTL_MS),
+    requestedAt: now,
+    cooldownMs: EMAIL_VERIFICATION_RESEND_COOLDOWN_MS,
+  });
+  if (attempt.status !== "created") return attempt;
+
+  try {
+    await dependencies.sender.send({
+      recipient: attempt.email,
+      verificationUrl: buildEmailVerificationUrl(dependencies.applicationBaseUrl, rawToken),
+    });
+  } catch (error) {
+    await dependencies.storage.discardAuthenticatedEmailVerificationAttempt({
+      userId: authenticatedUserId,
+      tokenDigest,
+    });
+    throw error;
+  }
+  return { status: "sent", email: attempt.email };
 }

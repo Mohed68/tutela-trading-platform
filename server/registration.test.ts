@@ -8,6 +8,7 @@ import {
   digestEmailVerificationToken,
   registerLocalAccount,
   registerTemporaryDirectLocalAccount,
+  requestAuthenticatedEmailVerification,
   registrationSchema,
 } from "./registration.js";
 import { getRegistrationActivationMode } from "./registrationPolicy.js";
@@ -192,6 +193,93 @@ test("activation delegates only a token digest and explicit timestamp", async ()
   assert.equal(received!.at, now);
 });
 
+test("authenticated legacy account receives a secret verification link for its canonical email", async () => {
+  let stored: any;
+  let delivered: any;
+  const result = await requestAuthenticatedEmailVerification("authenticated-user", {
+    storage: {
+      async createAuthenticatedEmailVerificationAttempt(input) {
+        stored = input;
+        return { status: "created", email: "canonical@example.com" } as const;
+      },
+      async discardAuthenticatedEmailVerificationAttempt() { assert.fail("successful delivery must retain the digest"); },
+    },
+    sender: { async send(input) { delivered = input; } },
+    applicationBaseUrl: "https://tutela.example",
+    now: new Date("2026-09-08T12:00:00.000Z"),
+  });
+  assert.deepEqual(result, { status: "sent", email: "canonical@example.com" });
+  assert.equal(stored.userId, "authenticated-user");
+  assert.match(stored.tokenDigest, /^[a-f0-9]{64}$/);
+  assert.equal(stored.tokenExpiresAt.toISOString(), "2026-09-09T12:00:00.000Z");
+  assert.match(delivered.verificationUrl, /^https:\/\/tutela\.example\/verify-email\?token=/);
+  assert.equal(delivered.recipient, "canonical@example.com");
+  assert.doesNotMatch(JSON.stringify(result), /token/i);
+});
+
+test("verified and cooldown accounts do not receive unnecessary verification email", async () => {
+  for (const attempt of [{ status: "already_verified" } as const, { status: "cooldown", retryAfterSeconds: 45 } as const]) {
+    let sends = 0;
+    const result = await requestAuthenticatedEmailVerification("authenticated-user", {
+      storage: {
+        async createAuthenticatedEmailVerificationAttempt() { return attempt; },
+        async discardAuthenticatedEmailVerificationAttempt() { assert.fail("nothing was created"); },
+      },
+      sender: { async send() { sends += 1; } },
+      applicationBaseUrl: "https://tutela.example",
+    });
+    assert.deepEqual(result, attempt);
+    assert.equal(sends, 0);
+  }
+});
+
+test("failed authenticated delivery removes only its new secret token", async () => {
+  let discarded: any;
+  await assert.rejects(requestAuthenticatedEmailVerification("authenticated-user", {
+    storage: {
+      async createAuthenticatedEmailVerificationAttempt() { return { status: "created", email: "canonical@example.com" } as const; },
+      async discardAuthenticatedEmailVerificationAttempt(input) { discarded = input; },
+    },
+    sender: { async send() { throw new Error("EMAIL_VERIFICATION_DELIVERY_FAILED"); } },
+    applicationBaseUrl: "https://tutela.example",
+  }), /EMAIL_VERIFICATION_DELIVERY_FAILED/);
+  assert.equal(discarded.userId, "authenticated-user");
+  assert.match(discarded.tokenDigest, /^[a-f0-9]{64}$/);
+});
+
+test("authenticated verification HTTP boundary accepts no browser identity and grants no authority", () => {
+  const authSource = fs.readFileSync(path.join(process.cwd(), "server/auth.ts"), "utf8");
+  const route = authSource.slice(authSource.indexOf('"/api/auth/email-verification/request"'), authSource.indexOf('app.post("/api/auth/verify-email"'));
+  assert.match(route, /isAuthenticated/);
+  assert.match(route, /req\.user!\.claims\.sub/);
+  assert.doesNotMatch(route, /req\.body|targetUserId|targetEmail|PlatformOwnership|MfaService|markMfa/);
+});
+
+test("verification activation retires only temporary registration provenance", () => {
+  const storageSource = fs.readFileSync(path.join(process.cwd(), "server/storage.ts"), "utf8");
+  const activation = storageSource.slice(storageSource.indexOf("async activateLocalRegistration("), storageSource.indexOf("async discardPendingLocalRegistrationAttempt("));
+  assert.match(activation, /emailVerifiedAt:\s*verifiedAt/);
+  assert.match(activation, /recoveryProvenance:\s*null/);
+  assert.doesNotMatch(activation, /is_2fa_enabled|platform_ownership|platform_role/);
+  assert.match(activation, /token\.expiresAt\.getTime\(\) <= verifiedAt\.getTime\(\)/);
+  assert.match(activation, /consumedAt:\s*verifiedAt/);
+});
+
+test("correct token activates while expired and invalid tokens fail closed", async () => {
+  const raw = "v".repeat(32);
+  const digest = digestEmailVerificationToken(raw);
+  const expiry = new Date("2026-09-09T00:00:00.000Z");
+  const storage = {
+    async activateLocalRegistration(candidate: string, verifiedAt: Date) {
+      if (candidate !== digest || expiry.getTime() <= verifiedAt.getTime()) return undefined;
+      return { id: "legacy", email: "canonical@example.com", passwordHash: "present", authProvider: "local", lastLoginAt: null, loginEnabled: true, credentialStatus: "active", recoveryProvenance: null, role: "trader", emailVerifiedAt: verifiedAt };
+    },
+  };
+  assert.equal(await activateLocalAccount("x".repeat(32), { storage, now: new Date("2026-09-08T00:00:00.000Z") }), undefined);
+  assert.equal(await activateLocalAccount(raw, { storage, now: expiry }), undefined);
+  assert.equal((await activateLocalAccount(raw, { storage, now: new Date("2026-09-08T00:00:00.000Z") }))?.id, "legacy");
+});
+
 test("production email delivery requires every confidential setting", () => {
   assert.equal(
     getVerificationEmailConfiguration({ NODE_ENV: "production" }),
@@ -351,7 +439,7 @@ test("temporary direct registration is explicitly marked and never marks email v
   );
   const method = storageSource.slice(
     storageSource.indexOf("async createTemporaryDirectLocalRegistration("),
-    storageSource.indexOf("async activateLocalRegistration("),
+    storageSource.indexOf("async createAuthenticatedEmailVerificationAttempt("),
   );
 
   assert.match(method, /login_enabled[\s\S]*true/);
