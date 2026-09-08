@@ -11,9 +11,11 @@ import {
 } from "./auth";
 import { BusinessEvents } from "./monitoring";
 import Stripe from "stripe";
-import { configurePrivilegedAdminAuthorization, requireAdminAuth, requirePermission, adminRateLimit } from "./adminAuth";
+import { configurePrivilegedAdminAuthorization, requireAdminAuth, requirePermission, requirePlatformOwner, adminRateLimit } from "./adminAuth";
 import { pool } from "./db";
-import { createPostgresPlatformAuthorityRepository, createSecurityAuditWriter, toAdminCompanySummary, toAdminOfferSummary, toSecurityAuditSummary } from "./admin-security";
+import { createAdminControlPlaneReadModel, createPostgresPlatformAuthorityRepository, createSecurityAuditWriter, toAdminCompanySummary, toAdminOfferSummary, toSecurityAuditSummary } from "./admin-security";
+import { createPlatformAuthorityService, createPlatformRoleAdministrationPolicy, isPlatformRole } from "./platform-authority";
+import { createPlatformOwnershipService, createPostgresPlatformOwnershipRepository } from "./platform-ownership";
 import { logAdminAction, AUDIT_ACTIONS } from "./auditLogger";
 import { 
   insertOfferSchema, 
@@ -79,8 +81,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
   const platformAuthorityRepository = createPostgresPlatformAuthorityRepository(pool);
-  configurePrivilegedAdminAuthorization(platformAuthorityRepository);
+  const platformOwnershipRepository = createPostgresPlatformOwnershipRepository(pool);
+  const platformOwnershipService = createPlatformOwnershipService({ read: platformOwnershipRepository, mutations: platformOwnershipRepository });
+  configurePrivilegedAdminAuthorization(platformAuthorityRepository, platformOwnershipRepository);
   const securityAudit = createSecurityAuditWriter(pool);
+  const controlPlane = createAdminControlPlaneReadModel(pool);
+  const platformAuthorityService = createPlatformAuthorityService({
+    read: platformAuthorityRepository,
+    mutations: platformAuthorityRepository,
+    roleAdministrationPolicy: createPlatformRoleAdministrationPolicy({
+      platformOwnership: {
+        async authorizePlatformAdminRoleMutation(input) {
+          const assignments = await platformOwnershipRepository.listOwnershipAssignments(input.actorAuthority.principalId ?? undefined);
+          return input.context.sessionAssurance === "recent_step_up" && assignments.some((assignment) => assignment.status === "active");
+        },
+      },
+    }),
+  });
   registerDemoRuntimeRoutes(app, createInMemoryDemoRuntime());
   registerDraftRoutes(app);
   registerTradeTrustApplicationRoutes(app);
@@ -1095,12 +1112,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
           roles: adminSession.roles,
           permissions: adminSession.permissions,
           assurance: adminSession.assurance,
+          isPlatformOwner: adminSession.isPlatformOwner,
         }
       });
     } catch (error) {
       console.error("Admin auth info error:", error);
       res.status(500).json({ message: "Failed to get admin info" });
     }
+  });
+
+  app.get('/admin/control-plane/overview', isAuthenticated, requireAdminAuth, requirePermission('platform.roles.view'), async (_req, res) => {
+    try { return res.json(await controlPlane.overview()); }
+    catch { return res.status(500).json({ message: "Unable to load Control Plane overview" }); }
+  });
+  app.get('/admin/platform/owners', isAuthenticated, requireAdminAuth, requirePermission('platform.roles.view'), async (_req, res) => {
+    try { return res.json(await controlPlane.owners()); }
+    catch { return res.status(500).json({ message: "Unable to load Platform Owners" }); }
+  });
+  app.get('/admin/platform/principals', isAuthenticated, requireAdminAuth, requirePermission('platform.roles.view'), async (_req, res) => {
+    try { return res.json(await controlPlane.principals()); }
+    catch { return res.status(500).json({ message: "Unable to load Platform Principals" }); }
+  });
+  app.get('/admin/platform/role-assignments', isAuthenticated, requireAdminAuth, requirePermission('platform.roles.view'), async (_req, res) => {
+    try { return res.json(await controlPlane.roleAssignments()); }
+    catch { return res.status(500).json({ message: "Unable to load role assignments" }); }
+  });
+  app.post('/admin/platform/role-assignments', isAuthenticated, requireAdminAuth, requirePermission('platform.roles.grant'), async (req: any, res) => {
+    const { targetPrincipalId, role, reason } = req.body ?? {};
+    if (typeof targetPrincipalId !== 'string' || !isPlatformRole(role) || typeof reason !== 'string' || reason.trim().length < 10) return res.status(400).json({ message: "Valid target, role, and reason are required" });
+    const result = await platformAuthorityService.grantRole({ actorUserId: req.adminSession.userId, targetPrincipalId, role, reason, assignmentId: randomUUID(), auditEventId: randomUUID(), context: { requestId: randomUUID(), correlationId: randomUUID(), sessionAssurance: req.adminSession.assurance, authorizationScope: { resource: 'platform_role_assignment', targetPrincipalId, targetRole: role } }, occurredAt: new Date().toISOString() });
+    return res.status(result.status === 'completed' ? 201 : 403).json(result);
+  });
+  app.post('/admin/platform/role-assignments/:assignmentId/revoke', isAuthenticated, requireAdminAuth, requirePermission('platform.roles.revoke'), async (req: any, res) => {
+    const { reason } = req.body ?? {};
+    if (typeof reason !== 'string' || reason.trim().length < 10) return res.status(400).json({ message: "Valid reason is required" });
+    const existingAssignment = await platformAuthorityRepository.findRoleAssignmentById(req.params.assignmentId);
+    if (!existingAssignment || !isPlatformRole(existingAssignment.role)) return res.status(404).json({ message: "Active role assignment not found" });
+    const targetPrincipalId = existingAssignment.principalId;
+    const result = await platformAuthorityService.revokeRole({ actorUserId: req.adminSession.userId, targetPrincipalId, assignmentId: req.params.assignmentId, reason, auditEventId: randomUUID(), context: { requestId: randomUUID(), correlationId: randomUUID(), sessionAssurance: req.adminSession.assurance, authorizationScope: { resource: 'platform_role_assignment', targetPrincipalId, targetRole: existingAssignment.role } }, occurredAt: new Date().toISOString() });
+    return res.status(result.status === 'completed' ? 200 : 403).json(result);
+  });
+  app.post('/admin/platform/owners', isAuthenticated, requireAdminAuth, requirePlatformOwner, requirePermission('platform.roles.grant'), async (req: any, res) => {
+    const { targetPrincipalId, reason } = req.body ?? {};
+    if (typeof targetPrincipalId !== 'string' || typeof reason !== 'string' || reason.trim().length < 10) return res.status(400).json({ message: "Valid target and reason are required" });
+    const result = await platformOwnershipService.grantPlatformOwnership({ targetPrincipalId, assignmentId: randomUUID(), context: { actorUserId: req.adminSession.userId, actorPrincipalId: req.adminSession.principalId, sessionAssurance: req.adminSession.assurance, reason, requestId: randomUUID(), correlationId: randomUUID(), auditEventId: randomUUID(), occurredAt: new Date().toISOString() } });
+    return res.status(result.status === 'completed' ? 201 : 403).json(result);
+  });
+  app.post('/admin/platform/owners/:assignmentId/revoke', isAuthenticated, requireAdminAuth, requirePlatformOwner, requirePermission('platform.roles.revoke'), async (req: any, res) => {
+    const { reason } = req.body ?? {};
+    if (typeof reason !== 'string' || reason.trim().length < 10) return res.status(400).json({ message: "Valid reason is required" });
+    const existingAssignment = (await platformOwnershipRepository.listOwnershipAssignments()).find((assignment) => assignment.assignmentId === req.params.assignmentId && assignment.status === 'active');
+    if (!existingAssignment) return res.status(404).json({ message: "Active ownership assignment not found" });
+    const targetPrincipalId = existingAssignment.principalId;
+    const result = await platformOwnershipService.revokePlatformOwnership({ assignmentId: req.params.assignmentId, targetPrincipalId, context: { actorUserId: req.adminSession.userId, actorPrincipalId: req.adminSession.principalId, sessionAssurance: req.adminSession.assurance, reason, requestId: randomUUID(), correlationId: randomUUID(), auditEventId: randomUUID(), occurredAt: new Date().toISOString() } });
+    return res.status(result.status === 'completed' ? 200 : 403).json(result);
   });
 
   // KYB/KYC Management

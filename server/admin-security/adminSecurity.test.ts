@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionData } from "express-session";
 import { ADMIN_ACTION_ASSURANCE, satisfiesAdminActionAssurance } from "./index.js";
-import { configurePrivilegedAdminAuthorization, requireAdminAuth, requirePermission } from "../adminAuth.js";
+import { configurePrivilegedAdminAuthorization, requireAdminAuth, requirePermission, requirePlatformOwner } from "../adminAuth.js";
 import { markAuthenticated, markMfaSatisfied, markStepUpSatisfied } from "../session-assurance/index.js";
 import type { PlatformAuthorityReadPort } from "../platform-authority/index.js";
+import type { PlatformOwnershipReadPort } from "../platform-ownership/index.js";
 
 const now = new Date();
 const read: PlatformAuthorityReadPort = {
@@ -59,4 +60,38 @@ test("legacy role and is2FAEnabled cannot forge authority or assurance", async (
 test("MFA and recent step-up requirements fail closed", () => {
   assert.equal(satisfiesAdminActionAssurance("security.audit.view", "authenticated"), false);
   assert.equal(satisfiesAdminActionAssurance("verification.review.submit", "mfa"), false);
+});
+
+test("an authentic Platform Owner can enter the bounded control plane without a Platform role", async () => {
+  const roleless: PlatformAuthorityReadPort = { ...read, async listRoleAssignments() { return []; } };
+  const ownership: PlatformOwnershipReadPort = {
+    async findPrincipalIdByUserId() { return "principal-1"; },
+    async listOwnershipAssignments() { return [{ assignmentId: "owner-1", principalId: "principal-1", status: "active", authoritySource: "initial_bootstrap", grantedByPrincipalId: null, grantedAt: now.toISOString(), grantReason: "Controlled initial platform ownership", revokedByPrincipalId: null, revokedAt: null, revocationReason: null, version: 1 }]; },
+  };
+  configurePrivilegedAdminAuthorization(roleless, ownership);
+  const req: any = { user: { claims: { sub: "user-1" } }, session: session("recent_step_up") };
+  const res: any = response();
+  let entered = false;
+  await requireAdminAuth(req, res, () => { entered = true; });
+  assert.equal(entered, true);
+  assert.equal(req.adminSession.isPlatformOwner, true);
+  assert.equal(req.adminSession.permissions.includes("platform.roles.view"), true);
+  let ownerAccepted = false;
+  requirePlatformOwner(req, res, () => { ownerAccepted = true; });
+  assert.equal(ownerAccepted, true);
+});
+
+test("legacy and organization ownership claims cannot impersonate Platform Ownership", async () => {
+  configurePrivilegedAdminAuthorization(read, {
+    async findPrincipalIdByUserId() { return "principal-1"; },
+    async listOwnershipAssignments() { return []; },
+  });
+  const req: any = { user: { claims: { sub: "user-1" }, role: "owner", adminRole: "admin" }, session: session("recent_step_up") };
+  const res: any = response();
+  await requireAdminAuth(req, res, () => undefined);
+  assert.equal(req.adminSession.isPlatformOwner, false);
+  let ownerAccepted = false;
+  requirePlatformOwner(req, res, () => { ownerAccepted = true; });
+  assert.equal(ownerAccepted, false);
+  assert.equal(res.statusCode, 403);
 });

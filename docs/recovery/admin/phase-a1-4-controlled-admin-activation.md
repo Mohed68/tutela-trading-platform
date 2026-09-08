@@ -20,6 +20,8 @@ The Security settings experience uses the existing server MFA APIs. Enrollment r
 
 Admin access requires authentication, Platform Principal resolution, Platform Role or Ownership authority, and the centrally required Session Assurance. The minimal Control Plane exposes only safe read models and clearly labels inactive modules as `DEFINED` or `ACTIVE_BASELINE`.
 
+The active shell includes Overview, Organizations & Users, Verification, Risk, Enforcement, Trade Operations, Documents, Shipping & Fulfilment, Settlement & Finance, Claims & Disputes, Support, Platform Administration, and Security & Audit. Only the Platform Administration and Security/Audit foundations are active; other modules remain honestly labelled. Controllers accept requested targets and reasons, while server repositories resolve existing assignment ownership and the domain services remain the sole mutation authority. Platform Owner permissions are explicitly bounded to administration and security and cannot manufacture business truth.
+
 ## Deployment and rollback
 
 Migration 0020 is additive and creates no Owner automatically. Deploy code, apply 0020, restart, verify health and denial before bootstrap, then run the explicit bootstrap only after owner selection. Code rollback returns to the pre-A1.4 HEAD; the additive ownership tables remain forward-compatible. Ownership bootstrap is not rolled back by deleting history—succession must be used.

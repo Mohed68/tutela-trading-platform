@@ -37,17 +37,10 @@ export function createPlatformRoleAdministrationPolicy(dependencies: {
         input.operation === "grant"
           ? "platform.roles.grant"
           : "platform.roles.revoke";
-      if (!hasPlatformPermission(input.actorAuthority, effectivePermission)) {
-        return deny(
-          input.operation === "grant"
-            ? "platform_role_grant_denied"
-            : "platform_role_revocation_denied",
-        );
+      if (input.context.sessionAssurance !== "recent_step_up") {
+        return deny("recent_step_up_required");
       }
       if (input.targetRole === "PLATFORM_ADMIN") {
-        if (input.context.sessionAssurance !== "recent_step_up") {
-          return deny("recent_step_up_required");
-        }
         const ownerAuthorized =
           await dependencies.platformOwnership.authorizePlatformAdminRoleMutation(
             input,
@@ -55,6 +48,14 @@ export function createPlatformRoleAdministrationPolicy(dependencies: {
         if (!ownerAuthorized) {
           return deny("platform_owner_authority_required");
         }
+        return Object.freeze({ authorized: true, effectivePermission });
+      }
+      if (!hasPlatformPermission(input.actorAuthority, effectivePermission)) {
+        return deny(
+          input.operation === "grant"
+            ? "platform_role_grant_denied"
+            : "platform_role_revocation_denied",
+        );
       }
       return Object.freeze({ authorized: true, effectivePermission });
     },

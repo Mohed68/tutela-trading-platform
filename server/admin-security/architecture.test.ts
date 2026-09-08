@@ -18,6 +18,13 @@ test("controllers request permissions but cannot manufacture authority or assura
   assert.doesNotMatch(routes, /requirePermission\(['"](?:kyb:|users:|offers:|audit:|settings:|insights:)/);
 });
 
+test("Platform Owner resolution is server-side and canonical truth remains unreachable", () => {
+  assert.match(adminAuth, /createPlatformOwnershipService/);
+  assert.match(adminAuth, /isPlatformOwner/);
+  assert.doesNotMatch(adminAuth + routes, /(?:create|set|override).*(?:Trust|VerificationDecision|Eligibility)/i);
+  assert.doesNotMatch(routes, /adminRole.*requireAdminAuth|is2FAEnabled.*requireAdminAuth/);
+});
+
 test("session invalidation is bounded to authenticated session rows", () => {
   const source = readFileSync(join(root, "server/admin-security/sessionInvalidation.ts"), "utf8");
   assert.match(source, /sess #>> '\{passport,user\}' = \$1/);

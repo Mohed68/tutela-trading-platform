@@ -120,7 +120,7 @@ function authorityService(store: AuthorityStore, ownerAuthorized = false) {
 
 function commandContext(
   targetRole: PlatformRole,
-  sessionAssurance: SessionAssurance = "authenticated",
+  sessionAssurance: SessionAssurance = "recent_step_up",
 ) {
   return {
     requestId: `request-${targetRole}`,
@@ -136,7 +136,7 @@ function commandContext(
 
 function grantCommand(
   role = "SUPPORT",
-  sessionAssurance: SessionAssurance = "authenticated",
+  sessionAssurance: SessionAssurance = "recent_step_up",
 ) {
   return {
     actorUserId: "user-admin",
@@ -288,7 +288,7 @@ test("role grants require an authorized actor and atomically bind audit evidence
   assert.equal(store.audits[0]?.actorPrincipalId, "principal-admin");
   assert.equal(store.audits[0]?.targetPrincipalId, "principal-target");
   assert.equal(store.audits[0]?.effectivePermission, "platform.roles.grant");
-  assert.equal(store.audits[0]?.sessionAssurance, "authenticated");
+  assert.equal(store.audits[0]?.sessionAssurance, "recent_step_up");
   assert.equal(store.audits[0]?.securitySeverity, "high");
 });
 
@@ -435,6 +435,22 @@ test("PLATFORM_ADMIN cannot revoke PLATFORM_ADMIN without Platform Owner authori
     code: "platform_owner_authority_required",
   });
   assert.equal(store.assignments.get("assignment-target-admin")?.status, "active");
+});
+
+test("Platform Owner with recent step-up can govern PLATFORM_ADMIN without inheriting that role", async () => {
+  const store = new AuthorityStore();
+  store.addPrincipal("principal-admin", "user-admin");
+  store.addPrincipal("principal-target", "user-target");
+
+  const result = await authorityService(store, true).grantRole(
+    grantCommand("PLATFORM_ADMIN", "recent_step_up"),
+  );
+  assert.equal(result.status, "completed");
+  const actor = await resolvePlatformAuthority("user-admin", store);
+  assert.deepEqual(actor.activeRoles, []);
+  assert.deepEqual(actor.permissions, []);
+  assert.equal(store.assignments.get("assignment-PLATFORM_ADMIN")?.role, "PLATFORM_ADMIN");
+  assert.equal(store.audits[0]?.sessionAssurance, "recent_step_up");
 });
 
 test("owner-sensitive policy fails closed when ownership authority is unavailable", async () => {

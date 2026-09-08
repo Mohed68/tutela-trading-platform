@@ -53,7 +53,7 @@ import Insights from "@/pages/insights";
 import Checkout from "@/pages/checkout";
 import MyDrafts from "@/pages/MyDrafts";
 import CheckoutSuccess from "@/pages/checkout-success";
-import AdminDashboard from "@/pages/AdminDashboard";
+import SecureAdminControlPlane from "@/pages/SecureAdminControlPlane";
 import { AnimationShowcase } from "@/components/demo/AnimationShowcase";
 import { MonitoringDashboard } from "@/components/MonitoringDashboard";
 import { MfaSecuritySettings } from "@/features/security/MfaSecuritySettings";
@@ -334,7 +334,7 @@ function Router() {
           {/* Admin Routes */}
           <Route path="/admin/:section?">
             <AdminRoute>
-              <AdminDashboard />
+              <SecureAdminControlPlane />
             </AdminRoute>
           </Route>
           

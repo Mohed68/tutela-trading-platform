@@ -14,6 +14,13 @@ export const ADMIN_ACTION_ASSURANCE: Readonly<Record<PlatformPermission, Session
   "security.audit.view": "mfa",
 });
 
+export const PLATFORM_OWNER_ADMIN_PERMISSIONS: readonly PlatformPermission[] = Object.freeze([
+  "platform.roles.view",
+  "platform.roles.grant",
+  "platform.roles.revoke",
+  "security.audit.view",
+]);
+
 const assuranceRank: Readonly<Record<SessionAssurance, number>> = Object.freeze({
   authenticated: 1,
   mfa: 2,

@@ -22,6 +22,7 @@
     "test:mfa:integration": "node --env-file=.env --import tsx --test scripts/auth/mfa.integration.test.ts",
     "test:admin-security": "tsx --test server/admin-security/adminSecurity.test.ts server/admin-security/architecture.test.ts",
     "test:admin-data-plane": "tsx --test server/admin-security/dataPlane.test.ts",
+    "test:admin-control-plane": "tsx --test server/admin-security/adminSecurity.test.ts server/admin-security/controlPlaneReadModel.test.ts server/admin-security/architecture.test.ts client/src/pages/secureAdminControlPlane.test.ts",
     "db:migrate:admin-security:test": "node --env-file=.env scripts/run-admin-security-migration.mjs --test",
     "test:platform-ownership": "tsx --test server/platform-ownership/platformOwnership.test.ts server/platform-ownership/architecture.test.ts",
     "test:mfa-frontend": "tsx --test client/src/features/security/mfaSecurity.test.ts",

@@ -22,7 +22,8 @@ test("Platform Authority remains server-only and infrastructure free", () => {
     path.join(root, "server", "adminAuth.ts"),
     "utf8",
   );
-  assert.doesNotMatch(routes, /resolvePlatformAuthority|createPlatformAuthority/);
+  assert.doesNotMatch(routes, /resolvePlatformAuthority/);
+  assert.match(routes, /createPlatformAuthorityService/);
   assert.match(adminAuth, /platform-authority/);
 });
 

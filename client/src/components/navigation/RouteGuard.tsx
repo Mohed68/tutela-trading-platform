@@ -76,11 +76,31 @@ export function PartnerRoute({ children }: { children: React.ReactNode }) {
 }
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {
-  return (
-    <RouteGuard requireVerified={true} requireRoles={["admin"]}>
-      {children}
-    </RouteGuard>
-  );
+  const [, setLocation] = useLocation();
+  const [state, setState] = React.useState<"loading" | "allowed" | "denied">("loading");
+
+  React.useEffect(() => {
+    let current = true;
+    fetch("/admin/auth/info", { credentials: "include" }).then((response) => {
+      if (!current) return;
+      if (response.ok) setState("allowed");
+      else {
+        setState("denied");
+        setLocation(response.status === 401 ? "/login" : "/dashboard");
+      }
+    }).catch(() => {
+      if (current) {
+        setState("denied");
+        setLocation("/dashboard");
+      }
+    });
+    return () => { current = false; };
+  }, [setLocation]);
+
+  if (state !== "allowed") {
+    return state === "loading" ? <p className="p-8 text-sm text-neutral-600">Checking platform authority…</p> : null;
+  }
+  return <>{children}</>;
 }
 
 export function ComplianceRoute({ children }: { children: React.ReactNode }) {

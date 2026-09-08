@@ -261,10 +261,7 @@ export function createPlatformAuthorityService(dependencies: {
         command.actorUserId,
         dependencies.read,
       );
-      if (
-        !authority.principalId ||
-        !hasPlatformPermission(authority, "platform.roles.revoke")
-      ) {
+      if (!authority.principalId) {
         return Object.freeze({
           status: "denied",
           code: "platform_role_revocation_denied",
