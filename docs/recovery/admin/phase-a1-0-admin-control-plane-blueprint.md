@@ -73,6 +73,30 @@ The following are non-negotiable:
 
 Base Platform roles are permission bundles, not identities or wildcards: `PLATFORM_ADMIN`, `VERIFICATION_REVIEWER`, `OPERATIONS`, and `SUPPORT`. Platform Owner is a separate concept. Permissions remain atomic, typed, and named by domain capability. Context policy must be designed to later constrain an otherwise valid permission by region, jurisdiction, commodity, case type, and risk tier without redesigning RBAC. Scope checks are evaluated with the command's target/context, never inferred from a screen or client-supplied role.
 
+### Platform workforce, personal identity, and delegated authority
+
+Platform workforce identity and authority are separate from marketplace Organization identity. The administrative authority chain is:
+
+`Human Identity → Personal Identity Assurance / future KYC → Platform Affiliation → Platform Principal → Role / Permission / Scope → Session Assurance → Platform Administrative Authority`
+
+The separate commercial authority chain is:
+
+`Organization → KYB / Organization Verification → Trust → Trading Eligibility → Marketplace Participation`
+
+The permanent invariants are:
+
+- Organization KYB ≠ Platform Admin Eligibility.
+- Organization Membership ≠ Platform Authority.
+- Organization Owner ≠ Platform Owner.
+- Trading Eligibility ≠ Administrative Authority.
+- Platform Role ≠ Marketplace Role.
+- Personal KYC ≠ Organization KYB.
+- Partner Delegation ≠ unrestricted Platform authority.
+
+The one-time `PLATFORM_OWNER_IDENTITY_CORRECTION` command is a controlled server/recovery authority for correcting only the initial bootstrap identity. It does not represent an HTTP user session, MFA satisfaction, or `recent_step_up`; it is locked, atomic, critically audited, rejects any later different transfer, and leaves normal ownership succession policy unchanged.
+
+Future **Platform Workforce & Delegated Authority** must model founders and Platform Owners, TUTELA employees, contractors and freelancers, advisers, and partner-delegated personnel. It must bind personal identity/KYC assurance, Platform affiliation, role and permission scopes, delegation expiry/revocation, privileged session assurance, and Security Audit. Personal KYC is a future policy input and is not a current A1.4 Platform Owner eligibility blocker.
+
 ## Full-control model: authorized commands, never database editing
 
 Full operational control means access to authorized, validated application commands. It does not mean unrestricted SQL or raw-entity editing.

@@ -1,5 +1,8 @@
 export type PlatformOwnershipStatus = "active" | "revoked";
-export type PlatformOwnershipAuthoritySource = "initial_bootstrap" | "owner_succession";
+export type PlatformOwnershipAuthoritySource =
+  | "initial_bootstrap"
+  | "owner_succession"
+  | "initial_owner_correction";
 
 export interface PlatformOwnershipAssignment {
   readonly assignmentId: string;
