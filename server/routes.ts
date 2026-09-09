@@ -1137,6 +1137,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try { return res.json(await controlPlane.roleAssignments()); }
     catch { return res.status(500).json({ message: "Unable to load role assignments" }); }
   });
+  app.get('/admin/control-plane/users', isAuthenticated, requireAdminAuth, requirePermission('users.support.view'), async (_req, res) => {
+    try { return res.json(await controlPlane.users()); }
+    catch { return res.status(500).json({ message: "Unable to load safe user records" }); }
+  });
   app.post('/admin/platform/role-assignments', isAuthenticated, requireAdminAuth, requirePermission('platform.roles.grant'), async (req: any, res) => {
     const { targetPrincipalId, role, reason } = req.body ?? {};
     if (typeof targetPrincipalId !== 'string' || !isPlatformRole(role) || typeof reason !== 'string' || reason.trim().length < 10) return res.status(400).json({ message: "Valid target, role, and reason are required" });

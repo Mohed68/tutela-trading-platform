@@ -15,8 +15,10 @@ test("Control Plane overview is bounded and labels inactive modules honestly", a
 test("Control Plane identity rows never select raw user or credential fields", async () => {
   const statements: string[] = [];
   const model = createAdminControlPlaneReadModel({ async query(sql) { statements.push(sql); return { rows: [] }; } });
-  await model.owners(); await model.principals(); await model.roleAssignments();
+  await model.owners(); await model.principals(); await model.roleAssignments(); await model.users();
   const sql = statements.join("\n");
   assert.doesNotMatch(sql, /SELECT\s+\*|email|password|phone|address|session|credential/i);
   assert.match(sql, /principal_id/);
+  assert.match(sql, /email_verified_at/);
+  assert.doesNotMatch(sql, /password_hash|encrypted_secret|recovery_code|sessions/i);
 });

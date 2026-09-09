@@ -22,7 +22,19 @@ test("Control Plane exposes honest maturity labels and safe endpoints", () => {
   assert.doesNotMatch(page, /password|recoveryCodes|encryptedSecret/);
 });
 
+test("platform role choices use the canonical server vocabulary", () => {
+  assert.match(page, /VERIFICATION_REVIEWER/);
+  assert.match(page, /OPERATIONS/);
+  assert.doesNotMatch(page, /COMPLIANCE_REVIEWER|RISK_ANALYST|TRADE_OPERATIONS/);
+});
+
 test("privileged actions require explicit post-step-up confirmation", () => {
   assert.match(page, /explicitly submit this action again/i);
   assert.doesNotMatch(page, /stepUp\(\).*grantRole\(|await stepUp\(\).*await grantRole/s);
+});
+
+test("privileged step-up uses a grouped numeric authenticator entry and safe failure copy", () => {
+  assert.match(page, /TotpCodeInput/);
+  assert.match(page, /The code could not be verified\. Wait for a new authenticator code and try again\./);
+  assert.doesNotMatch(page, /<Input aria-label="Current authenticator code"/);
 });
