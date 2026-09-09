@@ -50,6 +50,13 @@ export default function SecureAdminControlPlane() {
   const [reason, setReason] = useState("");
   const [ownerPrincipalId, setOwnerPrincipalId] = useState("");
   const [ownerReason, setOwnerReason] = useState("");
+  const [stepUpUntil, setStepUpUntil] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const refresh = useCallback(async () => {
     const [auth, summary] = await Promise.all([json<AdminIdentity>("/admin/auth/info"), json<Overview>("/admin/control-plane/overview")]);
@@ -71,7 +78,7 @@ export default function SecureAdminControlPlane() {
   const stepUp = async () => {
     try {
       await apiRequest("POST", "/api/auth/mfa/step-up", { code: totp });
-      setTotp(""); setNotice("Recent step-up is active. Confirm the privileged action again when ready.");
+      setTotp(""); setStepUpUntil(Date.now() + 5 * 60 * 1_000); setNotice("Recent step-up is active. Confirm the privileged action again when ready.");
       await refresh();
     } catch { setNotice("The code could not be verified. Wait for a new authenticator code and try again."); }
   };
@@ -104,12 +111,16 @@ export default function SecureAdminControlPlane() {
     catch { setNotice("Ownership revocation was denied safely; the final-owner invariant remains enforced."); }
   };
 
+  const recentStepUpActive = identity?.user.assurance === "recent_step_up" && (!stepUpUntil || stepUpUntil > now);
+  const stepUpRemaining = stepUpUntil ? Math.max(0, Math.ceil((stepUpUntil - now) / 1_000)) : null;
+  const formatRemaining = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+
   return <AppLayout>
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8" data-testid="secure-admin-control-plane">
       <div><p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">TUTELA Control Plane</p><h1 className="text-3xl font-bold">{title}</h1><p className="mt-1 text-sm text-neutral-600">Server-authoritative access · {maturity}</p></div>
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
         <nav className="space-y-1 rounded-xl border bg-white p-3" aria-label="Control Plane modules">
-          {navigation.map(([id, label]) => <Link key={id} href={`/admin/${id}`} className={`block rounded-lg px-3 py-2 text-sm ${id === section ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"}`}>{label}</Link>)}
+          {navigation.map(([id, label]) => { const state = overview?.modules.find((item) => item.id === moduleId(id))?.maturity ?? "DEFINED"; return <Link key={id} href={`/admin/${id}`} className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${id === section ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"}`}><span>{label}</span><span className={`text-[10px] font-semibold ${id === section ? "text-white/75" : state === "DEFINED" ? "text-amber-700" : "text-emerald-700"}`}>{state === "DEFINED" ? "DEFINED" : "ACTIVE"}</span></Link>; })}
         </nav>
         <main className="space-y-5">
           {notice && <p role="status" className="rounded-lg border bg-white p-3 text-sm">{notice}</p>}
@@ -118,7 +129,7 @@ export default function SecureAdminControlPlane() {
           </div>}
           {section === "platform" && <div className="space-y-5">
             <Card><CardHeader><CardTitle>Platform authority</CardTitle></CardHeader><CardContent className="space-y-2 text-sm"><p>Signed in as principal <code>{identity?.user.id}</code></p><p>Platform Owner: <strong>{identity?.user.isPlatformOwner ? "Yes" : "No"}</strong></p><p>Session assurance: <strong>{identity?.user.assurance ?? "unknown"}</strong></p><p>Privileged step-up: <strong>{identity?.user.assurance === "recent_step_up" ? "Active" : "Not active"}</strong></p></CardContent></Card>
-            <Card><CardHeader><CardTitle>Privileged step-up</CardTitle></CardHeader><CardContent className="space-y-3"><TotpCodeInput label="Current authenticator code" value={totp} onChange={setTotp}/><Button disabled={!/^\d{6}$/.test(totp)} onClick={stepUp}>Verify step-up</Button></CardContent></Card>
+            <Card><CardHeader><CardTitle>Privileged step-up</CardTitle></CardHeader><CardContent className="space-y-3">{recentStepUpActive ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm"><p className="font-semibold text-emerald-900">Privileged access — Active</p><p className="mt-1 text-emerald-800">{stepUpRemaining === null ? "Server-authoritative recent verification is active." : `Recent verification valid for approximately ${formatRemaining(stepUpRemaining)}.`}</p><Button className="mt-3" variant="outline" onClick={() => { setStepUpUntil(null); setTotp(""); }}>Re-verify</Button></div> : <><TotpCodeInput label="Current authenticator code" value={totp} onChange={setTotp}/><Button disabled={!/^\d{6}$/.test(totp)} onClick={stepUp}>Verify step-up</Button></>}</CardContent></Card>
             <Card><CardHeader><CardTitle>Grant Platform role</CardTitle></CardHeader><CardContent className="space-y-3"><Input aria-label="Target principal ID" value={targetPrincipalId} onChange={(event) => setTargetPrincipalId(event.target.value)}/><select className="h-10 w-full rounded-md border px-3" aria-label="Platform role" value={targetRole} onChange={(event) => setTargetRole(event.target.value)}>{["SUPPORT","VERIFICATION_REVIEWER","OPERATIONS","PLATFORM_ADMIN"].map((role) => <option key={role}>{role}</option>)}</select><Input aria-label="Explicit grant reason" placeholder="Reason (at least 10 characters)" value={reason} onChange={(event) => setReason(event.target.value)}/><Button disabled={!targetPrincipalId.trim() || reason.trim().length < 10} onClick={grantRole}>Confirm role grant</Button><p className="text-xs text-neutral-500">PLATFORM_ADMIN governance requires Platform Owner authority and recent step-up.</p></CardContent></Card>
             {identity?.user.isPlatformOwner && <Card><CardHeader><CardTitle>Grant Platform Ownership</CardTitle></CardHeader><CardContent className="space-y-3"><Input aria-label="Successor principal ID" value={ownerPrincipalId} onChange={(event) => setOwnerPrincipalId(event.target.value)}/><Input aria-label="Explicit ownership reason" placeholder="Reason (at least 10 characters)" value={ownerReason} onChange={(event) => setOwnerReason(event.target.value)}/><Button disabled={!ownerPrincipalId.trim() || ownerReason.trim().length < 10} onClick={grantOwner}>Confirm ownership grant</Button></CardContent></Card>}
             <Card><CardHeader><CardTitle>Platform Owners</CardTitle></CardHeader><CardContent>{owners.length ? <ul className="space-y-2 text-sm">{owners.map((owner) => <li key={owner.assignmentId} className="flex items-center justify-between gap-3 rounded border p-2"><code className="break-all">{owner.userId} · {owner.status} · {owner.authoritySource}</code>{owner.status === "active" && identity?.user.isPlatformOwner && <Button variant="outline" size="sm" onClick={() => revokeOwner(owner)}>Revoke</Button>}</li>)}</ul> : <p className="text-sm text-neutral-500">No records.</p>}</CardContent></Card>
@@ -126,7 +137,7 @@ export default function SecureAdminControlPlane() {
             <Card><CardHeader><CardTitle>Role Assignments</CardTitle></CardHeader><CardContent>{roles.length ? <ul className="space-y-2 text-sm">{roles.map((role) => <li key={role.assignmentId} className="flex items-center justify-between gap-3 rounded border p-2"><code className="break-all">{role.principalId} · {role.role} · {role.status}</code>{role.status === "active" && <Button variant="outline" size="sm" onClick={() => revokeRole(role)}>Revoke</Button>}</li>)}</ul> : <p className="text-sm text-neutral-500">No records.</p>}</CardContent></Card>
           </div>}
           {section === "organizations-users" && <div className="space-y-5"><Card><CardHeader><CardTitle>Organizations</CardTitle></CardHeader><CardContent><p className="text-sm text-neutral-600">A canonical Organization Registry is not active in this baseline. Declared company names below are account metadata, not Organization Verification, Trust, or Eligibility authority.</p></CardContent></Card><Card><CardHeader><CardTitle>Users</CardTitle></CardHeader><CardContent><SafeRows rows={users.map((user) => `${user.email ?? user.userId} · ${user.accountStatus} · email ${user.emailVerified ? "verified" : "unverified"} · Platform Principal ${user.platformPrincipal ? "yes" : "no"}${user.declaredCompanyName ? ` · ${user.declaredCompanyName}` : ""}`)}/></CardContent></Card></div>}
-          {section !== "overview" && section !== "platform" && section !== "organizations-users" && <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><p className="text-sm text-neutral-600">{maturity === "DEFINED" ? "DEFINED — NOT YET ACTIVATED" : `This module is ${maturity}. No unimplemented capability is presented as operational.`}</p>{section === "security" && <div className="mt-4"><p className="mb-3 text-sm">Security Audit access is protected by server permission and MFA assurance.</p><SafeRows rows={auditEvents.map((event) => `${event.occurredAt} · ${event.severity} · ${event.action} · ${event.targetType}:${event.targetId}`)}/></div>}</CardContent></Card>}
+          {section !== "overview" && section !== "platform" && section !== "organizations-users" && <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><p className="text-sm text-neutral-600">{maturity === "DEFINED" ? `DEFINED — NOT YET ACTIVATED. This capability is architecturally defined and will become available when the ${title} control plane is activated.` : `This module is ${maturity}. No unimplemented capability is presented as operational.`}</p>{section === "security" && <div className="mt-4"><p className="mb-3 text-sm">Security Audit access is protected by server permission and MFA assurance.</p><SafeRows rows={auditEvents.map((event) => `${event.occurredAt} · ${event.severity} · ${event.action} · ${event.targetType}:${event.targetId}`)}/></div>}</CardContent></Card>}
         </main>
       </div>
     </div>
