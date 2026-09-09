@@ -562,8 +562,8 @@ export async function setupAuth(app: Express) {
     mfaLimiter,
     async (req, res, next) => {
       const parsed = totpCodeSchema.safeParse(req.body?.code);
-      if (!parsed.success || !hasMfaAssurance(req.session)) {
-        return res.status(403).json({ message: "MFA assurance required." });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid authenticator code." });
       }
       const service = getMfaService();
       if (!service) return mfaUnavailable(res);
@@ -578,9 +578,21 @@ export async function setupAuth(app: Express) {
         if (result.method !== "totp") {
           return res.status(403).json({ message: "TOTP step-up required." });
         }
-        markStepUpSatisfied(req.session, new Date());
+        // A fresh TOTP is itself the evidence required to establish MFA
+        // assurance.  Step-up must work from an authenticated session; it
+        // must not require a prior, separate MFA challenge that would consume
+        // the same 30-second TOTP counter.
+        const verifiedAt = new Date();
+        markMfaSatisfied(req.session, verifiedAt);
+        markStepUpSatisfied(req.session, verifiedAt);
         return res.json({ assurance: "recent_step_up" });
       } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "MFA_ACTIVE_CREDENTIAL_NOT_FOUND"
+        ) {
+          return res.status(404).json({ message: "Active MFA not found." });
+        }
         return next(error);
       }
     },

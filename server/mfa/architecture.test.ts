@@ -53,7 +53,8 @@ test("normal MFA and privileged step-up are distinct server events", () => {
   assert.match(challenge, /markMfaSatisfied/);
   assert.doesNotMatch(challenge, /markStepUpSatisfied/);
   const stepUp = auth.slice(auth.indexOf('"/api/auth/mfa/step-up"'));
-  assert.match(stepUp, /hasMfaAssurance/);
+  assert.doesNotMatch(stepUp, /hasMfaAssurance\(req\.session\)/);
+  assert.match(stepUp, /service\.verifyChallenge\([\s\S]*result\.method !== "totp"[\s\S]*markMfaSatisfied\(req\.session[\s\S]*markStepUpSatisfied\(req\.session/);
   assert.match(stepUp, /markStepUpSatisfied/);
 });
 

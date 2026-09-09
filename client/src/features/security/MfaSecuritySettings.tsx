@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { TotpCodeInput } from "@/components/security/TotpCodeInput";
 import { apiRequest } from "@/lib/queryClient";
 
 type Status = { enrolled: boolean; status: "not_enrolled" | "pending_enrollment" | "active"; factorType: "totp" | null };
@@ -34,7 +34,7 @@ export function MfaSecuritySettings() {
         <p className="text-sm">Scan this QR code in your authenticator app. Starting enrollment does not enable MFA until confirmation succeeds.</p>
         {qr&&<img src={qr} alt="Authenticator enrollment QR code" width={220} height={220}/>} 
         <div><p className="text-xs text-neutral-500">Manual setup key</p><code className="break-all select-all">{enrollment.secret}</code></div>
-        <Input aria-label="Authenticator confirmation code" inputMode="numeric" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,""))}/>
+        <TotpCodeInput label="Authenticator confirmation code" value={code} onChange={setCode} disabled={busy}/>
         <Button disabled={busy||code.length!==6} onClick={confirm}>Confirm and activate MFA</Button>
       </div>}
       {recovery&&<div className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4">
@@ -44,9 +44,9 @@ export function MfaSecuritySettings() {
         <Button disabled={!ack} onClick={()=>setRecovery(null)}>Finish</Button>
       </div>}
       {status?.enrolled&&!recovery&&<div className="space-y-3 rounded-lg border p-4">
-        <p className="text-sm">Enter a current authenticator code for this session. Privileged step-up always requires TOTP and must be explicitly requested.</p>
-        <Input aria-label="MFA challenge code" inputMode="numeric" maxLength={32} value={challenge} onChange={e=>setChallenge(e.target.value.trim())}/>
-        <div className="flex gap-2"><Button disabled={busy||challenge.length<6} onClick={()=>verify(false)}>Verify session</Button><Button variant="outline" disabled={busy||!/^\d{6}$/.test(challenge)} onClick={()=>verify(true)}>Privileged step-up</Button></div>
+        <p className="text-sm">Verify MFA for this session, or explicitly establish a privileged step-up.</p>
+        <TotpCodeInput label="MFA challenge code" value={challenge} onChange={setChallenge} disabled={busy}/>
+        <div className="flex gap-2"><Button disabled={busy||!/^\d{6}$/.test(challenge)} onClick={()=>verify(false)}>Verify session</Button><Button variant="outline" disabled={busy||!/^\d{6}$/.test(challenge)} onClick={()=>verify(true)}>Privileged step-up</Button></div>
       </div>}
       {notice&&<p role="status" className="text-sm text-neutral-700">{notice}</p>}
     </CardContent>
