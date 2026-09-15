@@ -6,11 +6,21 @@ import test from "node:test";
 const root = process.cwd();
 const page = fs.readFileSync(path.join(root, "client/src/pages/SecureAdminControlPlane.tsx"), "utf8");
 const guard = fs.readFileSync(path.join(root, "client/src/components/navigation/RouteGuard.tsx"), "utf8");
+const vre = fs.readFileSync(path.join(root, "client/src/components/admin/VreWorkbench.tsx"), "utf8");
 
 test("Admin frontend consumes server authority and never manufactures it", () => {
   assert.match(guard, /\/admin\/auth\/info/);
   assert.doesNotMatch(guard, /requireRoles=\{\["admin"\]\}/);
   assert.doesNotMatch(page + guard, /localStorage|sessionStorage|adminRole|is2FAEnabled|mfaSatisfied/);
+});
+
+test("VRE workbench preserves domain separation and honest inactive enforcement consumption",()=>{
+  assert.match(vre,/Self-attestation is Evidence/);
+  assert.match(vre,/does not approve the Organization or set Trust/);
+  assert.match(vre,/signal never imposes an enforcement state/);
+  assert.match(vre,/downstream.*INACTIVE/is);
+  assert.match(vre,/Historical facts will remain intact/);
+  assert.doesNotMatch(vre,/Force Verified|Mark Trusted|Set Eligibility/);
 });
 
 test("Control Plane exposes honest maturity labels and safe endpoints", () => {

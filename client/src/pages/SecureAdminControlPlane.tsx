@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TotpCodeInput } from "@/components/security/TotpCodeInput";
 import { apiRequest } from "@/lib/queryClient";
+import { VreWorkbench } from "@/components/admin/VreWorkbench";
 
 type Maturity = "DEFINED" | "ACTIVE_BASELINE" | "FULL";
 type ModuleStatus = { id: string; maturity: Maturity };
@@ -59,7 +60,8 @@ export default function SecureAdminControlPlane() {
   }, []);
 
   const refresh = useCallback(async () => {
-    const [auth, summary] = await Promise.all([json<AdminIdentity>("/admin/auth/info"), json<Overview>("/admin/control-plane/overview")]);
+    const auth = await json<AdminIdentity>("/admin/auth/info");
+    const summary = await json<Overview>(auth.user.permissions.includes("platform.roles.view") ? "/admin/control-plane/overview" : "/admin/vre/status");
     setIdentity(auth); setOverview(summary);
     if (section === "platform") {
       const [principalRows, ownerRows, roleRows] = await Promise.all([
@@ -137,7 +139,8 @@ export default function SecureAdminControlPlane() {
             <Card><CardHeader><CardTitle>Role Assignments</CardTitle></CardHeader><CardContent>{roles.length ? <ul className="space-y-2 text-sm">{roles.map((role) => <li key={role.assignmentId} className="flex items-center justify-between gap-3 rounded border p-2"><code className="break-all">{role.principalId} · {role.role} · {role.status}</code>{role.status === "active" && <Button variant="outline" size="sm" onClick={() => revokeRole(role)}>Revoke</Button>}</li>)}</ul> : <p className="text-sm text-neutral-500">No records.</p>}</CardContent></Card>
           </div>}
           {section === "organizations-users" && <div className="space-y-5"><Card><CardHeader><CardTitle>Organizations</CardTitle></CardHeader><CardContent><p className="text-sm text-neutral-600">A canonical Organization Registry is not active in this baseline. Declared company names below are account metadata, not Organization Verification, Trust, or Eligibility authority.</p></CardContent></Card><Card><CardHeader><CardTitle>Users</CardTitle></CardHeader><CardContent><SafeRows rows={users.map((user) => `${user.email ?? user.userId} · ${user.accountStatus} · email ${user.emailVerified ? "verified" : "unverified"} · Platform Principal ${user.platformPrincipal ? "yes" : "no"}${user.declaredCompanyName ? ` · ${user.declaredCompanyName}` : ""}`)}/></CardContent></Card></div>}
-          {section !== "overview" && section !== "platform" && section !== "organizations-users" && <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><p className="text-sm text-neutral-600">{maturity === "DEFINED" ? `DEFINED — NOT YET ACTIVATED. This capability is architecturally defined and will become available when the ${title} control plane is activated.` : `This module is ${maturity}. No unimplemented capability is presented as operational.`}</p>{section === "security" && <div className="mt-4"><p className="mb-3 text-sm">Security Audit access is protected by server permission and MFA assurance.</p><SafeRows rows={auditEvents.map((event) => `${event.occurredAt} · ${event.severity} · ${event.action} · ${event.targetType}:${event.targetId}`)}/></div>}</CardContent></Card>}
+          {(section === "verification" || section === "risk" || section === "enforcement") && identity && <VreWorkbench key={section} module={section} permissions={identity.user.permissions}/>}
+          {!["overview","platform","organizations-users","verification","risk","enforcement"].includes(section) && <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><p className="text-sm text-neutral-600">{maturity === "DEFINED" ? `DEFINED — NOT YET ACTIVATED. This capability is architecturally defined and will become available when the ${title} control plane is activated.` : `This module is ${maturity}. No unimplemented capability is presented as operational.`}</p>{section === "security" && <div className="mt-4"><p className="mb-3 text-sm">Security Audit access is protected by server permission and MFA assurance.</p><SafeRows rows={auditEvents.map((event) => `${event.occurredAt} · ${event.severity} · ${event.action} · ${event.targetType}:${event.targetId}`)}/></div>}</CardContent></Card>}
         </main>
       </div>
     </div>
