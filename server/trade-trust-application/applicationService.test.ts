@@ -59,7 +59,7 @@ test("Verification uses Application Service and authoritative Replay",()=>{
   assert.match(runtime,/replayOrganizationVerificationWorkflow/);
   assert.match(runtime,/replayExecution\.reconstructedWorkflowExecution/);
   assert.doesNotMatch(runtime,/\.implementation\.evaluate\s*\(/);
-  assert.match(runtime,/requestedStep:"complete_policy"/);
+  assert.match(runtime,/requestedStep\s*:\s*"complete_policy"/);
   assert.doesNotMatch(runtime,/workflowRuntime\.test|buildRuntimeFixture|synthetic/i);
   assert.match(runtime,/organization-existence-evidence-reference/);
   assert.match(runtime,/representative-association-evidence-reference/);

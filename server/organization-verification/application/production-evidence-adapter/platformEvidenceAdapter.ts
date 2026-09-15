@@ -22,6 +22,17 @@ export type PlatformOrganizationEvidenceCategory =
   | "organization_existence"
   | "representative_association";
 
+export interface IndependentVerificationReviewArtifact {
+  readonly id: string;
+  readonly policyVersion: string;
+  readonly method: string;
+  readonly outcome: string;
+  readonly reviewerPrincipalId: string;
+  readonly evidenceDigest: string;
+  readonly profileFingerprint: string;
+  readonly createdAt: string;
+}
+
 export const PLATFORM_ORGANIZATION_EVIDENCE_ADAPTER_VERSION =
   "platform-organization-evidence-adapter/v1" as const;
 
@@ -154,5 +165,38 @@ export function adaptPlatformEvidenceToOrganizationVerificationReference(input: 
       correlationReference,
       integrityReference,
     }),
+  });
+}
+
+/** Curated adapter from an authenticated, persisted review fact into snapshot evidence. */
+export function adaptIndependentReviewToOrganizationVerificationReference(input: Readonly<{
+  review: IndependentVerificationReviewArtifact;
+  revisionEvidenceReferenceId: string;
+  correlationReference: string;
+}>): OrganizationVerificationSemanticEvidenceReferenceInput {
+  const required = <T>(result: { readonly ok: boolean; readonly value?: T }): T => {
+    if (!result.ok || result.value === undefined) throw new Error("INDEPENDENT_REVIEW_ADAPTER_INVALID");
+    return result.value;
+  };
+  return Object.freeze({
+    evidenceReferenceId: required(createEvidenceReferenceId(`independent-review:${input.review.id}`)),
+    evidenceReferenceVersion: required(createEvidenceReferenceVersion("review-artifact-v2")),
+    revisionEvidenceReferenceId: required(createOrganizationEvidenceReferenceId(input.revisionEvidenceReferenceId)),
+    evidenceKind: required(createEvidenceKind("review_artifact")),
+    category: required(createEvidenceCategory("independent_confirmation")),
+    sourceAuthority: required(createEvidenceSourceAuthority("independent_confirmation")),
+    contentDigest: required(createEvidenceContentDigest(createHash("sha256").update(JSON.stringify(input.review)).digest("hex"))),
+    capturedAt: input.review.createdAt,
+    attributes: Object.freeze([
+      { key: "policy_version", value: input.review.policyVersion },
+      { key: "outcome", value: input.review.outcome },
+      { key: "method", value: input.review.method },
+      { key: "reviewer_principal_id", value: input.review.reviewerPrincipalId },
+      { key: "reviewed_content_digest", value: input.review.evidenceDigest },
+      { key: "profile_fingerprint", value: input.review.profileFingerprint },
+    ]),
+    provenanceReference: required(createEvidenceSnapshotProvenanceReference(`vre-review:${input.review.id}:${input.review.policyVersion}`)),
+    correlationReference: required(createEvidenceSnapshotCorrelationReference(input.correlationReference)),
+    integrityReference: required(createEvidenceSnapshotIntegrityReference(`vre-review-integrity:${input.review.id}`)),
   });
 }

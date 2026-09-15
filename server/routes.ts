@@ -50,6 +50,7 @@ import { buildDashboardOverview } from "./dashboard";
 import { registerDraftRoutes } from "./drafts/routes";
 import { productionTradingFlowService } from "./trading-flow/productionService";
 import { registerTradeTrustApplicationRoutes } from "./trade-trust-application/routes";
+import { registerVreRoutes } from "./vre/routes";
 import { registerDemoRuntimeRoutes } from "./demo-runtime/routes";
 import { createInMemoryDemoRuntime } from "./demo-runtime/runtimeComposition";
 import { containsDemoIdentifier } from "./demo-runtime/productionBoundaryGuard";
@@ -101,6 +102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerDemoRuntimeRoutes(app, createInMemoryDemoRuntime());
   registerDraftRoutes(app);
   registerTradeTrustApplicationRoutes(app);
+  registerVreRoutes(app,pool);
 
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString(), environment: process.env.NODE_ENV ?? "development" });

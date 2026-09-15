@@ -254,6 +254,10 @@ test("least-privilege role boundaries remain independent", async () => {
     "platform.roles.grant",
     "platform.roles.revoke",
     "security.audit.view",
+    "risk.view",
+    "enforcement.view",
+    "enforcement.case.open",
+    "enforcement.decide",
   ]);
 });
 

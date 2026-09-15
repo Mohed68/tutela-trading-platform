@@ -237,7 +237,7 @@ export const platformEvidenceReadPort: LocalSubmittedEvidenceReadPort = Object.f
   async resolveSubmittedEvidence(input: Readonly<{subjectId:string;subjectVersion:string}>) {
     const result = await pool.query<QueryResultRow>(
       `SELECT * FROM public.platform_submitted_evidence
-       WHERE subject_id=$1 AND subject_version=$2 ORDER BY submitted_at DESC LIMIT 1`,
+       WHERE subject_id=$1 AND subject_version=$2 ORDER BY submitted_at DESC,evidence_id DESC LIMIT 1`,
       [input.subjectId,input.subjectVersion],
     );
     const row = result.rows[0];
@@ -271,10 +271,15 @@ export async function loadParticipationProfile(organizationId:string,userId:stri
 }
 
 export async function bindParticipationRuntime(input:Readonly<{organizationId:string;userId:string;profileRevisionId:string;streamIdentity:OrganizationVerificationWorkflowStreamIdentity}>):Promise<void>{
-  const client=await pool.connect();try{await client.query("BEGIN");await client.query("SELECT pg_advisory_xact_lock(hashtext($1))",[`participation-binding:${input.organizationId}:${input.userId}`]);
-  const membership=await client.query<QueryResultRow>(`SELECT membership_id FROM public.organization_memberships WHERE organization_id=$1 AND user_id=$2 AND role='owner' AND status='active'`,[input.organizationId,input.userId]);
+  const client=await pool.connect();try{await client.query("BEGIN");await bindParticipationRuntimeInTransaction(client,input);await client.query("COMMIT");}
+  catch(error){await client.query("ROLLBACK").catch(()=>undefined);throw error;}finally{client.release();}
+}
+
+export async function bindParticipationRuntimeInTransaction(client: import("../vre/verificationReview.js").VreQuery,input:Readonly<{organizationId:string;userId:string;profileRevisionId:string;streamIdentity:OrganizationVerificationWorkflowStreamIdentity}>):Promise<void>{
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))",[`participation-binding:${input.organizationId}:${input.userId}`]);
+  const membership=await client.query(`SELECT membership_id FROM public.organization_memberships WHERE organization_id=$1 AND user_id=$2 AND role='owner' AND status='active'`,[input.organizationId,input.userId]);
   const membershipId=membership.rows[0]?.membership_id;if(typeof membershipId!=="string")throw new Error("ACTIVE_OWNER_MEMBERSHIP_REQUIRED");
-  const existing=await client.query<{binding_version:number}>(`SELECT binding_version FROM public.organization_participation_runtime_bindings WHERE organization_id=$1 AND user_id=$2`,[input.organizationId,input.userId]);
+  const existing=await client.query(`SELECT binding_version FROM public.organization_participation_runtime_bindings WHERE organization_id=$1 AND user_id=$2`,[input.organizationId,input.userId]);
   const bindingId=`participation-binding-${input.organizationId}-${input.userId}`,bindingVersion=(existing.rows[0]?.binding_version??0)+1,integrityReference=`participation-binding-integrity:${input.streamIdentity.streamIdentityFingerprint}`;
   const bindingFingerprint=fingerprintOrganizationParticipationRuntimeBinding({bindingId,organizationId:input.organizationId,userId:input.userId,membershipId,organizationProfileRevisionId:input.profileRevisionId,verificationStreamIdentityFingerprint:input.streamIdentity.streamIdentityFingerprint,bindingVersion,integrityReference});
   await client.query(`INSERT INTO public.organization_participation_runtime_bindings
@@ -290,6 +295,5 @@ export async function bindParticipationRuntime(input:Readonly<{organizationId:st
       integrity_reference=EXCLUDED.integrity_reference,
       binding_fingerprint=EXCLUDED.binding_fingerprint`,
     [bindingId,input.organizationId,input.userId,membershipId,input.profileRevisionId,
-     input.streamIdentity.streamIdentityFingerprint,bindingVersion,integrityReference,bindingFingerprint]);await client.query("COMMIT");
-  }catch(error){await client.query("ROLLBACK").catch(()=>undefined);throw error;}finally{client.release();}
+     input.streamIdentity.streamIdentityFingerprint,bindingVersion,integrityReference,bindingFingerprint]);
 }

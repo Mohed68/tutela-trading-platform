@@ -20,7 +20,7 @@ import * as trust from "../organization-verification/domain/trust-status/index.j
 import {
   adaptPlatformEvidenceToOrganizationVerificationReference,
 } from "../organization-verification/application/production-evidence-adapter/platformEvidenceAdapter.js";
-import { createMinimumTradeTrustOrganizationPolicyBundle } from "./organizationVerificationPolicy.js";
+import { createMinimumTradeTrustOrganizationPolicyBundle, createOrganizationVerificationPolicyV2, ORGANIZATION_VERIFICATION_POLICY_V2 } from "./organizationVerificationPolicy.js";
 
 async function evidence(
   category: "organization_existence" | "representative_association",
@@ -128,6 +128,27 @@ test("real platform-submitted evidence satisfies the minimum Organization Verifi
     ["satisfied", "satisfied", "satisfied", "satisfied", "satisfied"],
   );
   assert.equal(bundle.policySet.status, "active");
+});
+
+test("V2 rejects self-attestation and forged confirmation attributes; independent review must bind the evidence and profile",async()=>{
+  const original=await factView();
+  const digest=original.evidenceFacts![0].contentDigest;
+  const facts={...original,evidenceFacts:original.evidenceFacts!.map(e=>({...e,contentDigest:digest}))};
+  const bundle=createOrganizationVerificationPolicyV2("2026-09-10T00:00:00.000Z");
+  const evaluate=(value:OrganizationVerificationPolicyEvaluationFactView)=>bundle.implementationSet.bindings.map(b=>b.implementation.evaluate(value));
+  assert.ok(evaluate(facts).includes("manual_review_required"));
+  const review={...facts.evidenceFacts[0],sourceAuthority:"independent_confirmation",category:"independent_confirmation",attributes:[
+    {key:"policy_version",value:ORGANIZATION_VERIFICATION_POLICY_V2},{key:"outcome",value:"confirmed"},
+    {key:"method",value:"independent_human"},{key:"reviewer_principal_id",value:"independent-principal"},
+    {key:"reviewed_content_digest",value:digest},{key:"profile_fingerprint",value:facts.registryFacts!.profileFingerprint},
+  ]};
+  assert.ok(evaluate({...facts,evidenceFacts:[...facts.evidenceFacts,review]}).every(v=>v==="satisfied"));
+  for(const [key,value] of [["outcome","revision_requested"],["method","ai_advisory"],["method","trusted_source"],
+    ["reviewed_content_digest","0".repeat(64)],["profile_fingerprint","other-profile"],["policy_version","v1"]]) {
+    const invalid={...review,attributes:review.attributes.map(a=>a.key===key?{...a,value}:a)};
+    assert.ok(evaluate({...facts,evidenceFacts:[...facts.evidenceFacts,invalid]}).includes("manual_review_required"));
+  }
+  assert.ok(evaluate({...facts,evidenceFacts:[...facts.evidenceFacts,{...review,sourceAuthority:"platform_submitted"}]}).includes("manual_review_required"));
 });
 
 test("incomplete evidence fails closed through revision or manual review", async () => {

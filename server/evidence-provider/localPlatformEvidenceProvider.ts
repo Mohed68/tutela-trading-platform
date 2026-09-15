@@ -37,7 +37,9 @@ export function createLocalPlatformEvidenceProvider(
         evidenceId: submitted.evidenceId,
         evidenceVersion: submitted.evidenceVersion,
         assuranceLevel: "documentary",
-        assertions: submitted.assertions,
+        // PostgreSQL jsonb may reorder object keys. Normalize the known contract
+        // fields before fingerprinting; property storage order is not evidence.
+        assertions: submitted.assertions.map(({ assertionCode, value }) => ({ assertionCode, value })),
         capturedAt: submitted.submittedAt,
         provenanceReference: submitted.provenanceReference,
         integrityReference: submitted.integrityReference,

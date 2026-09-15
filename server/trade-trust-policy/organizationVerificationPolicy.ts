@@ -5,6 +5,8 @@ import * as runtimeContract from "../organization-verification/domain/policy-run
 
 export const MINIMUM_TRADE_TRUST_ORGANIZATION_POLICY_VERSION =
   "minimum-trade-trust-organization-policy/v1" as const;
+export const ORGANIZATION_VERIFICATION_POLICY_V2 =
+  "minimum-trade-trust-organization-policy/v2" as const;
 
 const POLICY_SET_ID = "minimum-trade-trust-organization-policy";
 const POLICY_PROVENANCE = "tutela-production-policy:organization-verification:v1";
@@ -179,24 +181,65 @@ export interface MinimumTradeTrustOrganizationPolicyBundle {
   readonly implementationSet: runtimeContract.OrganizationVerificationRuleImplementationSet;
 }
 
+/** Historical V1 remains reproducible; never use it for new production decisions. */
 export function createMinimumTradeTrustOrganizationPolicyBundle(): MinimumTradeTrustOrganizationPolicyBundle {
+  return createPolicyBundle(1, "2026-01-01T00:00:00.000Z");
+}
+
+export function createOrganizationVerificationPolicyV2(effectiveFrom: string): MinimumTradeTrustOrganizationPolicyBundle {
+  return createPolicyBundle(2, effectiveFrom);
+}
+
+function hasIndependentConfirmation(facts: FactView): boolean {
+  const evidence = facts.evidenceFacts ?? [];
+  const submitted = evidence.filter(item => item.sourceAuthority === "platform_submitted");
+  return submitted.length > 0 && evidence.some(item => {
+    if (item.sourceAuthority !== "independent_confirmation" || item.category !== "independent_confirmation") return false;
+    const attrs = new Map(item.attributes.map(a => [a.key, a.value]));
+    // Only the server-owned review adapter may create this source authority.
+    // No provider is approved for automated confirmation in the initial V2 registry.
+    return attrs.get("policy_version") === ORGANIZATION_VERIFICATION_POLICY_V2 &&
+      attrs.get("outcome") === "confirmed" && attrs.get("method") === "independent_human" &&
+      typeof attrs.get("reviewer_principal_id") === "string" &&
+      String(attrs.get("reviewer_principal_id")).length > 0 &&
+      attrs.get("profile_fingerprint") === facts.registryFacts?.profileFingerprint &&
+      submitted.every(source => source.contentDigest === attrs.get("reviewed_content_digest"));
+  });
+}
+
+function createPolicyBundle(version: 1 | 2, effectiveFrom: string): MinimumTradeTrustOrganizationPolicyBundle {
+  const policyVersion = version === 1 ? MINIMUM_TRADE_TRUST_ORGANIZATION_POLICY_VERSION : ORGANIZATION_VERIFICATION_POLICY_V2;
+  const definitions: readonly RuleDefinition[] = version === 1 ? DEFINITIONS : [
+    ...DEFINITIONS.map(definition => definition.id !== "organization-evidence-integrity-valid" ? definition : {
+      ...definition,
+      evaluate: (facts: FactView) => hasValidEvidenceIntegrity({ ...facts,
+        evidenceFacts: facts.evidenceFacts?.filter(item => item.sourceAuthority === "platform_submitted"),
+      }) && (facts.evidenceFacts ?? []).every(item =>
+        (item.sourceAuthority === "platform_submitted" ||
+          (item.sourceAuthority === "independent_confirmation" && item.category === "independent_confirmation")) &&
+        /^[a-f0-9]{64}$/.test(item.contentDigest)),
+    }),
+    { id: "organization-independent-confirmation-required", title: "Independent confirmation of the submitted evidence is required",
+      category: "organization_verification.independent_confirmation", reasonCode: "organization_verification.independent_confirmation.required",
+      severity: "high", failureDisposition: "manual_review_required", evaluate: hasIndependentConfirmation },
+  ];
   const policySetId = must(
     policy.createOrganizationVerificationPolicySetId(POLICY_SET_ID),
   );
   const policySetVersion = must(
     policy.createOrganizationVerificationPolicySetVersion(
-      MINIMUM_TRADE_TRUST_ORGANIZATION_POLICY_VERSION,
+      policyVersion,
     ),
   );
   const provenanceReference = must(
     policy.createOrganizationVerificationPolicyProvenanceReference(
-      POLICY_PROVENANCE,
+      version === 1 ? POLICY_PROVENANCE : "tutela-production-policy:organization-verification:v2",
     ),
   );
-  const ruleIdentities = DEFINITIONS.map((definition, index) => ({
+  const ruleIdentities = definitions.map((definition, index) => ({
     ruleId: must(policy.createOrganizationVerificationRuleId(definition.id)),
     ruleVersion: must(
-      policy.createOrganizationVerificationRuleVersion("rule-version-1"),
+      policy.createOrganizationVerificationRuleVersion(`rule-version-${version}`),
     ),
     required: true,
     evaluationOrder: index + 1,
@@ -207,20 +250,20 @@ export function createMinimumTradeTrustOrganizationPolicyBundle(): MinimumTradeT
       policySetVersion,
       policyContractVersion: policy.POLICY_CONTRACT_VERSION,
       name: "TUTELA minimum trade trust organization verification",
-      effectiveFrom: "2026-01-01T00:00:00.000Z",
+      effectiveFrom,
       rules: ruleIdentities,
       evaluationContractVersion: policy.POLICY_EVALUATION_CONTRACT_VERSION,
       provenanceReference,
       integrityReference: must(
         policy.createOrganizationVerificationPolicySetIntegrityReference(
-          "tutela-production-policy-integrity:organization-verification:v1",
+          `tutela-production-policy-integrity:organization-verification:v${version}`,
         ),
       ),
       status: "active",
     }),
   );
   const rules = Object.freeze(
-    DEFINITIONS.map((definition, index) =>
+    definitions.map((definition, index) =>
       must(
         policy.createOrganizationVerificationRule({
           ...ruleIdentities[index],
@@ -235,14 +278,14 @@ export function createMinimumTradeTrustOrganizationPolicyBundle(): MinimumTradeT
           provenanceReference,
           integrityReference: must(
             policy.createOrganizationVerificationRuleIntegrityReference(
-              `tutela-production-rule-integrity:${definition.id}:v1`,
+              `tutela-production-rule-integrity:${definition.id}:v${version}`,
             ),
           ),
         }),
       ),
     ),
   );
-  const implementations = DEFINITIONS.map((definition, index) =>
+  const implementations = definitions.map((definition, index) =>
     must(
       runtimeContract.createOrganizationVerificationRuleImplementation({
         ruleId: ruleIdentities[index].ruleId,
@@ -253,26 +296,26 @@ export function createMinimumTradeTrustOrganizationPolicyBundle(): MinimumTradeT
           runtimeContract.ORGANIZATION_VERIFICATION_RULE_IMPLEMENTATION_CONTRACT_VERSION,
         implementationVersion: must(
           runtimeContract.createOrganizationVerificationRuleImplementationVersion(
-            "implementation-version-1",
+            `implementation-version-${version}`,
           ),
         ),
         implementationDigest: must(
           runtimeContract.createOrganizationVerificationRuleImplementationDigest(
             createHash("sha256")
               .update(
-                `${MINIMUM_TRADE_TRUST_ORGANIZATION_POLICY_VERSION}:${definition.id}:implementation-version-1`,
+                `${policyVersion}:${definition.id}:implementation-version-${version}`,
               )
               .digest("hex"),
           ),
         ),
         provenanceReference: must(
           runtimeContract.createOrganizationVerificationRuleImplementationProvenanceReference(
-            `tutela-production-rule-implementation:${definition.id}:v1`,
+            `tutela-production-rule-implementation:${definition.id}:v${version}`,
           ),
         ),
         integrityReference: must(
           runtimeContract.createOrganizationVerificationRuleImplementationIntegrityReference(
-            `tutela-production-rule-implementation-integrity:${definition.id}:v1`,
+            `tutela-production-rule-implementation-integrity:${definition.id}:v${version}`,
           ),
         ),
         evaluate: (facts) =>
@@ -293,7 +336,7 @@ export function createMinimumTradeTrustOrganizationPolicyBundle(): MinimumTradeT
       ),
       implementationSetVersion: must(
         runtimeContract.createOrganizationVerificationRuleImplementationSetVersion(
-          "implementation-set-version-1",
+          `implementation-set-version-${version}`,
         ),
       ),
       implementationSetContractVersion:
@@ -303,12 +346,12 @@ export function createMinimumTradeTrustOrganizationPolicyBundle(): MinimumTradeT
       implementations,
       provenanceReference: must(
         runtimeContract.createOrganizationVerificationRuleImplementationProvenanceReference(
-          "tutela-production-implementation-set:v1",
+          `tutela-production-implementation-set:v${version}`,
         ),
       ),
       integrityReference: must(
         runtimeContract.createOrganizationVerificationRuleImplementationIntegrityReference(
-          "tutela-production-implementation-set-integrity:v1",
+          `tutela-production-implementation-set-integrity:v${version}`,
         ),
       ),
     }),
