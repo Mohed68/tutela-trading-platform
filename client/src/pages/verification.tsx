@@ -19,6 +19,7 @@ import { useOrganizationContext } from "@/hooks/useOrganizationContext";
 import { authErrorPresentation } from "@/lib/authApiError";
 import { isDemo } from "@/lib/demo";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 
 type VerificationExecutionResponse = Readonly<{
   status: "completed";
@@ -54,6 +55,7 @@ export default function Verification() {
   const isOwner = organization?.membership.role === "owner";
   const isTrusted =
     organization?.verification.canonicalTrustStatus === "trusted";
+  const history=useQuery<{decisions:{id:string;createdAt:string;status:string;decision?:string;policyVersion?:string;trust?:string}[];reviews:{outcome:string;policyVersion:string;createdAt:string}[]}>({queryKey:["organization-verification-history",organization?.organizationId],enabled:Boolean(organization),queryFn:async()=>{const response=await fetch(`/api/organizations/${encodeURIComponent(organization!.organizationId)}/verification-history`,{credentials:"include"});if(!response.ok)throw new Error("history unavailable");return response.json();}});
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -103,7 +105,8 @@ export default function Verification() {
       ) {
         throw new Error("Canonical verification replay was not returned.");
       }
-      await Promise.all([
+        await Promise.all([
+          queryClient.invalidateQueries({queryKey:["organization-verification-history"]}),
         queryClient.invalidateQueries({
           queryKey: ["/api/organizations/current"],
         }),
@@ -308,10 +311,9 @@ export default function Verification() {
               </label>
               {submitted && (
                 <Alert className="border-emerald-200 bg-emerald-50">
-                  <AlertTitle>Verification processed</AlertTitle>
+                  <AlertTitle>Evidence submitted — independent review pending</AlertTitle>
                   <AlertDescription>
-                    Evidence was persisted and the displayed state was refreshed
-                    from authoritative Replay.
+                    Your structured assertions were persisted as Evidence. They are not a protected document repository and cannot approve or create Trust by themselves. An authorized independent reviewer must confirm them before Policy V2 can approve.
                   </AlertDescription>
                 </Alert>
               )}
@@ -339,6 +341,7 @@ export default function Verification() {
           </CardContent>
         </Card>
       )}
+      {organization&&<Card><CardHeader><CardTitle>Verification history</CardTitle><CardDescription>Safe Policy V2 decisions and independent review outcomes. Reviewers record artifacts; only the canonical engine produces Verification and derived Trust.</CardDescription></CardHeader><CardContent>{history.isLoading?<p className="text-sm">Loading history…</p>:history.data&&history.data.decisions.length+history.data.reviews.length>0?<div className="space-y-3 text-sm">{history.data.reviews.map((review,index)=><div key={`review-${index}`} className="rounded border p-3"><strong>Independent review: {review.outcome.replaceAll("_"," ")}</strong><p>{review.outcome==="confirmed"?"Independent confirmation was recorded for canonical evaluation.":review.outcome==="revision_requested"?"The reviewer requested revised evidence.":"The independent review did not confirm the submitted evidence."}</p><p className="text-xs text-neutral-500">{review.policyVersion} · {new Date(review.createdAt).toLocaleString()}</p></div>)}{history.data.decisions.map(item=><div key={item.id} className="rounded border p-3"><strong>Decision: {(item.decision??item.status).replaceAll("_"," ")}</strong><p className="text-xs text-neutral-500">Trust: {item.trust??"not established"} · {item.policyVersion??"no policy"} · {new Date(item.createdAt).toLocaleString()}</p></div>)}</div>:<p className="text-sm text-neutral-600">No verification history has been recorded yet.</p>}</CardContent></Card>}
     </div>
   );
 }

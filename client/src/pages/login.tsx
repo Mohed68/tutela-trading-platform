@@ -75,6 +75,7 @@ export default function Login() {
             <div>
               <Label htmlFor="password">Password</Label>
               <Input id="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+              <div className="mt-2 text-right"><Link href="/forgot-password" className="text-sm underline">Forgot password?</Link></div>
             </div>
             {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
             <Button className="w-full" type="submit" disabled={loading}>

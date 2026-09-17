@@ -116,9 +116,6 @@ export function KybWizardInteractive({ onSubmitPending, onVerified }: {
   };
 
   const handleAcceptVerified = () => {
-    document.body.classList.remove("state-unverified", "state-pending");
-    document.body.classList.add("state-verified");
-    localStorage.setItem("tutela_kyb_state", "verified");
     setReviewOpen(false);
     localStorage.removeItem(KYB_DRAFT_KEY);
     

@@ -27,7 +27,7 @@ import type {
 } from "@shared/drafts";
 
 interface DraftFormState {
-  offerType: "buy" | "sell";
+  offerType: "sell";
   commodityId: string;
   quantity: string;
   unit: DraftOfferUnit | "";
@@ -92,13 +92,11 @@ function DraftForm({
             id="draft-type"
             className="tutela-form-select w-full"
             value={form.offerType}
-            onChange={(event) =>
-              update("offerType", event.target.value === "buy" ? "buy" : "sell")
-            }
+            onChange={() => update("offerType", "sell")}
           >
             <option value="sell">Sell</option>
-            <option value="buy">Buy</option>
           </select>
+          <p className="text-xs text-neutral-500">Current V2 supports seller offers only. BUY Trade Intent is deferred to V3.</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="draft-commodity">Commodity</Label>
@@ -224,12 +222,25 @@ export default function MyDrafts() {
   const [selected, setSelected] =
     useState<OwnerPrivateOfferDetailDto | null>(null);
   const [editing, setEditing] = useState(false);
+  const [evidenceReference, setEvidenceReference] = useState("");
+  const [evidenceStatement, setEvidenceStatement] = useState("");
+  useEffect(()=>{setEvidenceReference("");setEvidenceStatement("");},[selected?.id,selected?.updatedAt]);
+  const evidenceMutation=useMutation({
+    mutationFn:async()=>{if(!selected)throw new Error("Offer unavailable");await apiRequest("POST",`/api/drafts/${encodeURIComponent(selected.id)}/evidence`,{assertions:[
+      {assertionCode:"document_type",value:"offer_specification"},
+      {assertionCode:"document_reference",value:evidenceReference.trim()},
+      {assertionCode:"offer_specification",value:evidenceStatement.trim()},
+    ]});},
+    onSuccess:()=>toast({title:"Evidence metadata recorded",description:"It is bound to this draft version. You may now submit for verification."}),
+    onError:()=>toast({title:"Evidence not recorded",description:"Check the current draft and your authority, then retry.",variant:"destructive"}),
+  });
 
   const optionsQuery = useQuery<DraftOfferOptionsDto>({
     queryKey: ["/api/drafts/options"],
   });
   const draftsQuery = useQuery<OwnerPrivateOfferDetailDto[]>({
     queryKey: ["/api/drafts"],
+    refetchInterval: 10_000,
   });
 
   const refresh = async () => {
@@ -356,7 +367,7 @@ export default function MyDrafts() {
 
   const editInitial = useMemo<DraftFormState | null>(
     () =>
-      selected?.status === "draft"
+      selected?.status === "draft" && selected.offerType === "sell"
         ? {
             offerType: selected.offerType,
             commodityId: selected.commodity.id,
@@ -379,11 +390,10 @@ export default function MyDrafts() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-neutral-900">
-            Private Offers
+            My Offers
           </h1>
           <p className="mt-2 text-neutral-600">
-            Prepare drafts and view submitted offers visible only to your
-            account.
+            Prepare drafts, submit evidence and follow verification. Published offers appear in the Marketplace only while current server eligibility permits.
           </p>
         </div>
         <Button
@@ -399,8 +409,7 @@ export default function MyDrafts() {
         <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0" />
         <p>
           Drafts and submitted offers remain private and unpublished.
-          Submission only freezes a completed draft for future processing; it
-          does not verify, activate, or publish it.
+          Submission freezes the revision and starts offer verification. Approval alone does not publish: Organization participation and publication eligibility are also required.
         </p>
       </div>
 
@@ -431,7 +440,7 @@ export default function MyDrafts() {
               <div className="flex items-start justify-between gap-3">
                 <CardTitle>{draft.commodity.name}</CardTitle>
                 <Badge variant="secondary">
-                  {draft.status === "draft" ? "Draft" : "Submitted"}
+                  {draft.status}
                 </Badge>
               </div>
             </CardHeader>
@@ -463,7 +472,7 @@ export default function MyDrafts() {
                 className="w-full"
                 onClick={() => setSelected(draft)}
               >
-                View Draft
+                View Offer
               </Button>
             </CardContent>
           </Card>
@@ -510,7 +519,7 @@ export default function MyDrafts() {
                   : "Draft Detail"}
             </DialogTitle>
             <DialogDescription>
-              Private and unpublished. Only your account can access this offer.
+              Owner view. Marketplace visibility is determined separately by server-authoritative publication eligibility.
             </DialogDescription>
           </DialogHeader>
           {selected && !editing && (
@@ -554,13 +563,20 @@ export default function MyDrafts() {
                   </dd>
                 </div>
               </dl>
-              {selected.status === "submitted" ? (
+              {selected.status !== "draft" ? (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                  Submitted offers are private and read-only while waiting for
-                  future platform processing. They are not verified, active,
-                  or published.
+                  This revision is read-only. Submitted offers await verification; verified offers still require current Organization and publication eligibility. Refresh the offer list for the latest state.
                 </div>
               ) : (
+                <div className="space-y-4">
+                <section className="space-y-2 rounded border p-3" aria-label="Offer evidence metadata">
+                  <p className="text-sm">Record the supporting specification reference and assertions before submission. This is metadata, not a protected file upload, and is not a guarantee of goods ownership or availability. Editing the draft requires evidence for the new version.</p>
+                  <Label htmlFor="offer-evidence-reference">Supporting document reference</Label>
+                  <Input id="offer-evidence-reference" maxLength={500} value={evidenceReference} onChange={e=>setEvidenceReference(e.target.value)}/>
+                  <Label htmlFor="offer-evidence-statement">Specification / evidence statement</Label>
+                  <textarea id="offer-evidence-statement" className="w-full rounded border p-2" maxLength={2000} value={evidenceStatement} onChange={e=>setEvidenceStatement(e.target.value)}/>
+                  <Button variant="outline" disabled={evidenceMutation.isPending||!evidenceReference.trim()||!evidenceStatement.trim()} onClick={()=>evidenceMutation.mutate()}>Record evidence metadata</Button>
+                </section>
                 <DialogFooter>
                   <Button
                     variant="destructive"
@@ -597,6 +613,7 @@ export default function MyDrafts() {
                     {submitMutation.isPending ? "Submitting…" : "Submit Draft"}
                   </Button>
                 </DialogFooter>
+                </div>
               )}
             </div>
           )}

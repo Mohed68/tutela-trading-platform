@@ -17,6 +17,8 @@ type Owner = { assignmentId: string; principalId: string; userId: string; status
 type RoleAssignment = { assignmentId: string; principalId: string; role: string; status: string; grantedAt: string; revokedAt: string | null };
 type AuditEvent = { id?: string; action: string; targetType: string; targetId: string; occurredAt: string; severity: string };
 type SafeUser = { userId: string; email: string | null; accountStatus: string; emailVerified: boolean; platformPrincipal: boolean; declaredCompanyName: string | null };
+type SafeOrganization={organizationId:string;legalName:string;lifecycle:string|null;memberCount:number;activeMemberCount:number;reviewOutcome:string|null;verificationDecision:string|null;trustStatus:string|null;verificationPolicyVersion:string|null};
+type TradeOperations={offers:Record<string,unknown>[];orders:Record<string,unknown>[];contracts:Record<string,unknown>[]};
 
 const navigation = [
   ["overview", "Overview"], ["organizations-users", "Organizations & Users"], ["verification", "Verification"],
@@ -44,6 +46,8 @@ export default function SecureAdminControlPlane() {
   const [roles, setRoles] = useState<readonly RoleAssignment[]>([]);
   const [auditEvents, setAuditEvents] = useState<readonly AuditEvent[]>([]);
   const [users, setUsers] = useState<readonly SafeUser[]>([]);
+  const [organizations,setOrganizations]=useState<readonly SafeOrganization[]>([]);
+  const [tradeOperations,setTradeOperations]=useState<TradeOperations>({offers:[],orders:[],contracts:[]});
   const [notice, setNotice] = useState("");
   const [totp, setTotp] = useState("");
   const [targetPrincipalId, setTargetPrincipalId] = useState("");
@@ -70,7 +74,8 @@ export default function SecureAdminControlPlane() {
       setPrincipals(principalRows); setOwners(ownerRows); setRoles(roleRows);
     }
     if (section === "security") setAuditEvents(await json<AuditEvent[]>("/admin/audit?limit=25&offset=0"));
-    if (section === "organizations-users") setUsers(await json<SafeUser[]>("/admin/control-plane/users"));
+    if (section === "organizations-users") {const[userRows,organizationRows]=await Promise.all([json<SafeUser[]>("/admin/control-plane/users"),json<SafeOrganization[]>("/admin/control-plane/organizations")]);setUsers(userRows);setOrganizations(organizationRows);}
+    if(section==="trade-operations")setTradeOperations(await json<TradeOperations>("/admin/control-plane/trade-operations"));
   }, [section]);
 
   useEffect(() => { void refresh().catch(() => setNotice("The secure Control Plane could not be loaded.")); }, [refresh]);
@@ -138,9 +143,10 @@ export default function SecureAdminControlPlane() {
             <Card><CardHeader><CardTitle>Platform Principals</CardTitle></CardHeader><CardContent><SafeRows rows={principals.map((principal) => `${principal.userId} · ${principal.status} · ${principal.principalId}`)}/></CardContent></Card>
             <Card><CardHeader><CardTitle>Role Assignments</CardTitle></CardHeader><CardContent>{roles.length ? <ul className="space-y-2 text-sm">{roles.map((role) => <li key={role.assignmentId} className="flex items-center justify-between gap-3 rounded border p-2"><code className="break-all">{role.principalId} · {role.role} · {role.status}</code>{role.status === "active" && <Button variant="outline" size="sm" onClick={() => revokeRole(role)}>Revoke</Button>}</li>)}</ul> : <p className="text-sm text-neutral-500">No records.</p>}</CardContent></Card>
           </div>}
-          {section === "organizations-users" && <div className="space-y-5"><Card><CardHeader><CardTitle>Organizations</CardTitle></CardHeader><CardContent><p className="text-sm text-neutral-600">A canonical Organization Registry is not active in this baseline. Declared company names below are account metadata, not Organization Verification, Trust, or Eligibility authority.</p></CardContent></Card><Card><CardHeader><CardTitle>Users</CardTitle></CardHeader><CardContent><SafeRows rows={users.map((user) => `${user.email ?? user.userId} · ${user.accountStatus} · email ${user.emailVerified ? "verified" : "unverified"} · Platform Principal ${user.platformPrincipal ? "yes" : "no"}${user.declaredCompanyName ? ` · ${user.declaredCompanyName}` : ""}`)}/></CardContent></Card></div>}
+          {section === "organizations-users" && <div className="space-y-5"><Card><CardHeader><CardTitle>Canonical Organization Registry</CardTitle></CardHeader><CardContent><p className="mb-3 text-sm text-neutral-600">Safe operational projection. Assertions and protected evidence content are not exposed here.</p><SafeRows rows={organizations.map(org=>`${org.legalName??org.organizationId} · ${org.lifecycle??"registered"} · members ${org.activeMemberCount}/${org.memberCount} · review ${org.reviewOutcome??"pending"} · decision ${org.verificationDecision??"not available"} · trust ${org.trustStatus??"not established"} · ${org.verificationPolicyVersion??"no policy decision"}`)}/></CardContent></Card><Card><CardHeader><CardTitle>Users</CardTitle></CardHeader><CardContent><SafeRows rows={users.map((user) => `${user.email ?? user.userId} · ${user.accountStatus} · email ${user.emailVerified ? "verified" : "unverified"} · Platform Principal ${user.platformPrincipal ? "yes" : "no"}${user.declaredCompanyName ? ` · ${user.declaredCompanyName}` : ""}`)}/></CardContent></Card></div>}
+          {section==="trade-operations"&&<div className="space-y-5"><p className="rounded border bg-white p-3 text-sm">ACTIVE_BASELINE — safe Current V2 visibility only. No RFQ, Trade Deal, settlement, payment, or shipping authority is implied.</p>{(["offers","orders","contracts"] as const).map(kind=><Card key={kind}><CardHeader><CardTitle className="capitalize">{kind}</CardTitle></CardHeader><CardContent><SafeRows rows={tradeOperations[kind].map(row=>Object.entries(row).map(([key,value])=>`${key}: ${String(value??"—")}`).join(" · "))}/></CardContent></Card>)}</div>}
           {(section === "verification" || section === "risk" || section === "enforcement") && identity && <VreWorkbench key={section} module={section} permissions={identity.user.permissions}/>}
-          {!["overview","platform","organizations-users","verification","risk","enforcement"].includes(section) && <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><p className="text-sm text-neutral-600">{maturity === "DEFINED" ? `DEFINED — NOT YET ACTIVATED. This capability is architecturally defined and will become available when the ${title} control plane is activated.` : `This module is ${maturity}. No unimplemented capability is presented as operational.`}</p>{section === "security" && <div className="mt-4"><p className="mb-3 text-sm">Security Audit access is protected by server permission and MFA assurance.</p><SafeRows rows={auditEvents.map((event) => `${event.occurredAt} · ${event.severity} · ${event.action} · ${event.targetType}:${event.targetId}`)}/></div>}</CardContent></Card>}
+          {!["overview","platform","organizations-users","verification","risk","enforcement","trade-operations"].includes(section) && <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><p className="text-sm text-neutral-600">{maturity === "DEFINED" ? `DEFINED — NOT YET ACTIVATED. This capability is architecturally defined and will become available when the ${title} control plane is activated.` : `This module is ${maturity}. No unimplemented capability is presented as operational.`}</p>{section === "security" && <div className="mt-4"><p className="mb-3 text-sm">Security Audit access is protected by server permission and MFA assurance.</p><SafeRows rows={auditEvents.map((event) => `${event.occurredAt} · ${event.severity} · ${event.action} · ${event.targetType}:${event.targetId}`)}/></div>}</CardContent></Card>}
         </main>
       </div>
     </div>

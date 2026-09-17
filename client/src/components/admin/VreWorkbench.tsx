@@ -6,7 +6,8 @@ import { apiRequest } from "@/lib/queryClient";
 
 type Module = "verification" | "risk" | "enforcement";
 type Row = Record<string, unknown>;
-type Field = { key: string; label: string; options?: readonly string[]; type?: "datetime-local" | "textarea"; optional?: boolean };
+type Field = { key: string; label: string; options?: readonly string[]; type?: "datetime-local" | "textarea" | "restrictions"; optional?: boolean };
+const restrictionOptions=["offer.create","offer.edit","offer.submit","order.create","order.accept","contract.create"] as const;
 type Action = { id: string; label: string; permission: string; path: string; fields: Field[]; warning: string };
 const reason: Field = {key:"reason",label:"Reason / supporting context",type:"textarea"};
 const scopes: Field = {key:"scope",label:"Scope",options:["ORGANIZATION","USER"]};
@@ -40,9 +41,10 @@ const actions: Record<Module,Action[]> = {
       warning:"An explicit case records context, not a punishment. Linked assessments must match this exact scope and subject."},
     {id:"decide",label:"Decide selected case",permission:"enforcement.decide",path:"enforcement/decisions",fields:[
       {key:"state",label:"New scoped state",options:["MONITORED","RESTRICTED","SUSPENDED","BLOCKED","TERMINATED","NORMAL"]},
+      {key:"restrictedActions",label:"Explicitly restricted V2 actions",type:"restrictions",optional:true},
       {key:"remediation",label:"Remediation / lifting conditions",type:"textarea"},
       {key:"reviewAt",label:"Next review (your local time)",type:"datetime-local"},reason],
-      warning:"Appends a decision and scoped action. NORMAL explicitly lifts the prior action and preserves history. Downstream trading/account restrictions are INACTIVE in this baseline; this does not block access or rewrite Trust."},
+      warning:"Appends a decision and scoped action. RESTRICTED requires explicit actions; MONITORED does not deny. SUSPENDED, BLOCKED and TERMINATED deny new V2 trade mutations while preserving history. Trust and Verification are never rewritten."},
   ],
 };
 const display = (value: unknown) => value == null ? "—" : String(value).replaceAll("_"," ");
@@ -100,6 +102,7 @@ export function VreWorkbench({module,permissions}:{module:Module;permissions:rea
       if(field.type==="datetime-local" && values[field.key]) body[field.key]=new Date(values[field.key]).toISOString();
       if(field.optional && !values[field.key]) body[field.key]=null;
     }
+    if(action.id==="decide")body.restrictedActions=values.state==="RESTRICTED"?(values.restrictedActions??"").split(",").filter(Boolean):[];
     if(action.id==="review")Object.assign(body,{organizationId:selected?.organizationId,profileRevisionId:selected?.profileRevisionId,
       evidenceId:evidence?.evidenceId,evidenceVersion:evidence?.evidenceVersion,evidenceDigest:evidence?.evidenceDigest});
     if(action.id==="reevaluate")Object.assign(body,{organizationId:selected?.organizationId,profileRevisionId:selected?.profileRevisionId});
@@ -128,7 +131,7 @@ export function VreWorkbench({module,permissions}:{module:Module;permissions:rea
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
       {module==="verification"?"Policy V2 · Self-attestation is Evidence. Independent confirmation is required before the canonical engine may approve. V1 history remains intact.":
         module==="risk"?"Signals → assessments → dispositions. Risk does not impose Enforcement, and lack of Verification is not misconduct.":
-        "Cases → explicit decisions → scoped actions. Downstream account/trading enforcement is INACTIVE; recorded states do not automatically block activity."}
+        "Cases → explicit decisions → scoped actions. The Current V2 command guard consumes only matching authoritative actions; read/history and Trust remain intact."}
     </div>
     <div className="flex flex-wrap gap-2"><Input aria-label={`Filter ${module} queue`} placeholder="Filter name, identifier or status…" value={filter} onChange={e=>setFilter(e.target.value)} className="max-w-sm"/>
       <Button variant="outline" disabled={busy||loading} onClick={()=>setRevision(n=>n+1)}>Refresh</Button>
@@ -141,7 +144,7 @@ export function VreWorkbench({module,permissions}:{module:Module;permissions:rea
         <td className="p-3"><div className="font-medium">{display(row.legalName??row.subjectName??row.scope??"Organization")}</div><div className="break-all text-xs text-slate-500">{display(row.organizationId??row.subjectId)}</div></td>
         <td className="p-3">{module==="verification"?display(!row.evidenceId?"Evidence missing":row.reviewMatchesEvidence?row.reviewOutcome:"Independent review needed"):
           module==="risk"?<>{display(row.severity)} · {display(row.signalType)}<div className="text-xs">{display(row.conclusion??"not assessed")} · {display(row.disposition??"open")}</div></>:
-          <>{display(row.currentState)}<div className="text-xs">{row.decisionId?"Case decided":"Case open"} · downstream inactive</div></>}</td>
+          <>{display(row.currentState)}<div className="text-xs">{row.decisionId?"Case decided":"Case open"} · {display(row.integrationStatus)}</div></>}</td>
         <td className="p-3 whitespace-nowrap">{date(row.createdAt??row.submittedAt)}</td><td className="p-3"><Button variant="outline" size="sm" disabled={busy} aria-label={`Inspect ${display(row.legalName??row.subjectName??rowId(row))}`} onClick={()=>setSelected(row)}>Inspect</Button></td>
       </tr>)}</tbody></table></div>}
     {selected&&<section className="space-y-3 rounded-lg border bg-white p-4" aria-label="Selected record details"><h2 className="font-semibold">Record context & history</h2>
@@ -164,6 +167,7 @@ export function VreWorkbench({module,permissions}:{module:Module;permissions:rea
       <div className="grid gap-3 sm:grid-cols-2">{action.fields.map(field=><label key={field.key} className={`space-y-1 text-sm ${field.type==="textarea"?"sm:col-span-2":""}`}><span>{field.label}</span>
         {field.options?<select className="h-10 w-full rounded border px-2" value={values[field.key]??field.options[0]} onChange={e=>setValues(v=>({...v,[field.key]:e.target.value,...(field.key==="scope"?{subjectId:""}:{})}))}>{field.options.map(option=><option key={option} value={option}>{display(option)}</option>)}</select>:
         field.key==="subjectId"?<select required className="h-10 w-full rounded border px-2" value={values.subjectId??""} onChange={e=>setValues(v=>({...v,subjectId:e.target.value}))}><option value="">Select a canonical subject</option>{subjects.map(s=><option key={s.id} value={s.id}>{s.label} · {s.id}</option>)}</select>:
+        field.type==="restrictions"?<div className="grid gap-1 rounded border p-2">{restrictionOptions.map(option=><label key={option} className="flex items-center gap-2"><input type="checkbox" disabled={values.state!=="RESTRICTED"} checked={(values[field.key]??"").split(",").includes(option)} onChange={e=>setValues(v=>{const current=new Set((v[field.key]??"").split(",").filter(Boolean));e.target.checked?current.add(option):current.delete(option);return {...v,[field.key]:[...current].join(",")};})}/>{display(option)}</label>)}</div>:
         field.type==="textarea"?<textarea required maxLength={1000} className="min-h-20 w-full rounded border p-2" value={values[field.key]??""} onChange={e=>setValues(v=>({...v,[field.key]:e.target.value}))}/>:
         <Input required={!field.optional} type={field.type??"text"} maxLength={500} value={values[field.key]??""} onChange={e=>setValues(v=>({...v,[field.key]:e.target.value}))}/>}</label>)}</div>
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} className="mt-1"/>I confirm this explicit action, its scope and supporting evidence. Historical facts will remain intact.</label>

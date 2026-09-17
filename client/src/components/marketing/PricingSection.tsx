@@ -15,8 +15,10 @@ interface UserState {
 }
 
 function inferUserState(): UserState {
-  const loggedIn = !!localStorage.getItem("tutela_user");
-  const kyb = (localStorage.getItem("tutela_kyb_state") as KYBState) || "none";
+  // Marketing pages do not resolve account or verification authority. Signed-in
+  // capability is projected only by authenticated server reads inside the app.
+  const loggedIn = false;
+  const kyb: KYBState = "none";
   const currentPlan = (localStorage.getItem("tutela_plan") as PlanId) || "none";
   const onFreemium = localStorage.getItem("tutela_freemium") === "1";
   return { loggedIn, kyb, currentPlan, onFreemium };
@@ -106,9 +108,7 @@ function useCTAs(
   const goto = (path: string) => navigate(path);
 
   const tryDemo = () => {
-    localStorage.setItem("tutela_demo", "1");
-    localStorage.setItem("tutela_kyb_state", "verified");
-    navigate("/offers");
+    navigate("/register");
   };
 
   // Not logged in

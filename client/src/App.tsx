@@ -9,12 +9,10 @@ import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganizationContext } from "@/hooks/useOrganizationContext";
 
-import { getAuth } from "@/lib/session";
 import { isDemo } from "@/lib/demo";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { RouteGuard, VerifiedRoute, PartnerRoute, AdminRoute } from "@/components/navigation/RouteGuard";
-import { PaymentSimulation } from "@/components/payment/PaymentSimulation";
+import { VerifiedRoute, PartnerRoute, AdminRoute } from "@/components/navigation/RouteGuard";
 
 // Public Pages
 import NotFound from "@/pages/NotFound";
@@ -22,39 +20,26 @@ import Home from "@/pages/home";
 import HowItWorks from "@/pages/how-it-works";
 import Pricing from "@/pages/pricing";
 import FAQ from "@/pages/faq";
-import DemoRequest from "@/pages/demo-request";
-import DemoCheckEmail from "@/pages/demo-check-email";
-import DemoVerify from "@/pages/demo-verify";
-import DemoLanding from "@/pages/demo-landing";
-import DemoMarketplace from "@/pages/demo-marketplace";
-import DemoMissions from "@/pages/demo-missions";
-import DemoOfferPage from "@/pages/demo-offer";
-import DemoOrganizationPage from "@/pages/demo-organization";
-import DemoOrderPage from "@/pages/demo-order";
-import DemoContractPage from "@/pages/demo-contract";
-import { DemoShell } from "@/features/demo/DemoShell";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import RegistrationPending from "@/pages/registration-pending";
 import VerifyEmail from "@/pages/verify-email";
+import ForgotPassword from "@/pages/forgot-password";
+import ResetPassword from "@/pages/reset-password";
 import OrganizationSetup from "@/pages/organization-setup";
 
 // App Pages  
-import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Offers from "@/pages/offers";
 import Marketplace from "@/pages/marketplace";
 import Commodities from "@/pages/commodities";
 import Orders from "@/pages/orders";
 import Contracts from "@/pages/contracts";
-import Partners from "@/pages/partners";
 import Verification from "@/pages/verification";
-import Insights from "@/pages/insights";
 import Checkout from "@/pages/checkout";
 import MyDrafts from "@/pages/MyDrafts";
 import CheckoutSuccess from "@/pages/checkout-success";
 import SecureAdminControlPlane from "@/pages/SecureAdminControlPlane";
-import { AnimationShowcase } from "@/components/demo/AnimationShowcase";
 import { MonitoringDashboard } from "@/components/MonitoringDashboard";
 import { MfaSecuritySettings } from "@/features/security/MfaSecuritySettings";
 import { EmailVerificationSettings } from "@/features/security/EmailVerificationSettings";
@@ -65,7 +50,6 @@ function Router() {
   const demoMode = isDemo();
   const { context: organizationContext, isLoading: organizationLoading } =
     useOrganizationContext(isAuthenticated);
-  const { verified } = getAuth();
   
   // Determine if user should see app interface
   const showAppInterface = isAuthenticated;
@@ -76,6 +60,8 @@ function Router() {
       "/register",
       "/registration-pending",
       "/verify-email",
+      "/forgot-password",
+      "/reset-password",
       "/home",
       "/how-it-works",
       "/pricing",
@@ -88,6 +74,8 @@ function Router() {
       !organizationLoading &&
       !publicPath &&
       location !== "/organization/setup" &&
+      !location.startsWith("/admin") &&
+      !["/settings", "/orders", "/contracts"].includes(location) &&
       organizationContext?.state === "setup_required" &&
       isAuthenticated &&
       !demoMode
@@ -118,6 +106,8 @@ function Router() {
       <Route path="/verify-email">
         <PublicLayout><VerifyEmail /></PublicLayout>
       </Route>
+      <Route path="/forgot-password"><PublicLayout><ForgotPassword /></PublicLayout></Route>
+      <Route path="/reset-password"><PublicLayout><ResetPassword /></PublicLayout></Route>
 
       {/* Public Marketing Pages */}
       <Route path="/how-it-works">
@@ -138,16 +128,6 @@ function Router() {
         </PublicLayout>
       </Route>
       
-      <Route path="/demo/request"><DemoRequest /></Route>
-      <Route path="/demo/check-email"><DemoCheckEmail /></Route>
-      <Route path="/demo/verify"><DemoVerify /></Route>
-      <Route path="/demo/marketplace"><DemoShell><DemoMarketplace /></DemoShell></Route>
-      <Route path="/demo/missions"><DemoShell><DemoMissions /></DemoShell></Route>
-      <Route path="/demo/offers/:offerId"><DemoShell><DemoOfferPage /></DemoShell></Route>
-      <Route path="/demo/organizations/:organizationId"><DemoShell><DemoOrganizationPage /></DemoShell></Route>
-      <Route path="/demo/orders/:orderId"><DemoShell><DemoOrderPage /></DemoShell></Route>
-      <Route path="/demo/contracts/:contractId"><DemoShell><DemoContractPage /></DemoShell></Route>
-      <Route path="/demo"><DemoShell><DemoLanding /></DemoShell></Route>
 
       {/* Checkout Flow - Available to all users */}
       <Route path="/checkout">
@@ -230,7 +210,7 @@ function Router() {
               <AppLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold text-neutral-900 mb-4">Negotiations</h1>
-                  <p className="text-neutral-600">Manage your active negotiations and proposals</p>
+                  <p className="text-neutral-600">NOT YET ACTIVATED — Negotiation is outside the current V2 order and contract-draft workflow.</p>
                 </div>
               </AppLayout>
             </VerifiedRoute>
@@ -249,7 +229,7 @@ function Router() {
               <AppLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold text-neutral-900 mb-4">Payments</h1>
-                  <p className="text-neutral-600">Track payments, manage wallet, and view transaction history</p>
+                  <p className="text-neutral-600">NOT YET ACTIVATED — No trade payment, wallet or settlement capability is offered here.</p>
                 </div>
               </AppLayout>
             </VerifiedRoute>
@@ -260,7 +240,7 @@ function Router() {
               <AppLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold text-neutral-900 mb-4">Logistics</h1>
-                  <p className="text-neutral-600">Manage shipments and logistics partners</p>
+                  <p className="text-neutral-600">NOT YET ACTIVATED — Shipment and logistics operations are deferred.</p>
                 </div>
               </AppLayout>
             </VerifiedRoute>
@@ -277,7 +257,7 @@ function Router() {
           <Route path="/analytics">
             <VerifiedRoute>
               <AppLayout>
-                <Insights />
+                <p className="p-8">NOT YET ACTIVATED — Trading analytics are deferred.</p>
               </AppLayout>
             </VerifiedRoute>
           </Route>
@@ -293,7 +273,7 @@ function Router() {
           <Route path="/partners">
             <VerifiedRoute>
               <AppLayout>
-                <Partners />
+                <p className="p-8">NOT YET ACTIVATED — Partner operations are deferred.</p>
               </AppLayout>
             </VerifiedRoute>
           </Route>
@@ -344,7 +324,7 @@ function Router() {
               <AppLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold text-neutral-900 mb-4">Review Queue</h1>
-                  <p className="text-neutral-600">Review pending verifications and applications</p>
+                  <p className="text-neutral-600">Use the active Verification module in the secure Admin Control Plane.</p>
                 </div>
               </AppLayout>
             </AdminRoute>
@@ -355,7 +335,7 @@ function Router() {
               <AppLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold text-neutral-900 mb-4">Audit Log</h1>
-                  <p className="text-neutral-600">View comprehensive audit trail and system logs</p>
+                  <p className="text-neutral-600">Use the active Security Audit module in the secure Admin Control Plane.</p>
                 </div>
               </AppLayout>
             </AdminRoute>
@@ -366,7 +346,7 @@ function Router() {
               <AppLayout>
                 <div className="text-center py-12">
                   <h1 className="text-2xl font-bold text-neutral-900 mb-4">Compliance Reports</h1>
-                  <p className="text-neutral-600">Generate and view compliance reports</p>
+                  <p className="text-neutral-600">NOT YET ACTIVATED — Compliance report generation is deferred.</p>
                 </div>
               </AppLayout>
             </AdminRoute>
@@ -377,7 +357,7 @@ function Router() {
             <AppLayout>
               <div className="text-center py-12">
                 <h1 className="text-2xl font-bold text-neutral-900 mb-4">Support Center</h1>
-                <p className="text-neutral-600">Get help and contact our support team</p>
+                <p className="text-neutral-600">NOT YET ACTIVATED — No operational support case workflow is available in the current system.</p>
               </div>
             </AppLayout>
           </Route>
@@ -394,7 +374,6 @@ function Router() {
                     <div className="mt-6" />
                     <MfaSecuritySettings />
                   </div>
-                  <PaymentSimulation />
                 </div>
               </div>
             </AppLayout>

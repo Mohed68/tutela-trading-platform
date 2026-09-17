@@ -298,9 +298,8 @@ export default function OfferDetailModal({ offer, isOpen, onClose }: OfferDetail
             </Button>
           </div> : (
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-              Live trading actions remain unavailable until the server-authoritative
-              reservation and contracting workflow is completed. You can explore
-              these interactions safely in Demo mode.
+              <p>Create an order for seller acceptance. Your Organization must be eligible; the server rechecks the published offer and all applicable restrictions.</p>
+              <Button className="mt-3" onClick={() => user ? setIsPlaceOrderOpen(true) : navigate("/login")}>{user ? "Place order" : "Sign in to place order"}</Button>
             </div>
           )}
         </div>

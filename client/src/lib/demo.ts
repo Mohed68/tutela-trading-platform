@@ -451,6 +451,7 @@ export function initializeDemoSession(
 }
 
 export function enableDemo(mode: DemoMode = "verified"): void {
+  if (!import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_RUNTIME !== "true") throw new Error("DEMO_RUNTIME_DISABLED");
   initializeDemoSession(localStorage, mode);
   
   // Set verification state
@@ -505,8 +506,7 @@ export function isDemo(): boolean {
     return false;
   }
   
-  const isDevelopment = import.meta.env?.DEV || import.meta.env?.NODE_ENV === 'development';
-  return localStorage.getItem("tutela_demo") === "1" || isDevelopment;
+  return import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_RUNTIME === "true" && localStorage.getItem("tutela_demo") === "1";
 }
 
 export function getDemoMode(): DemoMode | null {
