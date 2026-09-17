@@ -1,6 +1,7 @@
 import type { QueryResultRow } from "pg";
 
 import { pool } from "../db.js";
+import { lockAndRequireTradeMutation, type TradeMutationAction } from "../enforcement/guard.js";
 import {
   createAcceptedCommercialTerms,
   fingerprintTradingOffer,
@@ -47,7 +48,7 @@ export async function loadTradingOffer(offerId: string): Promise<TradingOfferSna
              'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS offer_version
     FROM public.offers AS offer
     INNER JOIN public.commodities AS commodity ON commodity.id = offer.commodity_id
-    WHERE offer.id = $1
+    WHERE offer.id = $1 AND offer.type = 'sell'
   `, [offerId]);
   const row = result.rows[0];
   const offerVersion = row?.offer_version ?? null;
@@ -143,6 +144,70 @@ function hydrateOrder(row: OrderRow | undefined): AuthoritativeOrderRecord | nul
   return isAuthoritativeOrderRecord(order) ? order : null;
 }
 
+export async function listCanonicalOrdersForUser(userId:string):Promise<AuthoritativeOrderRecord[]>{
+  const result=await pool.query<OrderRow>(`SELECT ${ORDER_COLUMNS} FROM public.orders
+    WHERE buyer_id=$1 OR seller_id=$1 ORDER BY created_at DESC,id DESC`,[userId]);
+  return result.rows.map(hydrateOrder).filter((value):value is AuthoritativeOrderRecord=>value!==null);
+}
+
+interface ContractRow extends QueryResultRow {
+  id:string;order_id:string|null;offer_id:string;buyer_id:string;buyer_organization_id:string|null;
+  seller_id:string;seller_organization_id:string|null;status:string|null;contract_version:number|null;
+  accepted_order_version:number|null;accepted_order_fingerprint:string|null;accepted_terms_version:number|null;
+  accepted_terms_fingerprint:string|null;contract_fingerprint:string|null;created_at:Date|string|null;
+  quantity:string;unit:string;price_per_unit:string;total_amount:string;currency:string;
+  delivery_terms:string|null;payment_terms:string|null;specifications:string|null;
+  accepted_terms_snapshot: Record<string, unknown> | null;
+  source_order_fingerprint: string | null;
+  snapshot_matches_contract: boolean;
+}
+function hydrateContract(row:ContractRow|undefined):AuthoritativeContractRecord|null{
+  if(!row||!row.order_id||!row.buyer_organization_id||!row.seller_organization_id||row.status!=="draft"||!row.snapshot_matches_contract||
+    row.contract_version!==1||!row.accepted_order_version||!row.accepted_order_fingerprint||row.accepted_terms_version!==1||
+    !row.accepted_terms_fingerprint||!row.contract_fingerprint)return null;
+  const snapshot = row.accepted_terms_snapshot;
+  if (!snapshot || row.source_order_fingerprint !== row.accepted_order_fingerprint ||
+    typeof snapshot.quantity !== "string" || typeof snapshot.unit !== "string" ||
+    typeof snapshot.pricePerUnit !== "string" || typeof snapshot.totalAmount !== "string" ||
+    typeof snapshot.currency !== "string") return null;
+  const terms=createAcceptedCommercialTerms({termsVersion:1,quantity:snapshot.quantity,unit:snapshot.unit,pricePerUnit:snapshot.pricePerUnit,
+    totalAmount:snapshot.totalAmount,currency:snapshot.currency,
+    deliveryTerms:typeof snapshot.deliveryTerms === "string" ? snapshot.deliveryTerms : null,
+    paymentTerms:typeof snapshot.paymentTerms === "string" ? snapshot.paymentTerms : null,
+    specifications:typeof snapshot.specifications === "string" ? snapshot.specifications : null});
+  if(terms.termsFingerprint!==row.accepted_terms_fingerprint)return null;
+  const createdAt=iso(row.created_at);if(!createdAt)return null;
+  const value=Object.freeze({contractId:row.id,orderId:row.order_id,offerId:row.offer_id,buyerUserId:row.buyer_id,
+    buyerOrganizationId:row.buyer_organization_id,sellerUserId:row.seller_id,sellerOrganizationId:row.seller_organization_id,
+    status:"draft" as const,contractVersion:1,acceptedOrderVersion:row.accepted_order_version,
+    acceptedOrderFingerprint:row.accepted_order_fingerprint,terms,createdAt,contractFingerprint:row.contract_fingerprint});
+  return isAuthoritativeContractRecord(value)?value:null;
+}
+const CONTRACT_COLUMNS=`contract.id,contract.order_id,contract.offer_id,contract.buyer_id,contract.buyer_organization_id,
+  contract.seller_id,contract.seller_organization_id,contract.status,contract.contract_version,contract.accepted_order_version,
+  contract.accepted_order_fingerprint,contract.accepted_terms_version,contract.accepted_terms_fingerprint,contract.contract_fingerprint,
+  to_char(contract.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+  source.accepted_terms_snapshot,source.order_fingerprint AS source_order_fingerprint,
+  (contract.quantity=(source.accepted_terms_snapshot->>'quantity')::numeric
+    AND contract.price_per_unit=(source.accepted_terms_snapshot->>'pricePerUnit')::numeric
+    AND contract.total_amount=(source.accepted_terms_snapshot->>'totalAmount')::numeric
+    AND contract.currency=source.accepted_terms_snapshot->>'currency'
+    AND contract.delivery_terms IS NOT DISTINCT FROM source.accepted_terms_snapshot->>'deliveryTerms'
+    AND contract.payment_terms IS NOT DISTINCT FROM source.accepted_terms_snapshot->>'paymentTerms'
+    AND contract.specifications IS NOT DISTINCT FROM source.accepted_terms_snapshot->>'specifications') AS snapshot_matches_contract,
+  contract.quantity::text,contract.price_per_unit::text,contract.total_amount::text,
+  contract.currency,contract.delivery_terms,contract.payment_terms,contract.specifications`;
+export async function listCanonicalContractsForUser(userId:string):Promise<AuthoritativeContractRecord[]>{
+  const result=await pool.query<ContractRow>(`SELECT ${CONTRACT_COLUMNS} FROM public.contracts contract
+    JOIN public.orders source ON source.id=contract.order_id WHERE contract.buyer_id=$1 OR contract.seller_id=$1
+    ORDER BY contract.created_at DESC,contract.id DESC`,[userId]);
+  return result.rows.map(hydrateContract).filter((value):value is AuthoritativeContractRecord=>value!==null);
+}
+export async function loadCanonicalContractForUser(contractId:string,userId:string):Promise<AuthoritativeContractRecord|null>{
+  const result=await pool.query<ContractRow>(`SELECT ${CONTRACT_COLUMNS} FROM public.contracts contract JOIN public.orders source ON source.id=contract.order_id
+    WHERE contract.id=$1 AND (contract.buyer_id=$2 OR contract.seller_id=$2)`,[contractId,userId]);return hydrateContract(result.rows[0]);
+}
+
 const ORDER_COLUMNS = `id, offer_id, buyer_id, buyer_organization_id,
   seller_id, seller_organization_id, status, order_version, offer_version,
   offer_fingerprint, publication_eligibility_fingerprint,
@@ -152,10 +217,25 @@ const ORDER_COLUMNS = `id, offer_id, buyer_id, buyer_organization_id,
   accepted_at,
   order_fingerprint`;
 
+function guardedWriter(action:TradeMutationAction, record:{buyerUserId:string;buyerOrganizationId:string;sellerUserId:string;sellerOrganizationId:string}) {
+  return {async query<T extends QueryResultRow>(sql:string,values:unknown[]){
+    const client=await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await lockAndRequireTradeMutation(client,action,[
+        {scope:"USER",subjectId:record.buyerUserId},{scope:"ORGANIZATION",subjectId:record.buyerOrganizationId},
+        {scope:"USER",subjectId:record.sellerUserId},{scope:"ORGANIZATION",subjectId:record.sellerOrganizationId},
+      ]);
+      const result=await client.query<T>(sql,values);
+      await client.query("COMMIT");return result;
+    }catch(error){await client.query("ROLLBACK").catch(()=>undefined);throw error;}finally{client.release();}
+  }};
+}
+
 export const postgresTradingFlowRepository: TradingFlowRepository = Object.freeze({
   loadOffer: loadTradingOffer,
   async insertOrder(order: AuthoritativeOrderRecord) {
-    const result = await pool.query<OrderRow>(`
+    const result = await guardedWriter("order.create",order).query<OrderRow>(`
       INSERT INTO public.orders (
         id, contract_id, offer_id, buyer_id, seller_id,
         buyer_organization_id, seller_organization_id, commodity, quantity,
@@ -196,7 +276,7 @@ export const postgresTradingFlowRepository: TradingFlowRepository = Object.freez
     previousOrderFingerprint: string;
     acceptedOrder: AuthoritativeOrderRecord;
   }>) {
-    const result = await pool.query<OrderRow>(`
+    const result = await guardedWriter("order.accept",acceptedOrder).query<OrderRow>(`
       UPDATE public.orders
       SET status = 'accepted', order_version = $1, accepted_at = $2::timestamptz,
           order_fingerprint = $3, updated_at = $2::timestamptz
@@ -207,7 +287,7 @@ export const postgresTradingFlowRepository: TradingFlowRepository = Object.freez
     return hydrateOrder(result.rows[0]);
   },
   async insertContract(contract: AuthoritativeContractRecord) {
-    const result = await pool.query<QueryResultRow>(`
+    const result = await guardedWriter("contract.create",contract).query<QueryResultRow>(`
       INSERT INTO public.contracts (
         id, order_id, offer_id, buyer_id, seller_id,
         buyer_organization_id, seller_organization_id, quantity, price_per_unit,

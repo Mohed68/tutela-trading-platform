@@ -20,7 +20,9 @@ const futureTimestampSchema = z
   );
 
 const mutableDraftFields = {
-  offerType: z.enum(["buy", "sell"]),
+  // Current V2 is a seller-offer flow. BUY Trade Intent belongs to V3 and
+  // must never be represented as a production V2 offer.
+  offerType: z.literal("sell"),
   commodityId: z.string().uuid(),
   quantity: storedDecimalSchema,
   unit: draftOfferUnitSchema,

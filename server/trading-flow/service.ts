@@ -16,6 +16,7 @@ import {
   type AuthoritativeOrderRecord,
   type TradingOfferSnapshot,
 } from "./contracts.js";
+import type { EnforcementGuard, EnforcementSubject, TradeMutationAction } from "../enforcement/guard.js";
 
 export type TradingFlowFailureCode =
   | "invalid_request"
@@ -28,6 +29,7 @@ export type TradingFlowFailureCode =
   | "seller_authority_required"
   | "order_not_contractible"
   | "participant_authority_required"
+  | "enforcement_denied"
   | "persistence_conflict";
 
 export type TradingFlowResult<T> =
@@ -49,6 +51,19 @@ export interface TradingFlowDependencies extends OfferPublicationEligibilityDepe
   readonly repository: TradingFlowRepository;
   readonly ids: Readonly<{ next(): string }>;
   readonly clock: Readonly<{ now(): string }>;
+  readonly enforcement: EnforcementGuard;
+}
+
+async function enforcementAllows(dependencies: TradingFlowDependencies, action: TradeMutationAction,
+  subjects: readonly EnforcementSubject[]): Promise<boolean> {
+  return dependencies.enforcement.allows(action,subjects);
+}
+
+function participants(offer: TradingOfferSnapshot,buyerUserId:string,buyerOrganizationId:string): readonly EnforcementSubject[] {
+  return [
+    {scope:"USER",subjectId:buyerUserId},{scope:"ORGANIZATION",subjectId:buyerOrganizationId},
+    {scope:"USER",subjectId:offer.sellerUserId},{scope:"ORGANIZATION",subjectId:offer.sellerOrganizationId},
+  ];
 }
 
 export interface CreateOrderRequest {
@@ -63,6 +78,7 @@ function validIdentity(value: unknown): value is string {
 }
 
 function parseDecimal(value: string): { coefficient: bigint; scale: number } | null {
+  if (typeof value !== "string" || value.length > 32) return null;
   if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) return null;
   const [whole, fraction = ""] = value.split(".");
   const coefficient = BigInt(`${whole}${fraction}`);
@@ -152,11 +168,14 @@ async function resolveCurrentAuthority(
 export function createTradingFlowService(dependencies: TradingFlowDependencies) {
   return Object.freeze({
     async createOrder(request: CreateOrderRequest): Promise<TradingFlowResult<AuthoritativeOrderRecord>> {
-      if (![request.offerId, request.buyerUserId, request.buyerOrganizationId].every(validIdentity)) {
+      if (![request.offerId, request.buyerUserId, request.buyerOrganizationId].every(validIdentity) ||
+        typeof request.quantity !== "string" || !/^(?:0|[1-9]\d{0,12})(?:\.\d{1,2})?$/.test(request.quantity)) {
         return Object.freeze({ ok: false, code: "invalid_request" });
       }
       const offer = await dependencies.repository.loadOffer(request.offerId);
       if (!offer) return Object.freeze({ ok: false, code: "offer_not_found" });
+      if (!(await enforcementAllows(dependencies,"order.create",participants(offer,request.buyerUserId,request.buyerOrganizationId))))
+        return Object.freeze({ok:false,code:"enforcement_denied"});
       const quantityVsAvailable = compareDecimal(request.quantity, offer.availableQuantity);
       const quantityVsMinimum = offer.minimumQuantity
         ? compareDecimal(request.quantity, offer.minimumQuantity)
@@ -219,9 +238,12 @@ export function createTradingFlowService(dependencies: TradingFlowDependencies) 
       if (order.status !== "created") return Object.freeze({ ok: false, code: "order_not_acceptable" });
       if (order.sellerUserId !== sellerUserId) return Object.freeze({ ok: false, code: "seller_authority_required" });
       const offer = await dependencies.repository.loadOffer(order.offerId);
-      if (!offer || offer.offerVersion !== order.offerVersion || offer.offerFingerprint !== order.offerFingerprint) {
+      if (!offer || offer.offerVersion !== order.offerVersion || offer.offerFingerprint !== order.offerFingerprint ||
+        (offer.validUntil !== null && (!Number.isFinite(Date.parse(offer.validUntil)) || Date.parse(offer.validUntil) <= Date.parse(dependencies.clock.now())))) {
         return Object.freeze({ ok: false, code: "stale_offer" });
       }
+      if (!(await enforcementAllows(dependencies,"order.accept",participants(offer,order.buyerUserId,order.buyerOrganizationId))))
+        return Object.freeze({ok:false,code:"enforcement_denied"});
       const authority = await resolveCurrentAuthority(
         dependencies,
         offer,
@@ -268,9 +290,12 @@ export function createTradingFlowService(dependencies: TradingFlowDependencies) 
         return Object.freeze({ ok: false, code: "participant_authority_required" });
       }
       const offer = await dependencies.repository.loadOffer(order.offerId);
-      if (!offer || offer.offerVersion !== order.offerVersion || offer.offerFingerprint !== order.offerFingerprint) {
+      if (!offer || offer.offerVersion !== order.offerVersion || offer.offerFingerprint !== order.offerFingerprint ||
+        (offer.validUntil !== null && (!Number.isFinite(Date.parse(offer.validUntil)) || Date.parse(offer.validUntil) <= Date.parse(dependencies.clock.now())))) {
         return Object.freeze({ ok: false, code: "stale_offer" });
       }
+      if (!(await enforcementAllows(dependencies,"contract.create",participants(offer,order.buyerUserId,order.buyerOrganizationId))))
+        return Object.freeze({ok:false,code:"enforcement_denied"});
       const authority = await resolveCurrentAuthority(dependencies, offer, order.buyerUserId, order.buyerOrganizationId);
       if (!authority.ok) return authority;
       const contract = freezeContract({

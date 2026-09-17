@@ -20,6 +20,7 @@ const uuid = z.string().uuid();
 // Other approved scopes are reserved, not silently mapped to unrelated legacy IDs.
 export const scopeSchema = z.enum(["USER", "ORGANIZATION"]);
 export const states = ["NORMAL","MONITORED","RESTRICTED","SUSPENDED","BLOCKED","TERMINATED"] as const;
+export const restrictedTradeActions = ["offer.create","offer.edit","offer.submit","order.create","order.accept","contract.create"] as const;
 export const reviewSchema = z.object({ organizationId: id, profileRevisionId: id,
   evidenceId: id, evidenceVersion: id, evidenceDigest: z.string().regex(/^[a-f0-9]{64}$/),
   outcome: z.enum(["confirmed","revision_requested","inconclusive"]), reason: text, sourceReference: reference }).strict();
@@ -30,7 +31,11 @@ export const assessmentSchema = z.object({ signalId: uuid, conclusion: z.enum(["
 export const dispositionSchema = z.object({ assessmentId: uuid, disposition: z.enum(["closed","monitor","refer_for_case_review"]), reason: text }).strict();
 export const caseSchema = z.object({ scope: scopeSchema, subjectId: id, riskAssessmentId: uuid.nullable(), evidenceReference: reference, reason: text }).strict();
 export const decisionSchema = z.object({ caseId: uuid, expectedActionId: uuid.nullable(), state: z.enum(states),
-  reason: text, remediation: text, reviewAt: z.string().datetime() }).strict();
+  restrictedActions:z.array(z.enum(restrictedTradeActions)).max(restrictedTradeActions.length).default([]),
+  reason: text, remediation: text, reviewAt: z.string().datetime() }).strict().superRefine((value,ctx)=>{
+    if(value.state==="RESTRICTED"&&value.restrictedActions.length===0)ctx.addIssue({code:z.ZodIssueCode.custom,path:["restrictedActions"],message:"Explicit restricted actions are required."});
+    if(value.state!=="RESTRICTED"&&value.restrictedActions.length>0)ctx.addIssue({code:z.ZodIssueCode.custom,path:["restrictedActions"],message:"Restrictions apply only to RESTRICTED."});
+  });
 export const reevaluateSchema = z.object({ organizationId: id, profileRevisionId: id,
   trigger: z.enum(["reverification","verification_expiry","material_evidence_change","material_organization_change","remediation"]), reason: text }).strict();
 
@@ -194,10 +199,11 @@ export function createVreService(pool: VrePool) {
         const decisionId = randomUUID(), actionId = randomUUID();
         await db.query(`INSERT INTO public.vre_enforcement_decisions(id,case_id,state,reason,remediation,decided_by,request_id,correlation_id)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,[decisionId,input.caseId,input.state,input.reason,input.remediation,context.admin.principalId,context.requestId,context.correlationId]);
-        await db.query(`INSERT INTO public.vre_enforcement_actions(id,decision_id,predecessor_action_id,scope,subject_id,state,review_at,effective_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,clock_timestamp())`,[actionId,decisionId,input.expectedActionId,target.scope,target.subject_id,input.state,input.reviewAt]);
-        return fact({id:actionId,decisionId,state:input.state,integrationStatus:"INACTIVE"},"enforcement_action",actionId,
-          {caseId:input.caseId,state:input.state,integrationStatus:"INACTIVE"},prior ?? {state:"NORMAL"});
+        await db.query(`INSERT INTO public.vre_enforcement_actions(id,decision_id,predecessor_action_id,scope,subject_id,state,review_at,effective_at,integration_status)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,clock_timestamp(),'ACTIVE_V2_COMMAND_GUARD')`,[actionId,decisionId,input.expectedActionId,target.scope,target.subject_id,input.state,input.reviewAt]);
+        for(const actionKind of input.restrictedActions)await db.query(`INSERT INTO public.vre_enforcement_action_restrictions(id,action_id,action_kind) VALUES($1,$2,$3)`,[randomUUID(),actionId,actionKind]);
+        return fact({id:actionId,decisionId,state:input.state,restrictedActions:input.restrictedActions,integrationStatus:"ACTIVE_V2_COMMAND_GUARD"},"enforcement_action",actionId,
+          {caseId:input.caseId,state:input.state,restrictedActions:input.restrictedActions,integrationStatus:"ACTIVE_V2_COMMAND_GUARD"},prior ?? {state:"NORMAL"});
       });
     },
     commit,

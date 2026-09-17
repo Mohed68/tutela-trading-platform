@@ -21,6 +21,22 @@ import {
   submitOwnedDraftOffer,
   updateOwnedDraftOffer,
 } from "./storage.js";
+import { pool } from "../db.js";
+import { loadCurrentOrganizationContext } from "../trade-trust-application/postgresRepository.js";
+import { EnforcementDeniedError, requireTradeMutation } from "../enforcement/guard.js";
+
+async function activeOrganizationId(userId:string):Promise<string|undefined>{
+  const result=await loadCurrentOrganizationContext(userId);
+  return result.status==='resolved' && result.record.membershipRole==='owner' ? result.record.organizationId : undefined;
+}
+async function enforceOfferMutation(action:"offer.create"|"offer.edit"|"offer.submit",userId:string,response:Response,offerId?:string){
+  const organizationId=offerId ? (await pool.query<{seller_org_id:string}>(`SELECT offer.seller_org_id FROM public.offers offer
+    JOIN public.organization_memberships membership ON membership.organization_id=offer.seller_org_id AND membership.user_id=offer.user_id
+      AND membership.role='owner' AND membership.status='active' WHERE offer.id=$1 AND offer.user_id=$2`,[offerId,userId])).rows[0]?.seller_org_id : await activeOrganizationId(userId);
+  if(!organizationId){response.status(409).json({message:"An active Organization membership is required."});return false;}
+  await requireTradeMutation(action,[{scope:"USER",subjectId:userId},{scope:"ORGANIZATION",subjectId:organizationId}]);
+  return true;
+}
 
 async function authenticatedDraftActor(
   request: Request,
@@ -52,7 +68,8 @@ export function registerDraftRoutes(app: Express): void {
     try {
       if (!(await authenticatedDraftActor(request, response))) return;
       response.json(await getDraftOfferOptions());
-    } catch {
+    } catch (error) {
+      if(error instanceof EnforcementDeniedError)return response.status(403).json({message:"This trade action is restricted by an active enforcement decision.",code:"enforcement_denied"});
       routeFailure(response);
     }
   });
@@ -62,7 +79,8 @@ export function registerDraftRoutes(app: Express): void {
       const ownerId = await authenticatedDraftActor(request, response);
       if (!ownerId) return;
       response.json(await listOwnedPrivateOffers(ownerId));
-    } catch {
+    } catch (error) {
+      if(error instanceof EnforcementDeniedError)return response.status(403).json({message:"This trade action is restricted by an active enforcement decision.",code:"enforcement_denied"});
       routeFailure(response);
     }
   });
@@ -71,6 +89,7 @@ export function registerDraftRoutes(app: Express): void {
     try {
       const ownerId = await authenticatedDraftActor(request, response);
       if (!ownerId) return;
+      if(!await enforceOfferMutation("offer.create",ownerId,response))return;
       const parsed = createDraftOfferRequestSchema.safeParse(request.body);
       if (!parsed.success) return invalidRequest(response);
       const commodity = await getDraftCommodity(parsed.data.commodityId);
@@ -81,7 +100,8 @@ export function registerDraftRoutes(app: Express): void {
         return invalidRequest(response);
       }
       response.status(201).json(await createOwnedDraftOffer(ownerId, parsed.data));
-    } catch {
+    } catch (error) {
+      if(error instanceof EnforcementDeniedError)return response.status(403).json({message:"This trade action is restricted by an active enforcement decision.",code:"enforcement_denied"});
       routeFailure(response);
     }
   });
@@ -104,6 +124,7 @@ export function registerDraftRoutes(app: Express): void {
     try {
       const ownerId = await authenticatedDraftActor(request, response);
       if (!ownerId) return;
+      if(!await enforceOfferMutation("offer.edit",ownerId,response,request.params.id))return;
       const parsed = updateDraftOfferRequestSchema.safeParse(request.body);
       if (!parsed.success) return invalidRequest(response);
 
@@ -130,7 +151,8 @@ export function registerDraftRoutes(app: Express): void {
         return response.status(404).json({ message: "Draft not found." });
       }
       response.json(updated);
-    } catch {
+    } catch (error) {
+      if(error instanceof EnforcementDeniedError)return response.status(403).json({message:"This trade action is restricted by an active enforcement decision.",code:"enforcement_denied"});
       routeFailure(response);
     }
   });
@@ -142,6 +164,7 @@ export function registerDraftRoutes(app: Express): void {
       try {
         const ownerId = await authenticatedDraftActor(request, response);
         if (!ownerId) return;
+        if(!await enforceOfferMutation("offer.submit",ownerId,response,request.params.id))return;
         if (!submitDraftRequestSchema.safeParse(request.body ?? {}).success) {
           return invalidRequest(response);
         }
@@ -157,6 +180,7 @@ export function registerDraftRoutes(app: Express): void {
         if (error instanceof Error && error.message === "OFFER_DOCUMENTARY_EVIDENCE_REQUIRED") {
           return response.status(422).json({ message: "Documentary offer evidence is required before submission." });
         }
+        if(error instanceof EnforcementDeniedError)return response.status(403).json({message:"This trade action is restricted by an active enforcement decision.",code:"enforcement_denied"});
         routeFailure(response);
       }
     },

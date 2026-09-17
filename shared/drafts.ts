@@ -12,7 +12,7 @@ export const DRAFT_OFFER_UNITS = [
 export type DraftOfferUnit = (typeof DRAFT_OFFER_UNITS)[number];
 
 export interface CreateDraftOfferRequest {
-  offerType: "buy" | "sell";
+  offerType: "sell";
   commodityId: string;
   quantity: string;
   unit: DraftOfferUnit;
@@ -23,7 +23,7 @@ export interface CreateDraftOfferRequest {
 }
 
 export interface UpdateDraftOfferRequest {
-  offerType?: "buy" | "sell";
+  offerType?: "sell";
   commodityId?: string;
   quantity?: string;
   unit?: DraftOfferUnit;
@@ -52,7 +52,7 @@ interface OwnerPrivateOfferDto {
   location: string;
   status: "draft" | "submitted";
   visibility: {
-    state: "private";
+    state: "private" | "owner_view";
   };
   validUntil: string | null;
   createdAt: string | null;
@@ -73,13 +73,19 @@ export interface SubmittedOfferSummaryDto
 
 export type SubmittedOfferDetailDto = SubmittedOfferSummaryDto;
 
+export interface ProcessedOfferSummaryDto extends Omit<OwnerPrivateOfferDto, "status"> {
+  status: "verified" | "closed" | "hidden" | "archived" | "cancelled";
+}
+
 export type OwnerPrivateOfferSummaryDto =
   | DraftOfferSummaryDto
-  | SubmittedOfferSummaryDto;
+  | SubmittedOfferSummaryDto
+  | ProcessedOfferSummaryDto;
 
 export type OwnerPrivateOfferDetailDto =
   | DraftOfferDetailDto
-  | SubmittedOfferDetailDto;
+  | SubmittedOfferDetailDto
+  | ProcessedOfferSummaryDto;
 
 export interface DeleteDraftOfferResponse {
   id: string;

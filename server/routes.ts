@@ -49,6 +49,7 @@ import {
 import { buildDashboardOverview } from "./dashboard";
 import { registerDraftRoutes } from "./drafts/routes";
 import { productionTradingFlowService } from "./trading-flow/productionService";
+import { listCanonicalOrdersForUser,listCanonicalContractsForUser,loadCanonicalContractForUser } from "./trading-flow/postgresRepository";
 import { registerTradeTrustApplicationRoutes } from "./trade-trust-application/routes";
 import { registerVreRoutes } from "./vre/routes";
 import { registerDemoRuntimeRoutes } from "./demo-runtime/routes";
@@ -99,7 +100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       },
     }),
   });
-  registerDemoRuntimeRoutes(app, createInMemoryDemoRuntime());
+  if(process.env.NODE_ENV!=="production"&&process.env.ENABLE_DEMO_RUNTIME==="true")
+    registerDemoRuntimeRoutes(app, createInMemoryDemoRuntime());
   registerDraftRoutes(app);
   registerTradeTrustApplicationRoutes(app);
   registerVreRoutes(app,pool);
@@ -110,30 +112,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
   // KYB status endpoint
-  app.get('/api/auth/kyb-status', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      res.json({
-        kybStatus: user.kybStatus || 'pending',
-        verificationLevel: user.verificationLevel || 'unverified',
-        hasCompletedKyb: user.kybStatus === 'verified',
-        requiredDocuments: {
-          businessRegistration: user.businessRegistrationStatus || 'pending',
-          taxCertificate: user.taxCertificateStatus || 'pending',
-          bankStatement: user.bankStatementStatus || 'pending',
-          identityVerification: user.identityVerificationStatus || 'pending'
-        }
-      });
-    } catch (error) {
-      console.error("Error fetching KYB status:", error);
-      res.status(500).json({ message: "Failed to fetch KYB status" });
-    }
-  });
+  app.get('/api/auth/kyb-status', isAuthenticated, (_req,res) => res.status(410).json({
+    message:"Legacy account KYB status is retired. Use the canonical Organization Verification and Participation reads.",
+    code:"legacy_authority_retired",
+  }));
 
   // Plan information endpoint
   app.get('/api/auth/plan', isAuthenticated, async (req: any, res) => {
@@ -495,59 +477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerRetiredLegacyAuthorityRoutes(app);
 
   app.post('/api/offers', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      
-      // Transform the data to match schema expectations
-      const transformedData = {
-        ...req.body,
-        quantity: String(req.body.quantity || 0),
-        pricePerUnit: String(req.body.pricePerUnit || req.body.price || 0),
-        minQuantity: req.body.minQuantity ? String(req.body.minQuantity) : undefined,
-        validUntil: req.body.validUntil ? new Date(req.body.validUntil) : undefined,
-      };
-      
-      const validatedData = insertOfferSchema.parse(transformedData);
-      const offer = await storage.createOffer(userId, validatedData);
-      
-      // Log business event for offer creation
-      BusinessEvents.offerCreated(
-        userId,
-        offer.id,
-        offer.commodityId,
-        parseFloat(offer.quantity) * parseFloat(offer.pricePerUnit),
-      );
-      
-      // Log activity
-      await storage.logActivity(userId, "create_offer", "offer", offer.id);
-      
-      // Automatically start verification process for marketplace readiness
-      try {
-        await storage.createOfferVerification({
-          offerId: offer.id,
-          submittedBy: userId,
-          documents: JSON.stringify({}), // Empty documents initially
-          notes: 'Automatic verification started after offer creation - pending document upload',
-          status: 'pending',
-          submittedAt: new Date(),
-        });
-        
-        // Log verification initiation
-        BusinessEvents.offerVerificationSubmitted(userId, offer.id, 0);
-        await storage.logActivity(userId, "start_offer_verification", "offer", offer.id);
-      } catch (verificationError) {
-        console.error("Error starting automatic verification:", verificationError);
-        // Don't fail the offer creation if verification fails
-      }
-      
-      res.status(201).json(offer);
-    } catch (error) {
-      console.error("Error creating offer:", error);
-      if (error instanceof Error && 'issues' in error) {
-        console.error("Validation issues:", (error as any).issues);
-      }
-      res.status(400).json({ message: "Failed to create offer" });
-    }
+    return res.status(410).json({message:"Legacy offer creation is retired. Use the canonical draft and submission workflow.",code:"legacy_offer_write_retired"});
   });
 
   app.patch('/api/offers/:id/status', isAuthenticated, async (req, res) => {
@@ -634,7 +564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/orders', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const orders = await storage.getOrders(userId);
+      const orders = await listCanonicalOrdersForUser(userId);
       res.json(orders);
     } catch (error) {
       console.error("Error fetching orders:", error);
@@ -648,10 +578,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Demo identifiers are not accepted by production trading endpoints.", code: "demo_identifier_not_allowed" });
       }
       const userId = req.user.claims.sub;
+      const {loadCurrentOrganizationContext}=await import('./trade-trust-application/postgresRepository.js');
+      const membership=await loadCurrentOrganizationContext(userId);
+      const buyerOrganizationId=membership.status==='resolved'?membership.record.organizationId:undefined;
+      if(!buyerOrganizationId)return res.status(409).json({message:"An active buyer Organization membership is required.",code:"buyer_organization_required"});
       const result = await productionTradingFlowService.createOrder({
         offerId: req.body?.offerId,
         buyerUserId: userId,
-        buyerOrganizationId: req.body?.buyerOrganizationId,
+        buyerOrganizationId,
         quantity: req.body?.quantity,
       });
       if (!result.ok) {
@@ -697,8 +631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/contracts', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const contracts = await storage.getContracts(userId);
-      res.json(contracts.map(toSafeContractResponse));
+      res.json(await listCanonicalContractsForUser(userId));
     } catch (error) {
       console.error("Error fetching contracts:", error);
       res.status(500).json({ message: "Failed to fetch contracts" });
@@ -710,15 +643,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (containsDemoIdentifier([req.params.id])) {
         return res.status(400).json({ message: "Demo identifiers are not accepted by production contract endpoints.", code: "demo_identifier_not_allowed" });
       }
-      const contract = await storage.getContractById(req.params.id);
+      const userId = req.user.claims.sub;
+      const contract = await loadCanonicalContractForUser(req.params.id,userId);
       if (!contract) {
         return res.status(404).json({ message: "Contract not found" });
       }
-      const userId = req.user.claims.sub;
-      if (contract.buyerId !== userId && contract.sellerId !== userId) {
-        return res.status(404).json({ message: "Contract not found" });
-      }
-      res.json(toSafeContractResponse(contract));
+      res.json(contract);
     } catch (error) {
       console.error("Error fetching contract:", error);
       res.status(500).json({ message: "Failed to fetch contract" });
@@ -755,34 +685,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(409).json({ message: "Contract lifecycle transitions are outside the first-cycle trading flow." });
   });
 
-  app.get('/api/contracts/:id/blockchain-status', isAuthenticated, async (req, res) => {
-    try {
-      if (containsDemoIdentifier([req.params.id])) {
-        return res.status(400).json({ message: "Demo identifiers are not accepted by production contract endpoints.", code: "demo_identifier_not_allowed" });
-      }
-      const contract = await storage.getContractById(req.params.id);
-      if (!contract) {
-        return res.status(404).json({ message: "Contract not found" });
-      }
-      const userId = req.user!.claims.sub;
-      if (contract.buyerId !== userId && contract.sellerId !== userId) {
-        return res.status(404).json({ message: "Contract not found" });
-      }
-      
-      if (!contract.smartContractAddress) {
-        return res.json({
-          status: contract.smartContractStatus || "not_deployed",
-          simulation: true,
-        });
-      }
-      
-      const blockchainStatus = await getContractStatus(contract.smartContractAddress);
-      res.json(blockchainStatus);
-    } catch (error) {
-      console.error("Error fetching blockchain status:", error);
-      res.status(500).json({ message: "Failed to fetch blockchain status" });
-    }
-  });
+  app.get('/api/contracts/:id/blockchain-status', isAuthenticated, (_req,res) => res.status(410).json({
+    message:"Blockchain deployment is not an active Current V2 contract capability.",code:"future_capability_not_active",
+  }));
 
   // Verification routes
   app.get('/api/verification/documents', isAuthenticated, async (req: any, res) => {
@@ -1142,6 +1047,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/admin/control-plane/users', isAuthenticated, requireAdminAuth, requirePermission('users.support.view'), async (_req, res) => {
     try { return res.json(await controlPlane.users()); }
     catch { return res.status(500).json({ message: "Unable to load safe user records" }); }
+  });
+  app.get('/admin/control-plane/organizations',isAuthenticated,requireAdminAuth,requirePermission('users.support.view'),async(_req,res)=>{
+    try{return res.json(await controlPlane.organizations());}catch{return res.status(500).json({message:"Unable to load Organization Registry projection"});}
+  });
+  app.get('/admin/control-plane/trade-operations',isAuthenticated,requireAdminAuth,requirePermission('offers.moderate'),async(_req,res)=>{
+    try{return res.json(await controlPlane.tradeOperations());}catch{return res.status(500).json({message:"Unable to load Current V2 trade operations"});}
   });
   app.post('/admin/platform/role-assignments', isAuthenticated, requireAdminAuth, requirePermission('platform.roles.grant'), async (req: any, res) => {
     const { targetPrincipalId, role, reason } = req.body ?? {};

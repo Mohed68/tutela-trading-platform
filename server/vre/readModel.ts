@@ -58,16 +58,18 @@ export function createVreReadModel(db: VreQuery) {
             FROM public.organization_registry_profile_revisions WHERE organization_id=c.subject_id ORDER BY created_at DESC,organization_profile_revision_id DESC LIMIT 1) END AS "subjectName",
         c.risk_assessment_id AS "riskAssessmentId",c.created_at AS "createdAt",c.opened_by AS "openedBy",
         d.id AS "decisionId",d.state AS "decidedState",d.remediation,d.reason AS "decisionReason",d.decided_by AS "decidedBy",
-        a.id AS "currentActionId",COALESCE(a.state,'NORMAL') AS "currentState",a.review_at AS "reviewAt",'INACTIVE' AS "integrationStatus"
+        a.id AS "currentActionId",COALESCE(a.state,'NORMAL') AS "currentState",a.review_at AS "reviewAt",COALESCE(a.integration_status,'ACTIVE_V2_COMMAND_GUARD') AS "integrationStatus",
+        COALESCE((SELECT jsonb_agg(r.action_kind ORDER BY r.action_kind) FROM public.vre_enforcement_action_restrictions r WHERE r.action_id=a.id),'[]'::jsonb) AS "restrictedActions"
         FROM public.vre_enforcement_cases c LEFT JOIN public.vre_enforcement_decisions d ON d.case_id=c.id
-        LEFT JOIN LATERAL (SELECT id,state,review_at FROM public.vre_enforcement_actions
+        LEFT JOIN LATERAL (SELECT id,state,review_at,integration_status FROM public.vre_enforcement_actions
           WHERE scope=c.scope AND subject_id=c.subject_id ORDER BY effective_at DESC,id DESC LIMIT 1) a ON true
         ORDER BY c.created_at DESC,c.id DESC LIMIT 100`);
       return cases.rows;
     },
     async enforcementHistory(scope: string, subjectId: string) {
       const rows = await db.query(`SELECT a.id,a.state,a.predecessor_action_id AS "predecessorActionId",a.effective_at AS "effectiveAt",
-        a.review_at AS "reviewAt",d.case_id AS "caseId",d.reason,d.remediation,d.decided_by AS "decidedBy",a.integration_status AS "integrationStatus"
+        a.review_at AS "reviewAt",d.case_id AS "caseId",d.reason,d.remediation,d.decided_by AS "decidedBy",a.integration_status AS "integrationStatus",
+        COALESCE((SELECT jsonb_agg(r.action_kind ORDER BY r.action_kind) FROM public.vre_enforcement_action_restrictions r WHERE r.action_id=a.id),'[]'::jsonb) AS "restrictedActions"
         FROM public.vre_enforcement_actions a JOIN public.vre_enforcement_decisions d ON d.id=a.decision_id
         WHERE a.scope=$1 AND a.subject_id=$2 ORDER BY a.effective_at DESC,a.id DESC LIMIT 100`,[scope,subjectId]);
       return rows.rows;

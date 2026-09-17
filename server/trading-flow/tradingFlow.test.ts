@@ -79,6 +79,7 @@ function fixture(options: { buyerEligible?: boolean; sellerEligible?: boolean; o
   let eligibilitySequence = 0;
   let buyerEvaluationCount = 0;
   const service = createTradingFlowService({
+    enforcement: { async allows() { return true; } },
     repository,
     ids: { next: () => `generated-${++sequence}` },
     clock: { now: () => "2026-09-05T00:00:00.000Z" },
@@ -133,6 +134,13 @@ test("stale offer binding prevents acceptance", async () => {
   const runtime = fixture();
   const created = must(await runtime.service.createOrder(request));
   runtime.repository.setOffer(offer({ offerVersion: "2026-09-06T00:00:00.000Z" }));
+  assert.deepEqual(await runtime.service.acceptOrder(created.orderId, "seller-user"), { ok: false, code: "stale_offer" });
+});
+
+test("offer expiry is rechecked before seller acceptance", async () => {
+  const runtime = fixture();
+  const created = must(await runtime.service.createOrder(request));
+  runtime.repository.setOffer(offer({ validUntil: "2026-01-01T00:00:00.000Z" }));
   assert.deepEqual(await runtime.service.acceptOrder(created.orderId, "seller-user"), { ok: false, code: "stale_offer" });
 });
 

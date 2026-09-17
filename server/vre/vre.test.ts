@@ -52,11 +52,12 @@ test('V1 policy is preserved and V2 requires independent confirmation',()=>{
   const independent=future.implementationSet.bindings.find(b=>b.rule.ruleId==='organization-independent-confirmation-required');
   assert.ok(independent); assert.equal(independent.implementation.evaluate({evidenceFacts:[]}), 'manual_review_required');
 });
-test('VRE persistence is additive and immutable; enforcement has no historical business writes',()=>{
+test('VRE persistence is immutable and the V2 command guard never rewrites historical business facts',()=>{
   const migration=readFileSync(new URL('../../migrations/0022_vre_baseline.sql',import.meta.url),'utf8');
   assert.doesNotMatch(migration,/\b(?:ALTER TABLE|DROP TABLE|TRUNCATE|UPDATE public\.|DELETE FROM)\b/i);
   assert.match(migration,/BEFORE UPDATE OR DELETE/);
   const service=readFileSync(new URL('./service.ts',import.meta.url),'utf8');
   assert.doesNotMatch(service,/(?:UPDATE|DELETE FROM) public\.(?:offers|orders|contracts|organization_verification|platform_ownership)/i);
-  assert.match(service,/integrationStatus:"INACTIVE"/);
+  assert.match(service,/integrationStatus:"ACTIVE_V2_COMMAND_GUARD"/);
+  assert.match(service,/vre_enforcement_action_restrictions/);
 });

@@ -46,6 +46,7 @@ import {
   TotpMfaService,
   requireMfaEncryptionKey,
 } from "./mfa/index.js";
+import { createPasswordRecoveryService } from "./passwordRecovery.js";
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const COOKIE_NAME = "tutela.sid";
@@ -227,6 +228,8 @@ const verificationResendLimiter = rateLimit({
   skipSuccessfulRequests: false,
   message: { message: "Too many verification email requests. Please try again later." },
 });
+const passwordRecoveryLimiter=rateLimit({windowMs:60*60*1000,limit:6,standardHeaders:true,legacyHeaders:false,
+  message:{message:"Too many password recovery attempts. Please try again later."}});
 
 const loginSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
@@ -265,7 +268,7 @@ function challengeResponse(
     });
   }
   if (result.status === "invalid") {
-    return res.status(401).json({ message: "Invalid MFA code." });
+    return res.status(401).json({ message: "The code could not be verified. Wait for a new authenticator code and try again." });
   }
   return null;
 }
@@ -311,6 +314,23 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/login", (_req, res) => res.redirect("/login"));
+
+  app.post("/api/auth/password/forgot",passwordRecoveryLimiter,async(req,res)=>{
+    const configuration=getVerificationEmailConfiguration();
+    if(!configuration)return res.status(503).json({message:"Password recovery is temporarily unavailable."});
+    try{await createPasswordRecoveryService(getSessionPool(),configuration).request(req.body?.email);}
+    catch{/* Preserve the same non-enumerating response even when delivery fails. */}
+    return res.status(202).json({message:"If an eligible account exists, a password reset email will arrive shortly."});
+  });
+  app.post("/api/auth/password/reset",authLimiter,async(req,res)=>{
+    const configuration=getVerificationEmailConfiguration();
+    if(!configuration)return res.status(503).json({message:"Password recovery is temporarily unavailable."});
+    try{
+      const reset=await createPasswordRecoveryService(getSessionPool(),configuration).reset(req.body?.token,req.body?.password);
+      if(!reset)return res.status(400).json({message:"This password reset link is invalid or has expired."});
+      return res.json({status:"reset",sessionsInvalidated:true,mfaPreserved:true});
+    }catch{return res.status(503).json({message:"Password recovery is temporarily unavailable."});}
+  });
 
   app.post("/api/auth/register", registrationLimiter, async (req, res, next) => {
     const parsed = registrationSchema.safeParse(req.body);
@@ -497,7 +517,7 @@ export async function setupAuth(app: Express) {
     async (req, res, next) => {
       const parsed = enrollmentConfirmationSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ message: "Invalid MFA confirmation." });
+        return res.status(400).json({ message: "The code could not be verified. Wait for a new authenticator code and try again." });
       }
       const service = getMfaService();
       if (!service) return mfaUnavailable(res);
@@ -530,7 +550,7 @@ export async function setupAuth(app: Express) {
     async (req, res, next) => {
       const parsed = mfaChallengeCodeSchema.safeParse(req.body?.code);
       if (!parsed.success) {
-        return res.status(400).json({ message: "Invalid MFA challenge." });
+        return res.status(400).json({ message: "The code could not be verified. Wait for a new authenticator code and try again." });
       }
       const service = getMfaService();
       if (!service) return mfaUnavailable(res);

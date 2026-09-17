@@ -1,6 +1,27 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import { pool } from "../db.js";
+import { lockAndRequireTradeMutation, type TradeMutationAction } from "../enforcement/guard.js";
+
+async function guardDraftCommand(client:PoolClient, action:TradeMutationAction, ownerId:string, offerId?:string) {
+  const result=offerId
+    ? await client.query<{organization_id:string}>(`SELECT offer.seller_org_id AS organization_id FROM public.offers offer
+        JOIN public.organization_memberships membership ON membership.organization_id=offer.seller_org_id
+          AND membership.user_id=offer.user_id AND membership.role='owner' AND membership.status='active'
+        WHERE offer.id=$1 AND offer.user_id=$2`,[offerId,ownerId])
+    : await client.query<{organization_id:string}>(`SELECT organization_id FROM public.organization_memberships WHERE user_id=$1 AND role='owner' AND status='active'`,[ownerId]);
+  if(result.rows.length!==1 || !result.rows[0].organization_id) throw new Error("CANONICAL_OWNER_ORGANIZATION_REQUIRED");
+  await lockAndRequireTradeMutation(client,action,[{scope:"USER",subjectId:ownerId},{scope:"ORGANIZATION",subjectId:result.rows[0].organization_id}]);
+}
+
+function guardedDraftWriter(action:TradeMutationAction,ownerId:string,offerId?:string) {
+  return {async query<T extends QueryResultRow>(sql:string,values:unknown[]){
+    const client=await pool.connect();
+    try{await client.query("BEGIN");await guardDraftCommand(client as PoolClient,action,ownerId,offerId);
+      const result=await client.query<T>(sql,values);await client.query("COMMIT");return result;
+    }catch(error){await client.query("ROLLBACK").catch(()=>undefined);throw error;}finally{client.release();}
+  }};
+}
 import {
   draftOfferUnitSchema,
 } from "../../shared/draftValidation.js";
@@ -66,7 +87,7 @@ function isoTimestamp(value: Date | string | null): string | null {
 
 function toPrivateOfferDto(row: DraftRow): OwnerPrivateOfferDetailDto {
   if (
-    (row.status !== "draft" && row.status !== "submitted") ||
+    !["draft","submitted","verified","closed","hidden","archived","cancelled"].includes(row.status ?? "") ||
     row.currency !== PHASE_5B_DRAFT_CURRENCY
   ) {
     throw new Error("INVALID_STORED_DRAFT_AUTHORITY");
@@ -89,9 +110,9 @@ function toPrivateOfferDto(row: DraftRow): OwnerPrivateOfferDetailDto {
       currency: PHASE_5B_DRAFT_CURRENCY,
     },
     location: row.location,
-    status: row.status,
+    status: row.status as OwnerPrivateOfferDetailDto["status"],
     visibility: {
-      state: "private",
+      state: row.status === "draft" || row.status === "submitted" ? "private" : "owner_view",
     },
     validUntil: isoTimestamp(row.valid_until),
     createdAt: isoTimestamp(row.created_at),
@@ -198,7 +219,7 @@ export async function listOwnedPrivateOffers(
       INNER JOIN public.commodities AS commodity
         ON commodity.id = offer.commodity_id
       WHERE offer.user_id = $1
-        AND offer.status::text IN ('draft', 'submitted')
+        AND (offer.status::text IN ('draft', 'submitted') OR EXISTS (SELECT 1 FROM public.offer_submission_revisions revision WHERE revision.offer_id=offer.id))
       ORDER BY offer.created_at DESC, offer.id
     `,
     [ownerId],
@@ -237,7 +258,7 @@ export async function getOwnedPrivateOffer(
         ON commodity.id = offer.commodity_id
       WHERE offer.id = $1
         AND offer.user_id = $2
-        AND offer.status::text IN ('draft', 'submitted')
+        AND (offer.status::text IN ('draft', 'submitted') OR EXISTS (SELECT 1 FROM public.offer_submission_revisions revision WHERE revision.offer_id=offer.id))
     `,
     [offerId, ownerId],
   );
@@ -248,7 +269,7 @@ export async function createOwnedDraftOffer(
   ownerId: string,
   request: CreateDraftOfferRequest,
 ): Promise<DraftOfferDetailDto> {
-  const result = await pool.query<DraftRow>(
+  const result = await guardedDraftWriter("offer.create",ownerId).query<DraftRow>(
     `
       WITH authoritative_owner_organization AS (
         SELECT membership.organization_id
@@ -369,7 +390,7 @@ export async function updateOwnedDraftOffer(
   values.push(draftId, ownerId);
   const draftIdParameter = values.length - 1;
   const ownerIdParameter = values.length;
-  const result = await pool.query<DraftRow>(
+  const result = await guardedDraftWriter("offer.edit",ownerId,draftId).query<DraftRow>(
     `
       WITH updated AS (
         UPDATE public.offers
@@ -412,6 +433,9 @@ export async function submitOwnedDraftOffer(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await guardDraftCommand(client as PoolClient,"offer.submit",ownerId,draftId);
+    const supported=await client.query(`SELECT 1 FROM public.offers WHERE id=$1 AND user_id=$2 AND type='sell'`,[draftId,ownerId]);
+    if(!supported.rowCount){await client.query("ROLLBACK");return undefined;}
     const evidence=await client.query<{evidence_id:string;evidence_version:string;evidence_fingerprint:string}>(`SELECT evidence.evidence_id,evidence.evidence_version,evidence.evidence_fingerprint FROM public.offers offer LEFT JOIN public.platform_submitted_evidence evidence ON evidence.subject_kind='offer' AND evidence.subject_id=offer.id AND evidence.subject_version=to_char(offer.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') WHERE offer.id=$1 AND offer.user_id=$2 AND offer.status::text='draft' FOR UPDATE OF offer`,[draftId,ownerId]);
     const documentaryEvidence=evidence.rows[0];
     if(!documentaryEvidence?.evidence_id){await client.query("ROLLBACK");throw new Error("OFFER_DOCUMENTARY_EVIDENCE_REQUIRED");}

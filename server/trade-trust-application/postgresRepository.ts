@@ -260,7 +260,9 @@ export async function loadOrganizationProfile(organizationId:string, profileRevi
 }
 
 export async function loadOwnedDraft(offerId:string,userId:string):Promise<{status:string;updatedAt:string}|null>{
-  const result=await pool.query<QueryResultRow>(`SELECT status::text,to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updated_at_version FROM public.offers WHERE id=$1 AND user_id=$2`,[offerId,userId]);
+  const result=await pool.query<QueryResultRow>(`SELECT offer.status::text,to_char(offer.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updated_at_version FROM public.offers offer
+    JOIN public.organization_memberships membership ON membership.organization_id=offer.seller_org_id AND membership.user_id=offer.user_id
+      AND membership.role='owner' AND membership.status='active' WHERE offer.id=$1 AND offer.user_id=$2`,[offerId,userId]);
   const row=result.rows[0];
   return row ? {status:String(row.status),updatedAt:String(row.updated_at_version)} : null;
 }

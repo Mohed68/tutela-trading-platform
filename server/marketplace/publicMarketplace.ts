@@ -178,6 +178,7 @@ export async function buildPublishedMarketplaceOfferRecords(
 ): Promise<PublishedMarketplaceOfferRecord[]> {
   const records: PublishedMarketplaceOfferRecord[] = [];
   for (const row of rows) {
+    if(row.offer_type !== "sell") continue;
     const organizationParticipation = row.seller_organization_id
       ? await dependencies.organizationParticipationEligibility.resolveCurrentOrganizationParticipationEligibility(
           {
