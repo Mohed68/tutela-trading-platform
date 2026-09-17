@@ -13,8 +13,9 @@ Status is evidence-based. “Planned” never means implemented or activated.
 | A1.2b Real TOTP MFA | **IMPLEMENTED** | `f9f589d`; encrypted TOTP credentials, replay protection, recovery codes, and bounded lockout. |
 | A1.2c Privileged MFA Enforcement | **IMPLEMENTED** | `8c8f7e4`; central Admin action-assurance policy and session invalidation. |
 | A1.3 Security Audit & Safe Data Plane | **IMPLEMENTED** | `84eb578`; atomic Security Audit and purpose-built safe Admin DTOs. |
-| A1.4 Controlled Admin Activation | **IMPLEMENTED / BOOTSTRAP PENDING** | Ownership authority `12146ca`, MFA UX `217aa93`, and secure Control Plane shell; Production deployment and explicit first-Owner selection remain pending. |
-| A1.5–A1.7 | **PLANNED / NOT IMPLEMENTED** | Operational modules remain outside this activation slice. |
+| A1.4 Controlled Admin Activation | **IMPLEMENTED / PRODUCTION ACTIVE** | Durable ownership, encrypted MFA, recent step-up and secure Control Plane. |
+| A1.5 Current operational baseline | **IMPLEMENTED** | Safe Organization/User and Current V2 Trade Operations projections plus active VRE workbenches. |
+| A1.6–A1.7 future domains | **NOT ACTIVATED** | Documents, shipping, settlement and disputes remain future architecture. |
 
 ## A1.4 controlled activation update
 

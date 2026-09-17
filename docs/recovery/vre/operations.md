@@ -51,17 +51,18 @@ and reasons must not contain credentials or confidential document payloads.
 The baseline captures submitted assertions and references, not a new confidential
 document storage authority.
 
-## Cross-domain orchestration and inactive consumers
+## Cross-domain orchestration and Current V2 consumer
 
 An assessment may be explicitly linked to a same-subject Enforcement case.
 Link validation does not confer decision authority. Verification failure does
 not automatically create misconduct, Risk or Enforcement. AI is never a final
 authority. No background punishment or legacy inference is introduced.
 
-Downstream enforcement integration is **INACTIVE**. Recording RESTRICTED,
-SUSPENDED, BLOCKED or TERMINATED does not itself disable login, trading or
-publication. No eligibility/trading command currently consumes this new authority;
-the UI states this explicitly. Existing canonical Verification, Trust, Eligibility,
-Offers, Orders, Contracts and ownership history are not overwritten. A future
-consumer must explicitly consult scoped Enforcement policy at its own legitimate
-command boundary, not mutate historical truth.
+Downstream enforcement integration is **ACTIVE_V2_COMMAND_GUARD** for SELL offer
+create/edit/submit, order create/accept and Contract draft creation. The latest
+matching USER and ORGANIZATION action is rechecked under the same advisory subject
+lock used by the decision writer before the durable command write. NORMAL and
+MONITORED allow; RESTRICTED denies only its explicit action vocabulary; SUSPENDED,
+BLOCKED and TERMINATED deny supported new mutations. Login and read/history/
+remediation remain available. Existing Verification, Trust, Eligibility, Offers,
+Orders, Contracts and ownership history are never overwritten.

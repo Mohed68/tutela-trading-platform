@@ -17,6 +17,8 @@ This register records decisions without duplicating the authoritative
 | Emergency recovery | Controlled server-side recovery/bootstrap only; no normal HTTP self-service or self-promotion. |
 | Canonical authority | Platform Owner and Platform Admin cannot directly create Verification, Trust, Activity/Participation/Publication Eligibility, or Offer verification truth. |
 | A1.1 adoption | Conformant design adopted with target-role policy, ownership-governance extension point, session-assurance context, and strengthened negative tests. |
+| Pre-V3 operational baseline | Organizations/Users and Current V2 Offers/Orders/Contracts use bounded read-only projections; VRE mutations retain permission, step-up and atomic-audit requirements. |
+| Enforcement consumption | Active only at the explicit Current V2 trade command vocabulary; never rewrites Verification, Trust, eligibility or historical commerce. |
 
 Future dual control may be added to ownership changes and recovery when multiple
 active owners exist. Persistence, bootstrap, MFA runtime, routes, and frontend
