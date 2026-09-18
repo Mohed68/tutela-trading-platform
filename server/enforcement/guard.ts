@@ -12,6 +12,9 @@ export async function lockAndRequireTradeMutation(db: QueryPort, action: TradeMu
 export const TRADE_MUTATION_ACTIONS = [
   "offer.create", "offer.edit", "offer.submit",
   "order.create", "order.accept", "contract.create",
+  "contract.prepare", "contract.approve", "contract.sign",
+  "contract.execute", "contract.evidence", "contract.delivery",
+  "contract.settlement", "contract.close", "contract.dispute",
 ] as const;
 export type TradeMutationAction = typeof TRADE_MUTATION_ACTIONS[number];
 export type EnforcementSubject = Readonly<{ scope: "USER" | "ORGANIZATION"; subjectId: string }>;

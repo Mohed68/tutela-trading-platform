@@ -217,6 +217,17 @@ const ORDER_COLUMNS = `id, offer_id, buyer_id, buyer_organization_id,
   accepted_at,
   order_fingerprint`;
 
+const CANDIDATE_ORDER_COLUMNS = `candidate.id, candidate.offer_id,
+  candidate.buyer_id, candidate.buyer_organization_id,
+  candidate.seller_id, candidate.seller_organization_id, candidate.status,
+  candidate.order_version, candidate.offer_version,
+  candidate.offer_fingerprint, candidate.publication_eligibility_fingerprint,
+  candidate.buyer_participation_eligibility_fingerprint,
+  candidate.accepted_terms_version, candidate.accepted_terms_fingerprint,
+  candidate.accepted_terms_snapshot,
+  to_char(candidate.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+  candidate.accepted_at, candidate.order_fingerprint`;
+
 function guardedWriter(action:TradeMutationAction, record:{buyerUserId:string;buyerOrganizationId:string;sellerUserId:string;sellerOrganizationId:string}) {
   return {async query<T extends QueryResultRow>(sql:string,values:unknown[]){
     const client=await pool.connect();
@@ -276,15 +287,43 @@ export const postgresTradingFlowRepository: TradingFlowRepository = Object.freez
     previousOrderFingerprint: string;
     acceptedOrder: AuthoritativeOrderRecord;
   }>) {
-    const result = await guardedWriter("order.accept",acceptedOrder).query<OrderRow>(`
-      UPDATE public.orders
-      SET status = 'accepted', order_version = $1, accepted_at = $2::timestamptz,
-          order_fingerprint = $3, updated_at = $2::timestamptz
-      WHERE id = $4 AND status = 'created' AND order_fingerprint = $5
-      RETURNING ${ORDER_COLUMNS}
-    `, [acceptedOrder.orderVersion, acceptedOrder.acceptedAt,
-      acceptedOrder.orderFingerprint, acceptedOrder.orderId, previousOrderFingerprint]);
-    return hydrateOrder(result.rows[0]);
+    const client=await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await lockAndRequireTradeMutation(client,"order.accept",[
+        {scope:"USER",subjectId:acceptedOrder.buyerUserId},
+        {scope:"ORGANIZATION",subjectId:acceptedOrder.buyerOrganizationId},
+        {scope:"USER",subjectId:acceptedOrder.sellerUserId},
+        {scope:"ORGANIZATION",subjectId:acceptedOrder.sellerOrganizationId},
+      ]);
+      // This must be a separate statement. Under READ COMMITTED, a contender
+      // waiting here receives a fresh snapshot for the allocation query below.
+      const locked=await client.query<{id:string;available_quantity:string}>(`
+        SELECT offer.id,offer.quantity::text available_quantity
+        FROM public.offers offer
+        JOIN public.orders candidate ON candidate.offer_id=offer.id
+        WHERE candidate.id=$1
+        FOR UPDATE OF offer
+      `,[acceptedOrder.orderId]);
+      if(!locked.rows[0]){await client.query("COMMIT");return null;}
+      const result=await client.query<OrderRow>(`
+        WITH allocated AS MATERIALIZED (
+          SELECT COALESCE(sum(existing.quantity),0)::numeric allocated_quantity
+          FROM public.orders existing
+          WHERE existing.offer_id=$6 AND existing.status='accepted'
+        )
+        UPDATE public.orders candidate
+        SET status='accepted',order_version=$1,accepted_at=$2::timestamptz,
+            order_fingerprint=$3,updated_at=$2::timestamptz
+        FROM allocated
+        WHERE candidate.id=$4 AND candidate.status='created' AND candidate.order_fingerprint=$5
+          AND allocated.allocated_quantity+candidate.quantity<=$7::numeric
+        RETURNING ${CANDIDATE_ORDER_COLUMNS}
+      `,[acceptedOrder.orderVersion,acceptedOrder.acceptedAt,acceptedOrder.orderFingerprint,
+        acceptedOrder.orderId,previousOrderFingerprint,locked.rows[0].id,locked.rows[0].available_quantity]);
+      await client.query("COMMIT");
+      return hydrateOrder(result.rows[0]);
+    }catch(error){await client.query("ROLLBACK").catch(()=>undefined);throw error;}finally{client.release();}
   },
   async insertContract(contract: AuthoritativeContractRecord) {
     const result = await guardedWriter("contract.create",contract).query<QueryResultRow>(`

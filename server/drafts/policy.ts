@@ -18,13 +18,22 @@ const PHASE_5B_PROFILE_BY_COMMODITY_NAME: Readonly<
   "arabica coffee beans": "arabica_coffee_beans",
 };
 
+// MVP Transaction Closure adds a bounded physical Urea 46 profile. These are
+// declaration units only; no mass or packaging conversion is inferred here.
+const MVP_UREA_UNITS_BY_COMMODITY_NAME: Readonly<Record<string, readonly DraftOfferUnit[]>> = {
+  "urea 46%": Object.freeze(["MT", "kg", "bag"]),
+  "urea 46% granular": Object.freeze(["MT", "kg", "bag"]),
+};
+
 export const PHASE_5B_DRAFT_CURRENCY = "USD" as const;
 
 export function phase5bDraftUnitsForCommodity(
   commodityName: string,
 ): DraftOfferUnit[] {
-  const profileKey =
-    PHASE_5B_PROFILE_BY_COMMODITY_NAME[commodityName.trim().toLowerCase()];
+  const normalizedName = commodityName.trim().toLowerCase();
+  const ureaUnits = MVP_UREA_UNITS_BY_COMMODITY_NAME[normalizedName];
+  if (ureaUnits) return [...ureaUnits];
+  const profileKey = PHASE_5B_PROFILE_BY_COMMODITY_NAME[normalizedName];
   if (!profileKey) return [];
   return getCommodityUnits(profileKey);
 }

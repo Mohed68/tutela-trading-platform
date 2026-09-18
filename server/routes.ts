@@ -52,6 +52,7 @@ import { productionTradingFlowService } from "./trading-flow/productionService";
 import { listCanonicalOrdersForUser,listCanonicalContractsForUser,loadCanonicalContractForUser } from "./trading-flow/postgresRepository";
 import { registerTradeTrustApplicationRoutes } from "./trade-trust-application/routes";
 import { registerVreRoutes } from "./vre/routes";
+import { registerMvpClosureRoutes } from "./mvp-closure/routes";
 import { registerDemoRuntimeRoutes } from "./demo-runtime/routes";
 import { createInMemoryDemoRuntime } from "./demo-runtime/runtimeComposition";
 import { containsDemoIdentifier } from "./demo-runtime/productionBoundaryGuard";
@@ -105,6 +106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerDraftRoutes(app);
   registerTradeTrustApplicationRoutes(app);
   registerVreRoutes(app,pool);
+  const mvpClosure = registerMvpClosureRoutes(app,pool);
 
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString(), environment: process.env.NODE_ENV ?? "development" });
@@ -1053,6 +1055,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   app.get('/admin/control-plane/trade-operations',isAuthenticated,requireAdminAuth,requirePermission('offers.moderate'),async(_req,res)=>{
     try{return res.json(await controlPlane.tradeOperations());}catch{return res.status(500).json({message:"Unable to load Current V2 trade operations"});}
+  });
+  app.get('/admin/control-plane/contracts/:id/closure',isAuthenticated,requireAdminAuth,requirePermission('offers.moderate'),async(req:any,res)=>{
+    const result=await mvpClosure.getForAdmin(req.params.id,req.user.claims.sub);
+    if(!result.ok)return res.status(result.code==='not_found'?404:403).json({message:'MVP contract operation is unavailable.',code:result.code});
+    return res.json(result.value);
   });
   app.post('/admin/platform/role-assignments', isAuthenticated, requireAdminAuth, requirePermission('platform.roles.grant'), async (req: any, res) => {
     const { targetPrincipalId, role, reason } = req.body ?? {};
