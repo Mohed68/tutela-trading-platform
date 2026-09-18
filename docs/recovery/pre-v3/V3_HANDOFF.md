@@ -42,3 +42,7 @@ Password recovery, TOTP MFA/replay prevention, recent privileged step-up, Platfo
 - any dual-control expansion for ownership or critical enforcement.
 
 These are architecture decisions, not gaps to patch into V2. Preserve all frozen authority chains and append-only history while designing them.
+
+## MVP closure baseline added before V3
+
+V3 must migrate rather than overwrite the bounded `mvp_contract_*` history introduced by migration `0024`. Current V2 now owns immutable terms snapshots, readiness, signing grants, bilateral exact-version signatures, executed artifact integrity and lightweight evidence/delivery/settlement/closeout. V3 still owns generic Trade Intent/Deal/negotiation, reservation/netting, amendments, protected document storage, provider verification, financial settlement orchestration, logistics and full claims/disputes. Preserve executed contract hashes and event provenance during any future aggregate migration.

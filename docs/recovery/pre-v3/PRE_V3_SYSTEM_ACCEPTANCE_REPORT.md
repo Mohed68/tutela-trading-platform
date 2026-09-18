@@ -57,3 +57,7 @@ The acceptance run comprises Auth/MFA integration and frontend tests; Organizati
 ## Verdict
 
 Acceptance is granted only after all listed gates, push, one production deployment, backup/migration and post-deploy smoke checks pass. The final delivery response records that operational verdict.
+
+## MVP transaction-closure addendum
+
+The bounded pre-V3 baseline now includes server-authoritative Contract Terms Snapshots/readiness, Urea 46% profile, bilateral terms approval, Organization signing grants, seller-then-buyer governed signatures, immutable preview/executed PDFs and a lightweight evidence/delivery/settlement/closeout lifecycle. See `../mvp-closure/`. This supersedes the earlier limitation that no Contract signing or execution existed; protected binary evidence storage, money movement and advanced fulfilment/claims remain excluded.
