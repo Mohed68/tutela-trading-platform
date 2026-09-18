@@ -33,3 +33,17 @@ test("Phase 5B unit policy delegates to existing commodity conversion profiles",
   assert.equal(isAllowedPhase5bDraftUnit("Gold Bullion", "kg"), false);
   assert.deepEqual(phase5bDraftUnitsForCommodity("Unknown commodity"), []);
 });
+
+test("MVP Urea 46 offer policy accepts bounded physical declaration units", () => {
+  assert.deepEqual(phase5bDraftUnitsForCommodity("Urea 46% Granular"), [
+    "MT",
+    "kg",
+    "bag",
+  ]);
+  assert.equal(isAllowedPhase5bDraftUnit("Urea 46% Granular", "MT"), true);
+  assert.equal(isAllowedPhase5bDraftUnit("Urea 46% Granular", "bbl"), false);
+});
+
+test("unknown commodities remain fail-closed", () => {
+  assert.deepEqual(phase5bDraftUnitsForCommodity("Unconfigured product"), []);
+});

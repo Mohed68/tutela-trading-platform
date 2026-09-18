@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { requireTestDatabase } from "../auth/test-database.js";
 
-test("real V2 journey: registration, independent review, engines/replay, publication, order, contract", {timeout:900_000}, async(t)=>{
+test("real MVP journey: verified Urea offer through executed contract and trade closeout", {timeout:900_000}, async(t)=>{
   const identity=requireTestDatabase();
   process.env.DATABASE_URL=identity.connectionString;process.env.NODE_ENV="test";process.env.TUTELA_TEST_NODE_POSTGRES="true";
   const client=new Client({connectionString:identity.connectionString,connectionTimeoutMillis:30_000});await client.connect();
@@ -39,6 +39,7 @@ test("real V2 journey: registration, independent review, engines/replay, publica
     const {productionTradingFlowService:trading}=await import("../../server/trading-flow/productionService.js");
     const reads=await import("../../server/trading-flow/postgresRepository.js");
     const {createEnforcementGuard}=await import("../../server/enforcement/guard.js");
+    const {createMvpClosureService}=await import("../../server/mvp-closure/service.js");
     const suffix=randomUUID();
     async function register(label:string){
       let token="";const email=`${label}-${suffix}@pre-v3.invalid`,password="IsolatedTestPassword123";
@@ -53,7 +54,8 @@ test("real V2 journey: registration, independent review, engines/replay, publica
     await client.query(`INSERT INTO public.platform_principals(id,user_id,status,created_at,updated_at) VALUES($1,$2,'active',now(),now()),($3,$4,'active',now(),now())`,[principal,reviewer,randomUUID(),admin]);
     const context=()=>({admin:{userId:reviewer,principalId:principal,roles:[],permissions:PLATFORM_OWNER_ADMIN_PERMISSIONS,assurance:"recent_step_up",isPlatformOwner:false,authority:{contractVersion:"platform-authority/v1",state:"resolved",authenticatedUserId:reviewer,principalId:principal,activeRoles:[],permissions:[]}},requestId:randomUUID(),correlationId:randomUUID()} as any);
     const vre=createVreService(pool as any);
-    const commodity=(await client.query(`SELECT id,name,type::text FROM public.commodities WHERE name='West Texas Intermediate (WTI) Crude Oil' LIMIT 1`)).rows[0];assert.ok(commodity);
+    const commodity={id:`urea46-${suffix}`,name:"Urea 46% Granular",type:"agricultural"};
+    await client.query(`INSERT INTO public.commodities(id,name,type,description,specifications,created_at) VALUES($1,$2,'agricultural','MVP Urea 46 test profile','{}'::jsonb,now())`,[commodity.id,commodity.name]);
     async function verifyOrganization(owner:string,label:string){
       t.diagnostic(`Starting canonical Organization verification: ${label}`);
       const created=await app.createOrganization(owner,{legalName:label,tradingNames:[],organizationType:"company",jurisdiction:"AE",registrationIdentifiers:[{scheme:"license",value:"123"}],declaredActivities:[{code:commodity.type}]});assert.equal(created.status,"created");
@@ -74,7 +76,7 @@ test("real V2 journey: registration, independent review, engines/replay, publica
       return organizationId;
     }
     const sellerOrg=await verifyOrganization(seller,"Seller Test Company"),buyerOrg=await verifyOrganization(buyer,"Buyer Test Company");
-    const draft=await drafts.createOwnedDraftOffer(seller,{commodityId:commodity.id,offerType:"sell",quantity:"100",unit:"bbl",amountPerUnit:"75.50",currency:"USD",location:"Houston",validUntil:new Date(Date.now()+86_400_000).toISOString()});
+    const draft=await drafts.createOwnedDraftOffer(seller,{commodityId:commodity.id,offerType:"sell",quantity:"100",unit:"MT",amountPerUnit:"300",currency:"USD",location:"Jubail",validUntil:new Date(Date.now()+86_400_000).toISOString()});
     assert.ok(await drafts.updateOwnedDraftOffer(seller,draft.id,{quantity:"120"}));
     assert.equal((await trading.createOrder({offerId:draft.id,buyerUserId:buyer,buyerOrganizationId:buyerOrg,quantity:"20"})).ok,false);
     assert.equal((await app.submitOfferEvidence(seller,draft.id,{assertions:[{assertionCode:"document_type",value:"offer_specification"},{assertionCode:"commodity",value:commodity.name}]})).status,"created");
@@ -84,10 +86,40 @@ test("real V2 journey: registration, independent review, engines/replay, publica
     assert.equal((await trading.createOrder({offerId:draft.id,buyerUserId:ordinary,buyerOrganizationId:buyerOrg,quantity:"20"})).ok,false);
     assert.equal((await trading.createOrder({offerId:draft.id,buyerUserId:buyer,buyerOrganizationId:buyerOrg,quantity:"121"})).ok,false);
     const order=await trading.createOrder({offerId:draft.id,buyerUserId:buyer,buyerOrganizationId:buyerOrg,quantity:"20"});assert.ok(order.ok);if(!order.ok)return;
-    assert.equal(order.value.terms.totalAmount,"1510");assert.equal((await trading.acceptOrder(order.value.orderId,ordinary)).ok,false);
+    assert.equal(order.value.terms.totalAmount,"6000");assert.equal((await trading.acceptOrder(order.value.orderId,ordinary)).ok,false);
     assert.ok((await trading.acceptOrder(order.value.orderId,seller)).ok);assert.equal((await trading.acceptOrder(order.value.orderId,seller)).ok,false);
-    assert.equal((await trading.createContract(order.value.orderId,ordinary)).ok,false);assert.ok((await trading.createContract(order.value.orderId,buyer)).ok);assert.equal((await trading.createContract(order.value.orderId,buyer)).ok,false);
+    assert.equal((await trading.createContract(order.value.orderId,ordinary)).ok,false);const createdContract=await trading.createContract(order.value.orderId,buyer);assert.ok(createdContract.ok);if(!createdContract.ok)return;assert.equal((await trading.createContract(order.value.orderId,buyer)).ok,false);
     assert.equal((await reads.listCanonicalOrdersForUser(seller)).length,1);assert.equal((await reads.listCanonicalContractsForUser(buyer)).length,1);assert.equal((await reads.listCanonicalContractsForUser(ordinary)).length,0);
+    let closureClock=Date.now();const closure=createMvpClosureService(pool as any,()=>new Date(closureClock++));
+    const completeTerms={sellerRepresentative:"Seller Authorized Signer",buyerRepresentative:"Buyer Authorized Signer",sellerAddress:{countryCode:"SA",locality:"Jubail",addressLines:["Industrial Area"]},buyerAddress:{countryCode:"AE",locality:"Dubai",addressLines:["Trade Centre"]},grade:"Granular 46% N",productDescription:"Granular Urea fertilizer",origin:"Saudi Arabia",producer:"Test producer supported by accepted terms",specifications:[{code:"NITROGEN",label:"Nitrogen",value:"46.0",unit:"%",sourceReference:"offer-evidence"},{code:"BIURET",label:"Biuret",value:"agreed",unit:"%",sourceReference:"offer-evidence"},{code:"MOISTURE",label:"Moisture",value:"agreed",unit:"%",sourceReference:"offer-evidence"},{code:"PARTICLE_SIZE",label:"Particle size distribution",value:"agreed",sourceReference:"offer-evidence"},{code:"APPEARANCE",label:"Appearance",value:"white granular",sourceReference:"offer-evidence"}],quantityTolerancePercent:"5",pricingBasis:"Fixed accepted Order unit price",incoterm:"CFR" as const,namedPlace:"Jebel Ali Port, UAE",shipmentWindowStart:"2026-10-01T00:00:00.000Z",shipmentWindowEnd:"2026-10-31T00:00:00.000Z",packaging:"50 kg bags",partialShipmentPolicy:"NOT_ALLOWED" as const,inspection:{required:true,bodyOrMethod:"SGS or agreed equivalent",inspectionPoint:"Load port",quantityDetermination:"Draft survey",qualityDetermination:"Certificate of analysis",finalityAndClaims:"Final at load port subject to documented fraud or manifest error"},payment:{method:"Irrevocable documentary letter of credit",timing:"At sight against compliant documents",currency:"USD",bankDocumentConditions:"Agreed documentary conditions"},requiredDocuments:["Commercial Invoice","Bill of Lading","Certificate of Origin","Quality Certificate","Quantity Certificate","Packing List"],legal:{riskTransfer:"At loading on board under CFR Incoterms 2020",titleTransfer:"Upon Seller receipt of cleared funds",governingLaw:"Laws of the Kingdom of Saudi Arabia",cisgTreatment:"LEGAL_REVIEW_REQUIRED" as const,disputeResolution:"ICC_ARBITRATION" as const,arbitrationInstitution:"ICC" as const,arbitrationSeat:"Riyadh, Saudi Arabia",arbitrationLanguage:"English",arbitratorCount:1 as const,forceMajeureTreatment:"Original clause aligned conceptually with ICC Force Majeure Clause 2020; notice and mitigation required",hardshipTreatment:"Good-faith renegotiation followed by termination if unresolved"},platformFeeTreatment:"Fees separately invoiced",specialConditions:[]};
+    assert.equal((await closure.prepare(createdContract.value.contractId,ordinary,completeTerms)).ok,false);
+    const missing=await closure.prepare(createdContract.value.contractId,seller,{...completeTerms,namedPlace:""});assert.ok(missing.ok);if(!missing.ok)return;assert.equal(missing.value.readiness?.outcome,"NOT_READY");
+    const prepared=await closure.prepare(createdContract.value.contractId,seller,completeTerms);assert.ok(prepared.ok);if(!prepared.ok||!prepared.value.snapshotId)return;assert.equal(prepared.value.readiness?.outcome,"READY");
+    assert.equal((await closure.approveTerms(createdContract.value.contractId,ordinary,prepared.value.snapshotId,prepared.value.contractVersion)).ok,false);
+    const sellerApproval=await closure.approveTerms(createdContract.value.contractId,seller,prepared.value.snapshotId,prepared.value.contractVersion);assert.ok(sellerApproval.ok);if(!sellerApproval.ok)return;assert.equal(sellerApproval.value.state,"CONTRACT_PREPARATION");
+    const buyerApproval=await closure.approveTerms(createdContract.value.contractId,buyer,prepared.value.snapshotId,prepared.value.contractVersion);assert.ok(buyerApproval.ok);if(!buyerApproval.ok)return;assert.equal(buyerApproval.value.state,"AWAITING_SELLER_SIGNATURE");assert.ok(buyerApproval.value.previewSha256);
+    assert.equal((await closure.grantSigningAuthority(sellerOrg,ordinary,ordinary,true)).ok,false);assert.equal((await closure.grantSigningAuthority(sellerOrg,seller,seller,false)).ok,false);
+    assert.ok((await closure.grantSigningAuthority(sellerOrg,seller,seller,true)).ok);assert.ok((await closure.grantSigningAuthority(buyerOrg,buyer,buyer,true)).ok);
+    assert.equal((await closure.sign(createdContract.value.contractId,buyer,{snapshotId:prepared.value.snapshotId,contractVersion:prepared.value.contractVersion,previewSha256:buyerApproval.value.previewSha256!,explicitConsent:true,recentStepUp:true})).ok,false);
+    assert.equal((await closure.sign(createdContract.value.contractId,seller,{snapshotId:prepared.value.snapshotId,contractVersion:prepared.value.contractVersion+1,previewSha256:buyerApproval.value.previewSha256!,explicitConsent:true,recentStepUp:true})).ok,false);
+    const sellerSigned=await closure.sign(createdContract.value.contractId,seller,{snapshotId:prepared.value.snapshotId,contractVersion:prepared.value.contractVersion,previewSha256:buyerApproval.value.previewSha256!,explicitConsent:true,recentStepUp:true});assert.ok(sellerSigned.ok);if(!sellerSigned.ok)return;assert.equal(sellerSigned.value.state,"AWAITING_BUYER_SIGNATURE");assert.equal(sellerSigned.value.signatures.length,1);
+    const duplicateSeller=await closure.sign(createdContract.value.contractId,seller,{snapshotId:prepared.value.snapshotId,contractVersion:prepared.value.contractVersion,previewSha256:buyerApproval.value.previewSha256!,explicitConsent:true,recentStepUp:true});assert.ok(duplicateSeller.ok);
+    const buyerSigned=await closure.sign(createdContract.value.contractId,buyer,{snapshotId:prepared.value.snapshotId,contractVersion:prepared.value.contractVersion,previewSha256:buyerApproval.value.previewSha256!,explicitConsent:true,recentStepUp:true});assert.ok(buyerSigned.ok);if(!buyerSigned.ok)return;assert.equal(buyerSigned.value.state,"EXECUTED");assert.equal(buyerSigned.value.signatures.length,2);assert.ok(buyerSigned.value.executedSha256);
+    assert.equal((await closure.prepare(createdContract.value.contractId,seller,completeTerms)).ok,false);
+    const artifact=await closure.artifact(createdContract.value.contractId,buyer,"EXECUTED");assert.ok(artifact.ok);if(artifact.ok){const {createHash}=await import("node:crypto");assert.equal(`sha256:${createHash("sha256").update(artifact.value.document_bytes).digest("hex")}`,artifact.value.document_sha256)}
+    assert.ok((await closure.transition(createdContract.value.contractId,seller,"START_EXECUTION","Execution commenced under the executed Contract")).ok);
+    assert.equal((await closure.transition(createdContract.value.contractId,buyer,"START_EXECUTION","Duplicate start")).ok,true);
+    assert.ok((await closure.addEvidence(createdContract.value.contractId,seller,{evidenceType:"COMMERCIAL_INVOICE",reference:"test-only:invoice-001"})).ok);
+    assert.equal((await closure.transition(createdContract.value.contractId,ordinary,"CONFIRM_DELIVERY","Unauthorized attempt")).ok,false);assert.equal((await closure.transition(createdContract.value.contractId,seller,"CONFIRM_DELIVERY","Seller cannot confirm receipt")).ok,false);
+    assert.ok((await closure.transition(createdContract.value.contractId,buyer,"CONFIRM_DELIVERY","Buyer confirms delivery against referenced evidence")).ok);assert.equal((await closure.transition(createdContract.value.contractId,buyer,"CONFIRM_SETTLEMENT","Buyer cannot confirm Seller receipt")).ok,false);
+    assert.ok((await closure.addEvidence(createdContract.value.contractId,seller,{evidenceType:"SETTLEMENT_CONFIRMATION",reference:"test-only:settlement-001",description:"Seller assertion only; TUTELA does not move or verify funds"})).ok);
+    assert.ok((await closure.transition(createdContract.value.contractId,seller,"CONFIRM_SETTLEMENT","Seller confirms receipt; TUTELA moved no funds")).ok);
+    await client.query("SAVEPOINT dispute_probe");assert.ok((await closure.openDispute(createdContract.value.contractId,buyer,"Material delivery dispute requiring human review")).ok);const blockedClose=await closure.transition(createdContract.value.contractId,buyer,"CLOSE_TRADE","Closeout blocked");assert.equal(blockedClose.ok,false);await client.query("ROLLBACK TO SAVEPOINT dispute_probe");await client.query("RELEASE SAVEPOINT dispute_probe");
+    const closed=await closure.transition(createdContract.value.contractId,buyer,"CLOSE_TRADE","Delivery and settlement confirmed; no unresolved dispute");assert.ok(closed.ok);if(closed.ok)assert.equal(closed.value.state,"TRADE_CLOSED");assert.ok((await closure.transition(createdContract.value.contractId,buyer,"CLOSE_TRADE","Idempotent closeout")).ok);
+    await client.query("SAVEPOINT immutable_probe");
+    await assert.rejects(client.query(`UPDATE public.mvp_contract_events SET reason='tampered' WHERE transaction_id=$1`,[closed.ok?closed.value.transactionId:""]));
+    await client.query("ROLLBACK TO SAVEPOINT immutable_probe");
+    await client.query("RELEASE SAVEPOINT immutable_probe");
     const before=await createVreReadModel({query} as any).verificationHistory(sellerOrg),guard=createEnforcementGuard({query} as any);
     let previousAction:string|null=null;
     for(const state of ["MONITORED","RESTRICTED","SUSPENDED","BLOCKED","TERMINATED","NORMAL"] as const){
