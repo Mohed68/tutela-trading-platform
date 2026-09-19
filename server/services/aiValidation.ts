@@ -62,8 +62,9 @@ export async function validateDocument(filePath: string, documentType: string): 
     
     // Add some realistic validation logic based on document type
     const enhancedResult: DocumentValidationResult = {
-      isValid: result.isValid ?? true,
-      confidence: result.confidence ?? 0.85,
+      // AI extraction is never canonical validation authority.
+      isValid: false,
+      confidence: typeof result.confidence === "number" && result.confidence >= 0 && result.confidence <= 1 ? result.confidence : 0,
       extractedData: result.extractedData ?? {},
       issues: result.issues ?? [],
       recommendations: result.recommendations ?? []
@@ -91,7 +92,7 @@ export async function validateDocument(filePath: string, documentType: string): 
 
     return enhancedResult;
   } catch (error) {
-    console.error("AI validation error:", error);
+    console.error("AI validation unavailable", { operation: "document_candidate_extraction" });
     
     // Return a safe fallback result
     return {
@@ -145,7 +146,7 @@ export async function analyzeCommodityMarket(commodityType: string, quantity: nu
     const result = JSON.parse(response.choices[0].message.content || "{}");
     return result;
   } catch (error) {
-    console.error("Market analysis error:", error);
+    console.error("AI market analysis unavailable", { operation: "market_analysis_candidate" });
     
     // Return conservative estimates
     return {
@@ -207,12 +208,12 @@ export async function validatePartnerCredentials(partnerData: {
     const result = JSON.parse(response.choices[0].message.content || "{}");
     return result;
   } catch (error) {
-    console.error("Partner validation error:", error);
+    console.error("AI partner assessment unavailable", { operation: "partner_assessment_candidate" });
     
     return {
-      riskScore: 50,
-      creditRating: "BBB",
-      verificationStatus: "pending",
+      riskScore: 0,
+      creditRating: "UNAVAILABLE",
+      verificationStatus: "unavailable_non_authoritative",
       riskFactors: ["Assessment service temporarily unavailable"],
       strengths: []
     };

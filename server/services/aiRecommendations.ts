@@ -38,7 +38,8 @@ export interface UserProfile {
 }
 
 /**
- * Generate personalized recommendations using OpenAI GPT-5
+ * Generate non-authoritative personalized candidates. An empty result means
+ * the optional AI service was unavailable; no recommendation is invented.
  */
 export async function generatePersonalizedRecommendations(
   userId: string
@@ -109,8 +110,7 @@ Respond with JSON in this exact format:
   } catch (error) {
     console.error("Error generating AI recommendations:", error);
     
-    // Fallback to rule-based recommendations
-    return generateFallbackRecommendations(userId);
+    return [];
   }
 }
 
@@ -270,31 +270,3 @@ function getTrendingCommodities(offers: any[]) {
 /**
  * Fallback recommendations when AI fails
  */
-async function generateFallbackRecommendations(userId: string): Promise<PersonalizedRecommendation[]> {
-  return [
-    {
-      id: "fallback_1",
-      type: "market_opportunity",
-      title: "Explore High-Volume Commodities",
-      description: "Based on current market activity, crude oil and gold are showing strong trading volumes. Consider diversifying your portfolio.",
-      confidence: 0.7,
-      actionable: true,
-      cta: "Browse Marketplace",
-      ctaUrl: "/marketplace",
-      priority: "medium",
-      category: "Market Analysis"
-    },
-    {
-      id: "fallback_2", 
-      type: "strategy",
-      title: "Complete KYB Verification",
-      description: "Verified traders receive 3x more partnership requests. Complete your KYB verification to unlock premium features.",
-      confidence: 0.9,
-      actionable: true,
-      cta: "Start Verification",
-      ctaUrl: "/verification",
-      priority: "high",
-      category: "Strategy"
-    }
-  ];
-}
