@@ -1,112 +1,18 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { generateContractPdf } from "../../server/mvp-closure/contractDocument.js";
-import {
-  MVP_TEMPLATE_VERSION,
-  UREA46_PROFILE_VERSION,
-  type ContractTermsSnapshot,
-} from "../../server/mvp-closure/domain.js";
+import { MVP_TEMPLATE_VERSION, UREA46_PROFILE_VERSION, type ContractTermsSnapshot } from "../../server/mvp-closure/domain.js";
 
-const snapshot: ContractTermsSnapshot = {
-  contractId: "SAMPLE-NON-PRODUCTION-CONTRACT",
-  orderId: "SAMPLE-NON-PRODUCTION-ORDER",
-  tutelaReference: "TUTELA-SAMPLE-UREA46-V1",
-  contractVersion: 1,
-  snapshotId: "00000000-0000-4000-8000-000000000001",
-  snapshotCreatedAt: "2026-09-18T00:00:00.000Z",
-  templateVersion: MVP_TEMPLATE_VERSION,
-  commercialProfileVersion: UREA46_PROFILE_VERSION,
-  seller: {
-    organizationId: "sample-seller",
-    profileRevisionId: "sample-seller-profile-v1",
-    legalName: "SAMPLE SELLER — NOT A REAL PARTY",
-    registrationJurisdiction: "SA",
-    registrationIdentifiers: [{ scheme: "sample", value: "NOT-REAL" }],
-    registeredAddress: {
-      countryCode: "SA",
-      locality: "Jubail",
-      addressLines: ["Sample address — not for execution"],
-    },
-    authorizedRepresentative: "Sample Seller Representative",
-  },
-  buyer: {
-    organizationId: "sample-buyer",
-    profileRevisionId: "sample-buyer-profile-v1",
-    legalName: "SAMPLE BUYER — NOT A REAL PARTY",
-    registrationJurisdiction: "AE",
-    registrationIdentifiers: [{ scheme: "sample", value: "NOT-REAL" }],
-    registeredAddress: {
-      countryCode: "AE",
-      locality: "Dubai",
-      addressLines: ["Sample address — not for execution"],
-    },
-    authorizedRepresentative: "Sample Buyer Representative",
-  },
-  commodity: {
-    name: "Urea 46% Granular",
-    grade: "Granular 46% N",
-    productDescription: "Granular Urea fertilizer — sample terms only",
-    origin: "Saudi Arabia",
-    producer: "Sample named producer",
-    specifications: [
-      { code: "NITROGEN", label: "Nitrogen", value: "46.0", unit: "%", sourceReference: "sample-evidence" },
-      { code: "BIURET", label: "Biuret", value: "mutually agreed", unit: "%", sourceReference: "sample-evidence" },
-      { code: "MOISTURE", label: "Moisture", value: "mutually agreed", unit: "%", sourceReference: "sample-evidence" },
-      { code: "PARTICLE_SIZE", label: "Particle size distribution", value: "mutually agreed", sourceReference: "sample-evidence" },
-      { code: "APPEARANCE", label: "Appearance", value: "white granular", sourceReference: "sample-evidence" },
-    ],
-  },
-  quantity: { amount: "1000", unit: "MT", tolerancePercent: "5" },
-  price: { unitPrice: "300", currency: "USD", pricingBasis: "Fixed accepted Order price", estimatedTotal: "300000" },
-  delivery: {
-    incoterm: "CFR",
-    incotermsVersion: "2020",
-    namedPlace: "Jebel Ali Port, UAE",
-    shipmentWindowStart: "2026-10-01T00:00:00.000Z",
-    shipmentWindowEnd: "2026-10-31T00:00:00.000Z",
-    packaging: "50 kg bags",
-    partialShipmentPolicy: "NOT_ALLOWED",
-  },
-  inspection: {
-    required: true,
-    bodyOrMethod: "SGS or mutually agreed equivalent",
-    inspectionPoint: "Load port",
-    quantityDetermination: "Draft survey",
-    qualityDetermination: "Certificate of analysis",
-    finalityAndClaims: "Final at load port subject to documented fraud or manifest error",
-  },
-  payment: {
-    method: "Irrevocable documentary letter of credit",
-    timing: "At sight against compliant documents",
-    currency: "USD",
-    bankDocumentConditions: "Sample conditions; bank and counsel review required",
-  },
-  requiredDocuments: ["Commercial Invoice", "Bill of Lading", "Certificate of Origin", "Quality Certificate", "Quantity Certificate", "Packing List"],
-  legal: {
-    riskTransfer: "At loading on board under CFR Incoterms 2020",
-    titleTransfer: "Upon Seller receipt of cleared funds",
-    governingLaw: "Laws of the Kingdom of Saudi Arabia",
-    cisgTreatment: "LEGAL_REVIEW_REQUIRED",
-    disputeResolution: "ICC_ARBITRATION",
-    arbitrationInstitution: "ICC",
-    arbitrationSeat: "Riyadh, Saudi Arabia",
-    arbitrationLanguage: "English",
-    arbitratorCount: 1,
-    forceMajeureTreatment: "Original TUTELA clause; notice and mitigation required",
-    hardshipTreatment: "Good-faith renegotiation followed by the agreed remedy",
-  },
-  platform: {
-    platformFeeTreatment: "Fees separately invoiced",
-    snapshotVersion: 1,
-    sourceOrderFingerprint: `sha256:${"a".repeat(64)}`,
-    sourceTermsFingerprint: `sha256:${"b".repeat(64)}`,
-  },
-  specialConditions: ["SAMPLE DOCUMENT ONLY — NOT AN OFFER OR EXECUTED AGREEMENT"],
-};
+// Fictitious, non-production review fixture. The draft watermark is the visible
+// execution boundary; no fixture is inserted into a database.
+const snapshot:ContractTermsSnapshot={
+  contractId:"review-contract-2026-0919",orderId:"review-order-2026-0919",tutelaReference:"TUTELA-2026-0919-R01",contractVersion:1,snapshotId:"00000000-0000-4000-8000-000000000011",snapshotCreatedAt:"2026-09-19T09:00:00.000Z",preparedAt:"2026-09-19T09:00:00.000Z",effectiveDate:null,templateVersion:MVP_TEMPLATE_VERSION,commercialProfileVersion:UREA46_PROFILE_VERSION,
+  seller:{organizationId:"review-seller",profileRevisionId:"review-seller-profile",legalName:"Arabian Nutrients Trading Company",registrationJurisdiction:"Saudi Arabia",registrationIdentifiers:[{scheme:"Commercial Registration",value:"1010999901"}],registeredAddress:{countryCode:"SA",locality:"Jubail",addressLines:["Industrial District, Building 18"]},commercialRepresentative:"Khalid Al Harbi, Commercial Director",authorizedSignatory:"Noura Al Mansour, Chief Executive Officer"},
+  buyer:{organizationId:"review-buyer",profileRevisionId:"review-buyer-profile",legalName:"Meridian Agricultural Inputs FZCO",registrationJurisdiction:"United Arab Emirates",registrationIdentifiers:[{scheme:"Trade Licence",value:"DMCC-889901"}],registeredAddress:{countryCode:"AE",locality:"Dubai",addressLines:["Jumeirah Lakes Towers, Cluster V"]},commercialRepresentative:"Omar Rahman, Procurement Director",authorizedSignatory:"Leila Haddad, Managing Director"},
+  commodity:{name:"Urea 46%",grade:"Granular 46% Nitrogen",form:"White free-flowing granules",productDescription:"Fertilizer-grade granular urea suitable for agricultural application",origin:"Kingdom of Saudi Arabia",producer:"Approved Saudi producer identified in shipping documents",customsClassification:{scheme:"HS",code:"3102.10",applicabilityBasis:"Non-authoritative contractual reference; final customs treatment remains with the declarant and competent authority"},specifications:[{code:"NITROGEN",label:"Nitrogen",value:"46.0 minimum",unit:"% by weight",sourceReference:"Annex A agreed specification"},{code:"BIURET",label:"Biuret",value:"1.0 maximum",unit:"% by weight",sourceReference:"Annex A agreed specification"},{code:"MOISTURE",label:"Moisture",value:"0.5 maximum",unit:"% by weight",sourceReference:"Annex A agreed specification"},{code:"PARTICLE_SIZE",label:"Particle size",value:"90 minimum between 2 and 4 mm",unit:"%",sourceReference:"Annex A agreed specification"},{code:"APPEARANCE",label:"Appearance",value:"White, free flowing and substantially free from visible contamination",sourceReference:"Annex A agreed specification"}]},
+  quantity:{amount:"25000",unit:"MT",tolerancePercent:"5",measurementBasis:"Metric tonnes net weight determined by independent draft survey at load port"},price:{unitPrice:"318.50",currency:"USD",pricingBasis:"Fixed price per metric tonne, CFR named destination",estimatedTotal:"7962500"},delivery:{incoterm:"CFR",incotermsVersion:"2020",namedPlace:"Jebel Ali Port, Dubai, United Arab Emirates",shipmentWindowStart:"2026-11-01T00:00:00.000Z",shipmentWindowEnd:"2026-11-20T23:59:59.000Z",laycanSemantics:"Seller shall nominate the performing vessel and a five-day laycan falling wholly within the shipment window at least ten calendar days before the first layday.",packaging:"Bulk",shipmentMode:"Single seagoing bulk vessel",partialShipmentPolicy:"NOT_ALLOWED"},
+  inspection:{required:true,bodyOrMethod:"SGS, Bureau Veritas or another independent inspector jointly accepted in writing",inspectionPoint:"Load port",quantityDetermination:"Independent draft survey",qualityDetermination:"Composite sampling and certificate of analysis against Annex A",finalityAndClaims:"Load-port findings are final for invoicing, without prejudice to a timely claim for latent non-conformity, fraud or manifest error",claimsNoticePeriod:"Quantity or apparent condition within five business days after discharge; latent quality within ten business days after receipt of analysis"},
+  payment:{method:"Irrevocable documentary letter of credit available by sight payment",methodCode:"LETTER_OF_CREDIT",timing:"Payment at sight against a complying presentation",dueTrigger:"Presentation of documents listed in Annex C within the credit validity",currency:"USD",bankDocumentConditions:"Subject to UCP 600; issued or confirmed by a first-class bank acceptable to Seller; no soft clauses"},requiredDocuments:["Commercial Invoice","Clean on-board Bill of Lading","Certificate of Origin","Quality Certificate","Quantity Certificate","Packing or weight statement"],
+  legal:{riskTransfer:"Risk transfers when the goods are on board the vessel at the load port in accordance with CFR Incoterms 2020",titleTransfer:"Title transfers only upon Seller's receipt of cleared payment in full",governingLaw:"Laws of the Kingdom of Saudi Arabia",cisgTreatment:"EXPRESSLY_INCLUDED",disputeResolution:"ICC_ARBITRATION",arbitrationInstitution:"ICC",arbitrationSeat:"Riyadh, Saudi Arabia",arbitrationLanguage:"English",arbitratorCount:3,forceMajeureTreatment:"Clause 18 applies, including prompt notice, reasonable mitigation, suspension for the affected period and termination after sixty consecutive days of substantial prevention",hardshipTreatment:"Clause 19 requires good-faith renegotiation of an exceptional fundamental equilibrium change for thirty days, after which either party may terminate unperformed quantities",claimsTreatment:"Claims require timely written notice, contractual particulars, preservation of evidence and reasonable mitigation",defaultTreatment:"A curable material default is subject to written notice and ten business days to cure; insolvency, illegality and repudiation may permit immediate relief",liabilityTreatment:"Liability is limited to direct proven loss and the value of the affected shipment, except for fraud, wilful misconduct, confidentiality breach, unpaid amounts and liability that cannot lawfully be limited",tradeComplianceTreatment:"Each party must comply with applicable sanctions, export controls, anti-bribery, customs and trade laws and must not require unlawful performance"},platform:{platformRole:"TUTELA provides the digital contracting, execution workflow and integrity-record platform only; it is not a sale party, guarantor, bank, escrow provider or legal adviser.",platformFeeTreatment:"Platform fees are separately invoiced to the responsible subscriber and do not alter the sale price or payment obligation between Seller and Buyer",snapshotVersion:1,sourceOrderFingerprint:`sha256:${"a".repeat(64)}`,sourceTermsFingerprint:`sha256:${"b".repeat(64)}`},specialConditions:["The Seller shall provide vessel particulars for sanctions and operational screening before final nomination."]};
 
-const outputDirectory = resolve("output/pdf");
-mkdirSync(outputDirectory, { recursive: true });
-const outputPath = resolve(outputDirectory, "TUTELA_International_Commodity_Sale_Contract_v1_sample.pdf");
-const document = generateContractPdf(snapshot);
-writeFileSync(outputPath, document.bytes);
-console.log(JSON.stringify({ outputPath, sha256: document.sha256, pageCount: document.pageCount }));
+const outputDirectory=resolve("output/pdf");mkdirSync(outputDirectory,{recursive:true});const outputPath=resolve(outputDirectory,"TUTELA_International_Commodity_Sale_Contract_v1_1_review.pdf");const document=generateContractPdf(snapshot);writeFileSync(outputPath,document.bytes);console.log(JSON.stringify({outputPath,sha256:document.sha256,pageCount:document.pageCount}));
