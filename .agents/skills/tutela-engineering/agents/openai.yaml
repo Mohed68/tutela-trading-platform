@@ -1,0 +1,7 @@
+interface:
+  display_name: "TUTELA Engineering"
+  short_description: "Governed engineering workflow for the TUTELA trading platform."
+  default_prompt: "Apply the TUTELA engineering constitution and execute the requested repository delta from the accepted baseline."
+
+policy:
+  allow_implicit_invocation: false
