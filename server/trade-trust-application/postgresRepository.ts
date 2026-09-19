@@ -99,7 +99,7 @@ export async function registerOrganizationAndOwner(input: Readonly<{
   profile: OrganizationProfileRevisionContract;
   profilePayload: Readonly<Record<string, unknown>>;
   membership: OrganizationMembership;
-}>): Promise<"created" | "owner_exists" | "actor_invalid" | "conflict"> {
+}>): Promise<"created" | "owner_exists" | "actor_invalid" | "duplicate_candidate" | "conflict"> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -116,6 +116,21 @@ export async function registerOrganizationAndOwner(input: Readonly<{
       [input.actorUserId],
     );
     if (existing.rowCount !== 0) { await client.query("ROLLBACK"); return "owner_exists"; }
+    const legalIdentity = input.profilePayload.legal_identity_projection as Record<string, unknown> | undefined;
+    const legalName = String(legalIdentity?.legal_name ?? "").trim();
+    const jurisdiction = String(legalIdentity?.registration_jurisdiction ?? input.profilePayload.jurisdiction ?? "").trim();
+    const identifiers = Array.isArray(legalIdentity?.registration_identifiers)
+      ? legalIdentity.registration_identifiers.map((item) => String((item as Record<string, unknown>).value ?? "").trim().toLowerCase()).filter(Boolean)
+      : [];
+    const duplicate = await client.query(
+      `SELECT 1 FROM public.organization_registry_profile_revisions revision
+       WHERE lower(revision.contract_payload#>>'{legal_identity_projection,legal_name}')=lower($1)
+         AND lower(COALESCE(revision.contract_payload#>>'{legal_identity_projection,registration_jurisdiction}',revision.contract_payload->>'jurisdiction',''))=lower($2)
+          OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(revision.contract_payload#>'{legal_identity_projection,registration_identifiers}','[]'::jsonb)) identifier WHERE lower(identifier->>'value')=ANY($3::text[]))
+       LIMIT 1 FOR SHARE`,
+      [legalName,jurisdiction,identifiers],
+    );
+    if (duplicate.rowCount !== 0) { await client.query("ROLLBACK"); return "duplicate_candidate"; }
     await client.query(
       `INSERT INTO public.organization_registry_profile_revisions
        (organization_id,organization_profile_revision_id,registry_contract_version,

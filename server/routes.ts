@@ -53,6 +53,7 @@ import { listCanonicalOrdersForUser,listCanonicalContractsForUser,loadCanonicalC
 import { registerTradeTrustApplicationRoutes } from "./trade-trust-application/routes";
 import { registerVreRoutes } from "./vre/routes";
 import { registerMvpClosureRoutes } from "./mvp-closure/routes";
+import { registerOrganizationAuthorityRoutes } from "./organization-authority/routes";
 import { registerDemoRuntimeRoutes } from "./demo-runtime/routes";
 import { createInMemoryDemoRuntime } from "./demo-runtime/runtimeComposition";
 import { containsDemoIdentifier } from "./demo-runtime/productionBoundaryGuard";
@@ -106,6 +107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerDraftRoutes(app);
   registerTradeTrustApplicationRoutes(app);
   registerVreRoutes(app,pool);
+  registerOrganizationAuthorityRoutes(app,pool);
   const mvpClosure = registerMvpClosureRoutes(app,pool);
 
   app.get("/api/health", (_req, res) => {
