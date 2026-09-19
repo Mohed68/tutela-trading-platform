@@ -41,6 +41,9 @@ export default function OrganizationSetup() {
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [resolution, setResolution] = useState<any>(null);
+  const [creationConfirmed, setCreationConfirmed] = useState(false);
+  const invitationToken = typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("invitation") ?? "";
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) navigate("/login");
@@ -72,6 +75,18 @@ export default function OrganizationSetup() {
       declaredActivities: [{ code: form.activityCode.trim() }],
     };
     try {
+      if (!creationConfirmed) {
+        const response = await apiRequest("POST", "/api/organization-resolution", {
+          legalName: form.legalName.trim(),
+          jurisdiction: form.jurisdiction.trim(),
+          registrationIdentifier: form.registrationNumber.trim(),
+        });
+        const resolved = await response.json();
+        setResolution(resolved);
+        if (resolved.outcome !== "NO_MATCH") return;
+        setCreationConfirmed(true);
+        return;
+      }
       const response = await apiRequest("POST", "/api/organizations", payload);
       const created =
         (await response.json()) as OrganizationRegistrationCreatedResponse;
@@ -106,6 +121,16 @@ export default function OrganizationSetup() {
       setSubmitting(false);
     }
   }
+
+  async function join(organizationId: string) {
+    setSubmitting(true); setError("");
+    try {
+      const response=await apiRequest("POST",`/api/organizations/${organizationId}/join`,{});const result=await response.json();
+      await queryClient.invalidateQueries({queryKey:["/api/organizations/current"]});
+      if(result.outcome==="JOINED")navigate("/organization");else setResolution({...resolution,outcome:"MEMBERSHIP_PENDING"});
+    } catch(caught){setError(authErrorPresentation(caught,"The membership request could not be completed.").message);} finally{setSubmitting(false)}
+  }
+  async function acceptInvitation(){setSubmitting(true);setError("");try{await apiRequest("POST","/api/organization-invitations/redeem",{token:invitationToken});await queryClient.invalidateQueries({queryKey:["/api/organizations/current"]});navigate("/organization");}catch(caught){setError(authErrorPresentation(caught,"This invitation could not be accepted.").message);}finally{setSubmitting(false)}}
 
   if (authLoading || organizationLoading || !isAuthenticated) return null;
 
@@ -147,11 +172,12 @@ export default function OrganizationSetup() {
         <Building2 className="mb-2 h-10 w-10 text-emerald-700" />
         <CardTitle>Set up your organization</CardTitle>
         <CardDescription>
-          Create your organization profile to continue through TUTELA&apos;s
-          verification and trading workflow.
+          Find and join your company first. Register a new organization only
+          when no authoritative match exists.
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {invitationToken&&<div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="font-semibold text-emerald-950">Organization invitation</p><p className="mt-1 text-sm text-emerald-900">Accept only if this invitation was sent to your verified business email. It grants basic Member only.</p><Button type="button" className="mt-3" disabled={submitting} onClick={()=>void acceptInvitation()}>Accept invitation</Button></div>}
         <form onSubmit={submit} className="space-y-5">
           <div>
             <Label htmlFor="legalName">Organization / company name</Label>
@@ -227,8 +253,11 @@ export default function OrganizationSetup() {
               {error}
             </p>
           )}
+          {resolution?.candidates?.length>0&&<div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div><p className="font-semibold text-emerald-950">{resolution.outcome==="MATCHED"?"We found your organization":"Possible organization match"}</p><p className="text-sm text-emerald-900">Candidate matches never create membership or ownership automatically.</p></div>{resolution.candidates.map((candidate:any)=><div key={candidate.organizationId} className="rounded-lg border bg-white p-3"><p className="font-medium">{candidate.legalName}</p><p className="text-sm text-neutral-600">{candidate.jurisdiction} · {candidate.verifiedDomainMatch?"Verified company-domain match":"Candidate match"}</p><Button type="button" className="mt-3" onClick={()=>void join(candidate.organizationId)} disabled={submitting}>Join this organization</Button></div>)}<Button type="button" variant="ghost" onClick={()=>{setResolution(null);setCreationConfirmed(true)}}>This is not my company</Button></div>}
+          {resolution?.outcome==="MEMBERSHIP_PENDING"&&<p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">Your membership request is pending organization approval. No role or signing authority has been granted.</p>}
+          {creationConfirmed&&<p className="rounded-lg border bg-neutral-50 p-3 text-sm">No authoritative match was selected. Review the legal details, then create a new organization. The creator becomes Owner only for this newly registered organization.</p>}
           <Button className="w-full" type="submit" disabled={submitting}>
-            {submitting ? "Creating organization..." : "Create organization"}
+            {submitting ? "Checking organization..." : creationConfirmed ? "Create new organization" : "Find my organization"}
           </Button>
         </form>
       </CardContent>

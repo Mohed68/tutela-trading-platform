@@ -27,6 +27,8 @@ import VerifyEmail from "@/pages/verify-email";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import OrganizationSetup from "@/pages/organization-setup";
+import OrganizationWorkspace from "@/pages/organization";
+import ActionCenter from "@/pages/action-center";
 
 // App Pages  
 import Dashboard from "@/pages/dashboard";
@@ -156,6 +158,14 @@ function Router() {
             <AppLayout>
               <OrganizationSetup />
             </AppLayout>
+          </Route>
+
+          <Route path="/organization">
+            <AppLayout><OrganizationWorkspace /></AppLayout>
+          </Route>
+
+          <Route path="/action-center">
+            <AppLayout><ActionCenter /></AppLayout>
           </Route>
 
           {/* Dashboard - accessible to all logged in users */}
